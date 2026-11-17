@@ -56,6 +56,17 @@ export function useCreateProject() {
 }
 
 export function CreateProjectDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  // The form is a child of DialogContent, which unmounts on close, so errors and input reset on reopen.
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <CreateProjectForm onOpenChange={onOpenChange} />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function CreateProjectForm({ onOpenChange }: { onOpenChange: (o: boolean) => void }) {
   const t = useT(TEXT);
   const { lang } = useLang();
   const create = useCreateProject();
@@ -113,8 +124,7 @@ export function CreateProjectDialog({ open, onOpenChange }: { open: boolean; onO
     ) : null;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+    <>
         <DialogHeader>
           <DialogTitle>{t.title}</DialogTitle>
           <DialogDescription>{t.desc}</DialogDescription>
@@ -158,7 +168,6 @@ export function CreateProjectDialog({ open, onOpenChange }: { open: boolean; onO
             </Button>
           </DialogFooter>
         </form>
-      </DialogContent>
-    </Dialog>
+    </>
   );
 }
