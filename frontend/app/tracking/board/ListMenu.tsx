@@ -39,8 +39,10 @@ export function ListMenu({ projectId, list, onRename }: { projectId: number; lis
   const confirm = useConfirm();
   const update = useUpdateList(projectId);
   const archive = useArchiveList(projectId);
-  // Radix returns focus to the trigger on close; skip that when the rename input should keep it.
-  const keepFocus = useRef(false);
+  // Rename starts only after the menu has closed: while it is open its focus trap would pull focus
+  // off the new input, and the input's blur would end the rename at once. Radix also returns focus
+  // to the trigger on close; skip that so the input keeps it.
+  const renameNext = useRef(false);
 
   return (
     <DropdownMenu>
@@ -53,16 +55,16 @@ export function ListMenu({ projectId, list, onRename }: { projectId: number; lis
         align="end"
         className="w-48"
         onCloseAutoFocus={(e) => {
-          if (keepFocus.current) {
+          if (renameNext.current) {
             e.preventDefault();
-            keepFocus.current = false;
+            renameNext.current = false;
+            onRename();
           }
         }}
       >
         <DropdownMenuItem
           onSelect={() => {
-            keepFocus.current = true;
-            onRename();
+            renameNext.current = true;
           }}
         >
           {t.rename}

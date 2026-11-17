@@ -99,6 +99,7 @@ export function ArchivedSheet({ projectId }: { projectId: number }) {
                       <Button
                         variant="outline"
                         size="sm"
+                        disabled={restoreCard.isPending}
                         aria-label={t.restoreItem(c.title)}
                         onClick={() => restoreCard.mutate({ card: c })}
                       >

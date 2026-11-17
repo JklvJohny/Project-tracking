@@ -47,10 +47,13 @@ export function CardPreview({
   card,
   users,
   labels,
+  actionSpace = false,
 }: {
   card: S['CardSummary'];
   users: S['User'][];
   labels: S['BoardLabel'][];
+  /** Reserve the top-right corner for an overlaid action button. */
+  actionSpace?: boolean;
 }) {
   const t = useT(TEXT);
   const { lang } = useLang();
@@ -67,7 +70,7 @@ export function CardPreview({
       scroll={false}
       className="block px-4 py-3.5 transition-colors hover:bg-muted/40 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
     >
-      <div className="flex flex-wrap items-center gap-1.5">
+      <div className={`flex flex-wrap items-center gap-1.5 ${actionSpace ? 'pr-7' : ''}`}>
         <span
           className="rounded px-1.5 py-0.5 text-[10px] leading-4 font-bold tracking-wide text-white uppercase"
           style={{ background: `var(--pb-${card.priority})` }}
@@ -130,9 +133,10 @@ export function CardPreview({
             </span>
           )}
           {card.commentCount > 0 && (
-            <span className="inline-flex items-center gap-1" aria-label={t.comments(card.commentCount)}>
+            <span className="inline-flex items-center gap-1">
               <MessageSquare className="size-3.5" aria-hidden />
-              {card.commentCount}
+              <span aria-hidden>{card.commentCount}</span>
+              <span className="sr-only">{t.comments(card.commentCount)}</span>
             </span>
           )}
         </div>

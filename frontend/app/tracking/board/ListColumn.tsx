@@ -1,6 +1,6 @@
 'use client';
 import { CheckCircle2, Archive } from 'lucide-react';
-import { useState, type KeyboardEvent } from 'react';
+import { useRef, useState, type KeyboardEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { components } from '../shared/api/schema';
@@ -54,15 +54,22 @@ export function ListColumn({
   const update = useUpdateList(projectId);
   const archiveCard = useArchiveCard(projectId);
   const [renaming, setRenaming] = useState(false);
+  // Enter/Escape unmount the focused input, which can fire blur: settled makes commit run once and never after Escape.
+  const settled = useRef(false);
 
   function commit(value: string) {
+    if (settled.current) return;
+    settled.current = true;
     setRenaming(false);
     const name = value.trim();
     if (name && name !== list.name) update.mutate({ listId: list.id, name });
   }
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.nativeEvent.isComposing) commit(e.currentTarget.value);
-    else if (e.key === 'Escape') setRenaming(false);
+    else if (e.key === 'Escape') {
+      settled.current = true;
+      setRenaming(false);
+    }
   };
 
   return (
@@ -87,10 +94,14 @@ export function ListColumn({
           </h2>
         )}
         {list.isDone && <CheckCircle2 className="size-4 shrink-0 text-(--s-done)" aria-label={t.done} role="img" />}
-        <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground tabular-nums" aria-label={t.count(cards.length)}>
-          {cards.length}
+        <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground tabular-nums">
+          <span aria-hidden>{cards.length}</span>
+          <span className="sr-only">{t.count(cards.length)}</span>
         </span>
-        {canManage && <ListMenu projectId={projectId} list={list} onRename={() => setRenaming(true)} />}
+        {canManage && <ListMenu projectId={projectId} list={list} onRename={() => {
+              settled.current = false;
+              setRenaming(true);
+            }} />}
       </div>
       <ol
         aria-label={t.cards(list.name)}
@@ -99,12 +110,12 @@ export function ListColumn({
         {cards.length === 0 && <li className="px-3 py-6 text-center text-xs text-muted-foreground">{t.empty}</li>}
         {cards.map((c) => (
           <li key={c.id} className="group relative">
-            <CardPreview card={c} users={users} labels={labels} />
+            <CardPreview card={c} users={users} labels={labels} actionSpace={canAddCards} />
             {canAddCards && (
               <Button
                 variant="ghost"
                 size="icon-xs"
-                className="absolute top-2 right-2 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100"
+                className="absolute top-2 right-2 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
                 aria-label={t.archiveCard(c.title)}
                 title={t.archiveCard(c.title)}
                 onClick={() => archiveCard.mutate(c)}

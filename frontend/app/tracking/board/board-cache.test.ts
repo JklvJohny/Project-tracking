@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { components } from '../shared/api/schema';
-import { cardsByList, moveCardLocal, moveListLocal, removeCard, upsertCard, upsertList, type BoardData } from './board-cache';
+import { cardsByList, detailToSummary, moveCardLocal, setListCompletion, moveListLocal, removeCard, upsertCard, upsertList, type BoardData } from './board-cache';
 
 type Card = components['schemas']['CardSummary'];
 
@@ -109,5 +109,30 @@ describe('lists', () => {
 
   it('cardsByList includes empty lists', () => {
     expect([...cardsByList(board([card(1, 2)])).keys()]).toEqual([1, 2, 3]);
+  });
+});
+
+describe('setListCompletion', () => {
+  it('stamps only cards without completedAt; false clears all; other lists untouched', () => {
+    const b = board([card(1, 1), card(2, 1, { completedAt: '2026-01-01T00:00:00Z' }), card(3, 2)]);
+    const done = setListCompletion(b, 1, '2026-11-17T10:00:00Z');
+    expect(done.cards.map((c) => c.completedAt)).toEqual(['2026-11-17T10:00:00Z', '2026-01-01T00:00:00Z', null]);
+    expect(setListCompletion(done, 1, null).cards.map((c) => c.completedAt)).toEqual([null, null, null]);
+  });
+});
+
+describe('detailToSummary', () => {
+  const detail = {
+    id: 9, listId: 1, title: 't', descriptionMd: '', priority: 'low' as const, startDate: null, dueDate: null,
+    position: 'p', completedAt: null, createdAt: 'x', updatedAt: 'y', archivedAt: null, assigneeIds: [1], labelIds: [2],
+    checklist: [
+      { id: 1, text: 'a', isDone: true, position: 'a' },
+      { id: 2, text: 'b', isDone: false, position: 'b' },
+    ],
+  };
+  it('counts checklist and takes commentCount from prev', () => {
+    const s = detailToSummary(detail, card(9, 1, { commentCount: 4 }));
+    expect([s.checklistTotal, s.checklistDone, s.commentCount]).toEqual([2, 1, 4]);
+    expect(detailToSummary(detail).commentCount).toBe(0);
   });
 });

@@ -19,7 +19,7 @@ const SKELETON_CARDS = [3, 2, 4, 2];
 export function BoardSkeleton() {
   const t = useT(TEXT);
   return (
-    <div className="flex items-start gap-3 overflow-x-auto px-4 pb-4" role="status" aria-label={t.loading}>
+    <div className="flex min-h-[28rem] items-start gap-3 overflow-x-auto px-4 pb-4" role="status" aria-label={t.loading}>
       {SKELETON_CARDS.map((n, i) => (
         <div key={i} aria-hidden className={`${COLUMN_W} animate-pulse rounded-xl border bg-muted/50 p-2`}>
           <div className="mb-2 h-7 w-32 rounded bg-muted" />
