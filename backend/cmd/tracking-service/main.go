@@ -46,6 +46,11 @@ func run() error {
 	}
 	st := memory.New(time.Now)
 	userProvider := users.NewStub()
+	if cfg.Env == "local" {
+		if err := memory.Seed(st, userProvider, cfg.SeedLarge); err != nil {
+			return err
+		}
+	}
 	publisher := events.NewLog(slog.Default())
 	projects := project.New(st, userProvider, publisher, time.Now)
 	boards := board.New(st, publisher, time.Now)

@@ -1,0 +1,1180 @@
+openapi: 3.1.0
+info:
+  title: Project Tracking service
+  version: 1.0.0
+  description: |
+    Boards, lists, cards, checklists, comments, labels and members for one department.
+    Every JSON response uses an envelope: `{ "success": true, "data": ... }` on success and
+    `{ "success": false, "error": "<english text>", "code": "<code>", "fields"?: { "<field>": "<code>" } }`
+    on failure. `error` is for logs; clients show their own Thai/English text chosen by `code`.
+    The server never sends 405: a wrong method answers 400 `bad_request`.
+    Writes are all-or-nothing and return the updated entity. Ids are int64 (JSON numbers).
+    Dates are `YYYY-MM-DD`, timestamps are RFC 3339.
+servers:
+  - url: /api/tracking/v1
+security:
+  - userHeader: []
+tags:
+  - name: me
+  - name: projects
+  - name: members
+  - name: labels
+  - name: board
+  - name: lists
+  - name: cards
+  - name: checklist
+  - name: comments
+  - name: ops
+paths:
+  /healthz:
+    servers:
+      - url: /
+    get:
+      tags: [ops]
+      operationId: healthz
+      summary: Liveness probe (no auth, outside the API base path)
+      security: []
+      responses:
+        '200': { $ref: '#/components/responses/Health' }
+  /me:
+    get:
+      tags: [me]
+      operationId: getMe
+      summary: The caller, with system-level capabilities
+      responses:
+        '200': { $ref: '#/components/responses/Me' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /users:
+    get:
+      tags: [me]
+      operationId: searchUsers
+      summary: Search people for the member picker (empty q gives an empty list; max 20 results)
+      parameters:
+        - name: q
+          in: query
+          schema: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/UserList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /projects:
+    get:
+      tags: [projects]
+      operationId: listProjects
+      summary: Projects visible to the caller (admins see all; others only memberships). Active first, then newest change.
+      responses:
+        '200': { $ref: '#/components/responses/ProjectList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [projects]
+      operationId: createProject
+      summary: Create a project with its board and four default lists; the caller becomes its PM. Admin or manager only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateProjectInput' }
+      responses:
+        '201': { $ref: '#/components/responses/Project' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /projects/{projectID}:
+    parameters:
+      - $ref: '#/components/parameters/projectID'
+    get:
+      tags: [projects]
+      operationId: getProject
+      responses:
+        '200': { $ref: '#/components/responses/Project' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [projects]
+      operationId: updateProject
+      summary: Partial update. Omitted or null fields stay; an empty string clears startDate or endDate. PM or admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateProjectInput' }
+      responses:
+        '200': { $ref: '#/components/responses/Project' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /projects/{projectID}/archive:
+    parameters:
+      - $ref: '#/components/parameters/projectID'
+    post:
+      tags: [projects]
+      operationId: archiveProject
+      summary: Set archivedAt. PM or admin. Idempotent.
+      responses:
+        '200': { $ref: '#/components/responses/Project' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /projects/{projectID}/restore:
+    parameters:
+      - $ref: '#/components/parameters/projectID'
+    post:
+      tags: [projects]
+      operationId: restoreProject
+      summary: Clear archivedAt. Conflict when another live project already uses the name. PM or admin.
+      responses:
+        '200': { $ref: '#/components/responses/Project' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /projects/{projectID}/members:
+    parameters:
+      - $ref: '#/components/parameters/projectID'
+    get:
+      tags: [members]
+      operationId: listMembers
+      responses:
+        '200': { $ref: '#/components/responses/MemberList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [members]
+      operationId: addMember
+      summary: Add a user-service user to the project. 404 when the user does not exist, 409 when already a member. PM or admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AddMemberInput' }
+      responses:
+        '201': { $ref: '#/components/responses/Member' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /projects/{projectID}/members/{userID}:
+    parameters:
+      - $ref: '#/components/parameters/projectID'
+      - $ref: '#/components/parameters/userID'
+    patch:
+      tags: [members]
+      operationId: setMemberRole
+      summary: Change a role. Demoting the only PM answers 409. PM or admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SetRoleInput' }
+      responses:
+        '200': { $ref: '#/components/responses/Member' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    delete:
+      tags: [members]
+      operationId: removeMember
+      summary: Remove a member. Removing the only PM answers 409. PM or admin.
+      responses:
+        '200': { $ref: '#/components/responses/Empty' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /projects/{projectID}/labels:
+    parameters:
+      - $ref: '#/components/parameters/projectID'
+    get:
+      tags: [labels]
+      operationId: listLabels
+      responses:
+        '200': { $ref: '#/components/responses/LabelList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [labels]
+      operationId: createLabel
+      summary: Create a label (names are unique per project, ignoring case). PM or admin; 409 on an archived project.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LabelInput' }
+      responses:
+        '201': { $ref: '#/components/responses/Label' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /labels/{labelID}:
+    parameters:
+      - $ref: '#/components/parameters/labelID'
+    patch:
+      tags: [labels]
+      operationId: updateLabel
+      summary: Partial update of name and/or color. PM or admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LabelPatch' }
+      responses:
+        '200': { $ref: '#/components/responses/Label' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    delete:
+      tags: [labels]
+      operationId: deleteLabel
+      summary: Delete the label and remove it from every card. PM or admin.
+      responses:
+        '200': { $ref: '#/components/responses/Empty' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /projects/{projectID}/board:
+    parameters:
+      - $ref: '#/components/parameters/projectID'
+    get:
+      tags: [board]
+      operationId: getBoard
+      summary: Everything the board screen shows in one response (no description fields). Carries a weak ETag; send it back as If-None-Match to get 304 with no body.
+      parameters:
+        - name: If-None-Match
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: The board.
+          headers:
+            ETag:
+              description: Weak validator built from the board's updatedAt and the caller's role.
+              schema: { type: string }
+            Cache-Control:
+              description: private, no-cache
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { const: true }
+                  data: { $ref: '#/components/schemas/Board' }
+        '304':
+          description: Not modified; empty body.
+          headers:
+            ETag:
+              schema: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /projects/{projectID}/archived:
+    parameters:
+      - $ref: '#/components/parameters/projectID'
+    get:
+      tags: [board]
+      operationId: getArchived
+      summary: Archived lists and archived cards of the board
+      responses:
+        '200': { $ref: '#/components/responses/Archived' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /projects/{projectID}/lists:
+    parameters:
+      - $ref: '#/components/parameters/projectID'
+    post:
+      tags: [lists]
+      operationId: createList
+      summary: Append a list at the end of the board. PM or admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateListInput' }
+      responses:
+        '201': { $ref: '#/components/responses/List' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /lists/{listID}:
+    parameters:
+      - $ref: '#/components/parameters/listID'
+    patch:
+      tags: [lists]
+      operationId: updateList
+      summary: Rename a list and/or set isDone. Setting isDone stamps completedAt on its active cards, clearing it unstamps them.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateListInput' }
+      responses:
+        '200': { $ref: '#/components/responses/List' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /lists/{listID}/move:
+    parameters:
+      - $ref: '#/components/parameters/listID'
+    post:
+      tags: [lists]
+      operationId: moveList
+      summary: Drop a list between two neighbours. Stale or misordered neighbours answer 409 with error "stale_order"; the client refetches the board.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MoveInput' }
+      responses:
+        '200': { $ref: '#/components/responses/List' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /lists/{listID}/archive:
+    parameters:
+      - $ref: '#/components/parameters/listID'
+    post:
+      tags: [lists]
+      operationId: archiveList
+      summary: Archive a list (its cards leave the board with it). PM or admin.
+      responses:
+        '200': { $ref: '#/components/responses/List' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /lists/{listID}/restore:
+    parameters:
+      - $ref: '#/components/parameters/listID'
+    post:
+      tags: [lists]
+      operationId: restoreList
+      summary: Restore a list to the end of the board. PM or admin.
+      responses:
+        '200': { $ref: '#/components/responses/List' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /lists/{listID}/cards:
+    parameters:
+      - $ref: '#/components/parameters/listID'
+    post:
+      tags: [cards]
+      operationId: createCard
+      summary: Create a card at the end of a list. Member, PM or admin. 409 for an archived list or project.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateCardInput' }
+      responses:
+        '201': { $ref: '#/components/responses/Card' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /cards/{cardID}:
+    parameters:
+      - $ref: '#/components/parameters/cardID'
+    get:
+      tags: [cards]
+      operationId: getCard
+      summary: Full card detail. Comments are served separately.
+      responses:
+        '200': { $ref: '#/components/responses/Card' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [cards]
+      operationId: updateCard
+      summary: Partial update. An absent key leaves the field alone; startDate/dueDate null clears the date. Member, PM or admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateCardInput' }
+      responses:
+        '200': { $ref: '#/components/responses/Card' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /cards/{cardID}/move:
+    parameters:
+      - $ref: '#/components/parameters/cardID'
+    post:
+      tags: [cards]
+      operationId: moveCard
+      summary: Move within or across lists of the same project. Moving into a done list stamps completedAt, out of one clears it. Stale neighbours answer 409 "stale_order".
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MoveCardInput' }
+      responses:
+        '200': { $ref: '#/components/responses/Card' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /cards/{cardID}/archive:
+    parameters:
+      - $ref: '#/components/parameters/cardID'
+    post:
+      tags: [cards]
+      operationId: archiveCard
+      responses:
+        '200': { $ref: '#/components/responses/Card' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /cards/{cardID}/restore:
+    parameters:
+      - $ref: '#/components/parameters/cardID'
+    post:
+      tags: [cards]
+      operationId: restoreCard
+      summary: Put the card back at the end of its list. 409 when the list is archived.
+      responses:
+        '200': { $ref: '#/components/responses/Card' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /cards/{cardID}/assignees/{userID}:
+    parameters:
+      - $ref: '#/components/parameters/cardID'
+      - $ref: '#/components/parameters/userID'
+    put:
+      tags: [cards]
+      operationId: assignUser
+      summary: Assign a project member. Idempotent. 422 (userId not_member) for a non-member.
+      responses:
+        '200': { $ref: '#/components/responses/Card' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    delete:
+      tags: [cards]
+      operationId: unassignUser
+      summary: Remove an assignee. Idempotent.
+      responses:
+        '200': { $ref: '#/components/responses/Card' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /cards/{cardID}/labels/{labelID}:
+    parameters:
+      - $ref: '#/components/parameters/cardID'
+      - $ref: '#/components/parameters/labelID'
+    put:
+      tags: [cards]
+      operationId: addCardLabel
+      summary: Put a label of the card's own project on the card. Idempotent.
+      responses:
+        '200': { $ref: '#/components/responses/Card' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      tags: [cards]
+      operationId: removeCardLabel
+      summary: Take a label off the card. Idempotent.
+      responses:
+        '200': { $ref: '#/components/responses/Card' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /cards/{cardID}/checklist:
+    parameters:
+      - $ref: '#/components/parameters/cardID'
+    post:
+      tags: [checklist]
+      operationId: addChecklistItem
+      summary: Append an item. 409 on an archived card.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AddItemInput' }
+      responses:
+        '201': { $ref: '#/components/responses/ChecklistItem' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /checklist/{itemID}:
+    parameters:
+      - $ref: '#/components/parameters/itemID'
+    patch:
+      tags: [checklist]
+      operationId: updateChecklistItem
+      summary: Edit text and/or tick the item.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ItemPatch' }
+      responses:
+        '200': { $ref: '#/components/responses/ChecklistItem' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    delete:
+      tags: [checklist]
+      operationId: deleteChecklistItem
+      responses:
+        '200': { $ref: '#/components/responses/Empty' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /checklist/{itemID}/move:
+    parameters:
+      - $ref: '#/components/parameters/itemID'
+    post:
+      tags: [checklist]
+      operationId: moveChecklistItem
+      summary: Reorder within the card. Stale neighbours answer 409 "stale_order".
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MoveInput' }
+      responses:
+        '200': { $ref: '#/components/responses/ChecklistItem' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /cards/{cardID}/comments:
+    parameters:
+      - $ref: '#/components/parameters/cardID'
+    get:
+      tags: [comments]
+      operationId: listComments
+      summary: Non-deleted comments, oldest first
+      responses:
+        '200': { $ref: '#/components/responses/CommentList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [comments]
+      operationId: addComment
+      summary: Add a comment. Mentions are written `@[<userId>]` in the body; mentioned project members are notified. Viewers get 403.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CommentInput' }
+      responses:
+        '201': { $ref: '#/components/responses/Comment' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /comments/{commentID}:
+    parameters:
+      - $ref: '#/components/parameters/commentID'
+    patch:
+      tags: [comments]
+      operationId: editComment
+      summary: Edit your own comment (sets editedAt).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CommentInput' }
+      responses:
+        '200': { $ref: '#/components/responses/Comment' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    delete:
+      tags: [comments]
+      operationId: deleteComment
+      summary: Soft-delete. Authors delete their own; PM or admin delete any.
+      responses:
+        '200': { $ref: '#/components/responses/Empty' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+components:
+  securitySchemes:
+    userHeader:
+      type: apiKey
+      in: header
+      name: X-User-ID
+      description: Local development only (build tag `local`). Production authentication replaces it.
+  parameters:
+    projectID: { name: projectID, in: path, required: true, schema: { type: integer, format: int64, minimum: 1 } }
+    userID: { name: userID, in: path, required: true, schema: { type: integer, format: int64, minimum: 1 } }
+    listID: { name: listID, in: path, required: true, schema: { type: integer, format: int64, minimum: 1 } }
+    cardID: { name: cardID, in: path, required: true, schema: { type: integer, format: int64, minimum: 1 } }
+    labelID: { name: labelID, in: path, required: true, schema: { type: integer, format: int64, minimum: 1 } }
+    itemID: { name: itemID, in: path, required: true, schema: { type: integer, format: int64, minimum: 1 } }
+    commentID: { name: commentID, in: path, required: true, schema: { type: integer, format: int64, minimum: 1 } }
+  responses:
+    Health:
+      description: Service is up.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [success, data]
+            properties:
+              success: { const: true }
+              data: { type: object, required: [status], properties: { status: { const: ok } } }
+    Me:
+      description: The caller.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [success, data]
+            properties:
+              success: { const: true }
+              data: { $ref: '#/components/schemas/Me' }
+    UserList:
+      description: Matching users.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [success, data]
+            properties:
+              success: { const: true }
+              data: { type: array, items: { $ref: '#/components/schemas/User' } }
+    Project:
+      description: The project.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [success, data]
+            properties:
+              success: { const: true }
+              data: { $ref: '#/components/schemas/Project' }
+    ProjectList:
+      description: Projects.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [success, data]
+            properties:
+              success: { const: true }
+              data: { type: array, items: { $ref: '#/components/schemas/Project' } }
+    Member:
+      description: The member.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [success, data]
+            properties:
+              success: { const: true }
+              data: { $ref: '#/components/schemas/Member' }
+    MemberList:
+      description: Members ordered by added time.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [success, data]
+            properties:
+              success: { const: true }
+              data: { type: array, items: { $ref: '#/components/schemas/Member' } }
+    Label:
+      description: The label.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [success, data]
+            properties:
+              success: { const: true }
+              data: { $ref: '#/components/schemas/Label' }
+    LabelList:
+      description: Labels ordered by id.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [success, data]
+            properties:
+              success: { const: true }
+              data: { type: array, items: { $ref: '#/components/schemas/Label' } }
+    Archived:
+      description: Archived lists and cards.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [success, data]
+            properties:
+              success: { const: true }
+              data: { $ref: '#/components/schemas/Archived' }
+    List:
+      description: The list.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [success, data]
+            properties:
+              success: { const: true }
+              data: { $ref: '#/components/schemas/List' }
+    Card:
+      description: The card.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [success, data]
+            properties:
+              success: { const: true }
+              data: { $ref: '#/components/schemas/CardDetail' }
+    ChecklistItem:
+      description: The checklist item.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [success, data]
+            properties:
+              success: { const: true }
+              data: { $ref: '#/components/schemas/ChecklistItem' }
+    CommentList:
+      description: Comments, oldest first.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [success, data]
+            properties:
+              success: { const: true }
+              data: { type: array, items: { $ref: '#/components/schemas/Comment' } }
+    Comment:
+      description: The comment.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [success, data]
+            properties:
+              success: { const: true }
+              data: { $ref: '#/components/schemas/Comment' }
+    Empty:
+      description: Done; data is an empty object.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [success, data]
+            properties:
+              success: { const: true }
+              data: { type: object, additionalProperties: false }
+    BadRequest:
+      description: Malformed id, unknown JSON field, oversized body or wrong HTTP method (code bad_request).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unauthorized:
+      description: Missing or invalid credentials (code unauthorized).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: The caller's project role lacks this action (code forbidden).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Missing, or the caller is not a member of the project; existence is never revealed (code not_found).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Conflict:
+      description: Duplicate name, archived parent, last PM, or stale_order on a move (code conflict).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    ValidationFailed:
+      description: Field errors in `fields` (code validation_failed).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+  schemas:
+    Error:
+      type: object
+      required: [success, error, code]
+      properties:
+        success: { const: false }
+        error: { type: string, description: English text for logs. }
+        code:
+          type: string
+          enum: [bad_request, unauthorized, forbidden, not_found, conflict, validation_failed, server_error]
+        fields:
+          type: object
+          description: Present with validation_failed. Maps a request field to why it failed.
+          additionalProperties:
+            type: string
+            enum: [required, too_long, invalid, invalid_date, before_start, not_member]
+    ProjectStatus:
+      type: string
+      enum: [active, on_hold, done]
+    ProjectRole:
+      type: string
+      enum: [pm, member, viewer]
+    MyRole:
+      description: The caller's role in this project; admin for system admins who are not members.
+      type: string
+      enum: [admin, pm, member, viewer]
+    Priority:
+      type: string
+      enum: [low, medium, high, urgent]
+    LabelColor:
+      type: string
+      enum: [green, yellow, red, blue, purple, gray]
+    User:
+      type: object
+      required: [id, name, avatarUrl]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        avatarUrl: { type: string }
+    Me:
+      type: object
+      required: [user, isAdmin, canCreateProject]
+      properties:
+        user: { $ref: '#/components/schemas/User' }
+        isAdmin: { type: boolean }
+        canCreateProject: { type: boolean, description: True for system admins and managers. }
+    Project:
+      type: object
+      required: [id, name, description, ownerId, status, startDate, endDate, createdAt, updatedAt, archivedAt, myRole]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string, maxLength: 200 }
+        description: { type: string, maxLength: 20000 }
+        ownerId: { type: integer, format: int64 }
+        status: { $ref: '#/components/schemas/ProjectStatus' }
+        startDate: { type: [string, 'null'], format: date }
+        endDate: { type: [string, 'null'], format: date }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        archivedAt: { type: [string, 'null'], format: date-time }
+        myRole: { $ref: '#/components/schemas/MyRole' }
+    CreateProjectInput:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: string, maxLength: 20000 }
+        lang:
+          type: string
+          enum: [th, en]
+          description: Language of the four default list names; empty means en.
+        startDate: { type: [string, 'null'], format: date }
+        endDate: { type: [string, 'null'], format: date, description: Must not be before startDate. }
+    UpdateProjectInput:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: string, maxLength: 20000 }
+        status: { $ref: '#/components/schemas/ProjectStatus' }
+        startDate: { type: string, description: 'A YYYY-MM-DD date; an empty string clears it.' }
+        endDate: { type: string, description: 'A YYYY-MM-DD date; an empty string clears it.' }
+    Member:
+      type: object
+      required: [userId, name, avatarUrl, role, addedAt]
+      properties:
+        userId: { type: integer, format: int64 }
+        name: { type: string }
+        avatarUrl: { type: string }
+        role: { $ref: '#/components/schemas/ProjectRole' }
+        addedAt: { type: string, format: date-time }
+    AddMemberInput:
+      type: object
+      additionalProperties: false
+      required: [userId, role]
+      properties:
+        userId: { type: integer, format: int64 }
+        role: { $ref: '#/components/schemas/ProjectRole' }
+    SetRoleInput:
+      type: object
+      additionalProperties: false
+      required: [role]
+      properties:
+        role: { $ref: '#/components/schemas/ProjectRole' }
+    Label:
+      type: object
+      required: [id, projectId, name, color]
+      properties:
+        id: { type: integer, format: int64 }
+        projectId: { type: integer, format: int64 }
+        name: { type: string, maxLength: 40 }
+        color: { $ref: '#/components/schemas/LabelColor' }
+    LabelInput:
+      type: object
+      additionalProperties: false
+      required: [name, color]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 40 }
+        color: { $ref: '#/components/schemas/LabelColor' }
+    LabelPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 40 }
+        color: { $ref: '#/components/schemas/LabelColor' }
+    BoardInfo:
+      type: object
+      required: [id, projectId, updatedAt]
+      properties:
+        id: { type: integer, format: int64 }
+        projectId: { type: integer, format: int64 }
+        updatedAt: { type: string, format: date-time, description: Bumped by every change the board shows; the ETag source. }
+    BoardProject:
+      type: object
+      required: [id, name, description, ownerId, status, startDate, endDate, archivedAt]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        description: { type: string }
+        ownerId: { type: integer, format: int64 }
+        status: { $ref: '#/components/schemas/ProjectStatus' }
+        startDate: { type: [string, 'null'], format: date }
+        endDate: { type: [string, 'null'], format: date }
+        archivedAt: { type: [string, 'null'], format: date-time }
+    List:
+      type: object
+      required: [id, boardId, name, position, isDone, wipLimit, archivedAt]
+      properties:
+        id: { type: integer, format: int64 }
+        boardId: { type: integer, format: int64 }
+        name: { type: string, maxLength: 100 }
+        position: { type: string, description: LexoRank key; sort ascending by plain byte comparison. }
+        isDone: { type: boolean, description: Cards in a done list carry completedAt. }
+        wipLimit: { type: [integer, 'null'], description: Reserved; always null today. }
+        archivedAt: { type: [string, 'null'], format: date-time }
+    CardSummary:
+      type: object
+      required: [id, listId, title, priority, startDate, dueDate, position, completedAt, updatedAt, labelIds, assigneeIds, checklistTotal, checklistDone, commentCount]
+      properties:
+        id: { type: integer, format: int64 }
+        listId: { type: integer, format: int64 }
+        title: { type: string }
+        priority: { $ref: '#/components/schemas/Priority' }
+        startDate: { type: [string, 'null'], format: date }
+        dueDate: { type: [string, 'null'], format: date }
+        position: { type: string }
+        completedAt: { type: [string, 'null'], format: date-time }
+        updatedAt: { type: string, format: date-time }
+        labelIds: { type: array, items: { type: integer, format: int64 } }
+        assigneeIds: { type: array, items: { type: integer, format: int64 } }
+        checklistTotal: { type: integer }
+        checklistDone: { type: integer }
+        commentCount: { type: integer, description: Excludes soft-deleted comments. }
+    BoardLabel:
+      type: object
+      required: [id, name, color]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        color: { $ref: '#/components/schemas/LabelColor' }
+    BoardMember:
+      type: object
+      required: [userId, name, avatarUrl, role]
+      properties:
+        userId: { type: integer, format: int64 }
+        name: { type: string }
+        avatarUrl: { type: string }
+        role: { $ref: '#/components/schemas/ProjectRole' }
+    Board:
+      type: object
+      required: [board, project, myRole, lists, cards, labels, members, users]
+      properties:
+        board: { $ref: '#/components/schemas/BoardInfo' }
+        project: { $ref: '#/components/schemas/BoardProject' }
+        myRole: { $ref: '#/components/schemas/MyRole' }
+        lists: { type: array, items: { $ref: '#/components/schemas/List' }, description: Live lists by position. }
+        cards: { type: array, items: { $ref: '#/components/schemas/CardSummary' }, description: Live cards of live lists, by position. }
+        labels: { type: array, items: { $ref: '#/components/schemas/BoardLabel' } }
+        members: { type: array, items: { $ref: '#/components/schemas/BoardMember' } }
+        users: { type: array, items: { $ref: '#/components/schemas/User' }, description: Profiles of members and of every assignee. }
+    Archived:
+      type: object
+      required: [lists, cards]
+      properties:
+        lists: { type: array, items: { $ref: '#/components/schemas/List' } }
+        cards: { type: array, items: { $ref: '#/components/schemas/CardSummary' } }
+    CreateListInput:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+    UpdateListInput:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        isDone: { type: boolean }
+    MoveInput:
+      type: object
+      additionalProperties: false
+      description: The neighbours the client saw at the drop spot. Both null means no neighbour (the item goes to an empty spot or the end).
+      properties:
+        beforeId: { type: [integer, 'null'], format: int64, description: Id of the item that will sit above. }
+        afterId: { type: [integer, 'null'], format: int64, description: Id of the item that will sit below. }
+    ChecklistItem:
+      type: object
+      required: [id, text, isDone, position]
+      properties:
+        id: { type: integer, format: int64 }
+        text: { type: string, maxLength: 500 }
+        isDone: { type: boolean }
+        position: { type: string }
+    CardDetail:
+      type: object
+      required: [id, listId, title, descriptionMd, priority, startDate, dueDate, position, completedAt, createdAt, updatedAt, archivedAt, assigneeIds, labelIds, checklist]
+      properties:
+        id: { type: integer, format: int64 }
+        listId: { type: integer, format: int64 }
+        title: { type: string, maxLength: 200 }
+        descriptionMd: { type: string, maxLength: 20000 }
+        priority: { $ref: '#/components/schemas/Priority' }
+        startDate: { type: [string, 'null'], format: date }
+        dueDate: { type: [string, 'null'], format: date, description: Not before startDate. }
+        position: { type: string }
+        completedAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        archivedAt: { type: [string, 'null'], format: date-time }
+        assigneeIds: { type: array, items: { type: integer, format: int64 } }
+        labelIds: { type: array, items: { type: integer, format: int64 } }
+        checklist: { type: array, items: { $ref: '#/components/schemas/ChecklistItem' } }
+    CreateCardInput:
+      type: object
+      additionalProperties: false
+      required: [title]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+    UpdateCardInput:
+      type: object
+      additionalProperties: false
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        descriptionMd: { type: string, maxLength: 20000 }
+        priority: { $ref: '#/components/schemas/Priority' }
+        startDate: { type: [string, 'null'], format: date, description: 'Absent leaves it; null clears it.' }
+        dueDate: { type: [string, 'null'], format: date, description: 'Absent leaves it; null clears it.' }
+    MoveCardInput:
+      type: object
+      additionalProperties: false
+      required: [toListId]
+      properties:
+        toListId: { type: integer, format: int64 }
+        beforeId: { type: [integer, 'null'], format: int64 }
+        afterId: { type: [integer, 'null'], format: int64 }
+    AddItemInput:
+      type: object
+      additionalProperties: false
+      required: [text]
+      properties:
+        text: { type: string, minLength: 1, maxLength: 500 }
+    ItemPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        text: { type: string, minLength: 1, maxLength: 500 }
+        isDone: { type: boolean }
+    CommentInput:
+      type: object
+      additionalProperties: false
+      required: [body]
+      properties:
+        body: { type: string, minLength: 1, maxLength: 5000 }
+    Comment:
+      type: object
+      required: [id, cardId, authorId, bodyMd, createdAt, editedAt, mentionIds]
+      properties:
+        id: { type: integer, format: int64 }
+        cardId: { type: integer, format: int64 }
+        authorId: { type: integer, format: int64 }
+        bodyMd: { type: string }
+        createdAt: { type: string, format: date-time }
+        editedAt: { type: [string, 'null'], format: date-time }
+        mentionIds: { type: array, items: { type: integer, format: int64 } }
