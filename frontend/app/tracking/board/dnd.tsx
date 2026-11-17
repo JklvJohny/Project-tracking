@@ -17,7 +17,6 @@ import {
   type UniqueIdentifier,
 } from '@dnd-kit/core';
 import {
-  arrayMove,
   horizontalListSortingStrategy,
   SortableContext,
   sortableKeyboardCoordinates,
@@ -37,33 +36,29 @@ import {
   type ReactNode,
 } from 'react';
 import { useLang } from '../shared/i18n';
-import { announcements, cardDndId, listDndId } from './announcements';
+import { announcements, cardDndId, listDndId, movedText } from './announcements';
 import type { BoardData, CardSummary } from './board-cache';
 import { CardPreview } from './CardPreview';
+import {
+  arrayMove,
+  containerOf,
+  dropOrder,
+  dropZoneId,
+  isCardId,
+  isListId,
+  neighboursAt,
+  numOf,
+  previewCrossList,
+  type Preview,
+} from './dnd-order';
 import { useMoveCard } from './useMoveCard';
 import { useMoveList } from './useMoveList';
 
-export const dropZoneId = (listId: number) => `list-drop:${listId}`;
-const numOf = (id: UniqueIdentifier) => Number(String(id).split(':')[1]);
-const isCard = (id: UniqueIdentifier) => String(id).startsWith('card:');
-const isList = (id: UniqueIdentifier) => String(id).startsWith('list:');
+const isCard = isCardId;
+const isList = isListId;
 
-type Preview = Map<number, number[]>;
-export type Dir = 'up' | 'down' | 'left' | 'right';
-
-/** Server neighbours of `movedId` inside `ids` (the order after the drop): above = beforeId, below = afterId, itself excluded. */
-export function neighboursAt(ids: number[], movedId: number) {
-  const others = ids.filter((x) => x !== movedId);
-  const idx = ids.indexOf(movedId);
-  return { beforeId: others[idx - 1] ?? null, afterId: others[idx] ?? null };
-}
-
-function containerOf(p: Preview, id: UniqueIdentifier): number | undefined {
-  const s = String(id);
-  if (s.startsWith('list-drop:') || s.startsWith('list:')) return numOf(id);
-  const cid = numOf(id);
-  for (const [l, ids] of p) if (ids.includes(cid)) return l;
-}
+type Dir = 'up' | 'down' | 'left' | 'right';
+export type { Dir };
 
 /** Cards only collide with cards and list drop zones, lists only with lists. */
 const collision: CollisionDetection = (args) => {
@@ -89,17 +84,15 @@ const Ctx = createContext<{
 });
 export const useDndCtx = () => useContext(Ctx);
 
-function useReducedMotion() {
-  return useSyncExternalStore(
-    (cb) => {
-      const mq = window.matchMedia?.('(prefers-reduced-motion: reduce)');
-      mq?.addEventListener('change', cb);
-      return () => mq?.removeEventListener('change', cb);
-    },
-    () => !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches,
-    () => false,
-  );
+const REDUCED = '(prefers-reduced-motion: reduce)';
+function subscribeReduced(cb: () => void) {
+  const mq = window.matchMedia?.(REDUCED);
+  mq?.addEventListener('change', cb);
+  return () => mq?.removeEventListener('change', cb);
 }
+const reducedNow = () => !!window.matchMedia?.(REDUCED).matches;
+const reducedServer = () => false;
+const useReducedMotion = () => useSyncExternalStore(subscribeReduced, reducedNow, reducedServer);
 
 const ALT_DIR: Record<string, Dir> = {
   ArrowUp: 'up',
@@ -211,12 +204,9 @@ export function BoardDnd({
       nb = { beforeId: null, afterId: byList.get(target.id)?.[0]?.id ?? null }; // top of the neighbouring list
     }
     focusRef.current = String(cardId);
-    setLive(
-      text.onDragEnd?.({
-        active: { id: cardDndId(cardId) },
-        over: null,
-      } as never) ?? '',
-    );
+    const total = to === card.listId ? ids.length : (byList.get(to)?.length ?? 0) + 1;
+    const pos = dir === 'up' ? i : dir === 'down' ? i + 2 : 1;
+    setLive(movedText(lang, 'card', card.title, listById.get(to)?.name, pos, total));
     moveCard.mutate({ cardId, toListId: to, ...nb });
   };
 
@@ -225,12 +215,7 @@ export function BoardDnd({
     const i = ids.indexOf(listId);
     const j = dir === 'left' ? i - 1 : i + 1;
     if (j < 0 || j >= ids.length) return;
-    setLive(
-      text.onDragEnd?.({
-        active: { id: listDndId(listId) },
-        over: null,
-      } as never) ?? '',
-    );
+    setLive(movedText(lang, 'list', listById.get(listId)?.name ?? '', undefined, j + 1, ids.length));
     moveList.mutate({ listId, ...neighboursAt(arrayMove(ids, i, j), listId) });
   };
 
@@ -245,26 +230,8 @@ export function BoardDnd({
 
   function onDragOver({ active: a, over }: DragOverEvent) {
     if (!over || !isCard(a.id)) return;
-    setPreview((p) => {
-      if (!p) return p;
-      const from = containerOf(p, a.id);
-      const to = containerOf(p, over.id);
-      if (from == null || to == null || from === to) return p;
-      const cid = numOf(a.id);
-      const target = p.get(to)!;
-      let idx = target.length;
-      if (isCard(over.id)) {
-        const below = (a.rect.current.translated?.top ?? 0) > over.rect.top + over.rect.height / 2;
-        idx = target.indexOf(numOf(over.id)) + (below ? 1 : 0);
-      }
-      const next = new Map(p);
-      next.set(
-        from,
-        p.get(from)!.filter((x) => x !== cid),
-      );
-      next.set(to, [...target.slice(0, idx), cid, ...target.slice(idx)]);
-      return next;
-    });
+    const below = (a.rect.current.translated?.top ?? 0) > over.rect.top + over.rect.height / 2;
+    setPreview((p) => (p ? previewCrossList(p, String(a.id), String(over.id), below) : p));
   }
 
   function onDragEnd({ active: a, over }: DragEndEvent) {
@@ -283,11 +250,9 @@ export function BoardDnd({
     origin.current = null;
     if (!preview || !o || !over) return setPreview(null);
     const cid = numOf(a.id);
-    const to = containerOf(preview, a.id)!;
-    let ids = preview.get(to)!;
-    if (isCard(over.id) && over.id !== a.id && containerOf(preview, over.id) === to) {
-      ids = arrayMove(ids, ids.indexOf(cid), ids.indexOf(numOf(over.id)));
-    }
+    const end = dropOrder(preview, String(a.id), String(over.id));
+    if (!end) return setPreview(null);
+    const { listId: to, ids } = end;
     if (to === o.listId && ids.length === o.ids.length && ids.every((x, i) => x === o.ids[i])) return setPreview(null);
     droppedRef.current = true;
     moveCard.mutate({ cardId: cid, toListId: to, ...neighboursAt(ids, cid) }, { onSettled: () => setPreview(null) });
@@ -307,7 +272,7 @@ export function BoardDnd({
       canDragLists,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the handlers close over data/byList/text, which change with them
-    [data, byList, text, canDragCards, canDragLists],
+    [data, byList, lang, canDragCards, canDragLists],
   );
 
   const activeCard = active && isCard(active.id) ? cardById.get(numOf(active.id)) : undefined;

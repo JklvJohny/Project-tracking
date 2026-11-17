@@ -1,5 +1,5 @@
 'use client';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { api } from '../shared/api/client';
 import { qk } from '../shared/api/queries';
@@ -18,30 +18,49 @@ export type MoveCardInput = {
 
 const TEXT = { th: { retry: 'ลองอีกครั้ง' }, en: { retry: 'Retry' } };
 
+/** Card and list moves share one key, so "is another move still in flight" is a single count. */
+export const moveKey = (projectId: number) => ['move', projectId] as const;
+
+// Failure flag per client+project, shared by the card and list hooks (two hook instances, one batch).
+const failedBatch = new WeakMap<QueryClient, Set<number>>();
+
 /**
- * Shared failure path of card and list moves: restore the snapshot, then either reload the board
- * (stale_order, someone else reordered) or offer a Retry that re-sends the same move.
+ * Failure and settle path of card and list moves.
+ *
+ * Why not just restore the snapshot: with moves A then B in flight, B's snapshot already contains A's optimistic
+ * move, so if both fail B's restore would resurrect A's rejected move. Each failure still restores (instant
+ * feedback), but the last move to settle in a batch that saw any failure refetches the board, so the final
+ * state is the server's. Serialising with a mutation scope was rejected: onMutate still runs immediately for
+ * queued mutations, so the snapshots would not change, and queued drags would feel laggy.
  */
 export function useMoveFailure(projectId: number) {
   const qc = useQueryClient();
   const { lang } = useLang();
   const t = useT(TEXT);
-  return (e: unknown, prev: BoardData | undefined, retry: () => void) => {
-    const key = qk.board(projectId);
-    if (prev) qc.setQueryData(key, prev);
-    if (errorKey(e) === 'stale_order') {
-      // fetchQuery writes the cache itself; no invalidation, nothing awaited by the UI.
+  const key = qk.board(projectId);
+  const mark = () => {
+    const set = failedBatch.get(qc) ?? new Set<number>();
+    set.add(projectId);
+    failedBatch.set(qc, set);
+  };
+  return {
+    onFail(e: unknown, prev: BoardData | undefined, retry: () => void) {
+      mark();
+      if (prev) qc.setQueryData(key, prev);
+      if (errorKey(e) === 'stale_order') toast(errorText('stale_order', lang));
+      else toast.error(errorText(errorKey(e), lang), { action: { label: t.retry, onClick: retry } });
+    },
+    onSettled() {
+      // This move still counts as in flight inside its own onSettled.
+      if (qc.isMutating({ mutationKey: moveKey(projectId) }) !== 1) return;
+      if (!failedBatch.get(qc)?.delete(projectId)) return;
+      // fetchQuery writes the cache itself; no invalidation.
       qc.fetchQuery({
         queryKey: key,
         queryFn: () => api<BoardData>(`/projects/${projectId}/board`),
         staleTime: 0,
       }).catch(() => {});
-      toast(errorText('stale_order', lang));
-    } else {
-      toast.error(errorText(errorKey(e), lang), {
-        action: { label: t.retry, onClick: retry },
-      });
-    }
+    },
   };
 }
 
@@ -65,8 +84,9 @@ function applyMove(b: BoardData, v: MoveCardInput): BoardData {
 export function useMoveCard(projectId: number) {
   const qc = useQueryClient();
   const key = qk.board(projectId);
-  const onFail = useMoveFailure(projectId);
+  const fail = useMoveFailure(projectId);
   const m = useMutation({
+    mutationKey: moveKey(projectId),
     mutationFn: ({ cardId, toListId, beforeId, afterId }: MoveCardInput) =>
       api<S['CardDetail']>(`/cards/${cardId}/move`, {
         method: 'POST',
@@ -78,7 +98,8 @@ export function useMoveCard(projectId: number) {
       if (prev) qc.setQueryData<BoardData>(key, applyMove(prev, v));
       return { prev };
     },
-    onError: (e, v, ctx) => onFail(e, ctx?.prev, () => m.mutate(v)),
+    onError: (e, v, ctx) => fail.onFail(e, ctx?.prev, () => m.mutate(v)),
+    onSettled: fail.onSettled,
     onSuccess: (d) =>
       qc.setQueryData<BoardData>(key, (b) =>
         b

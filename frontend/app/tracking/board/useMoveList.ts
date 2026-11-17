@@ -4,7 +4,7 @@ import { api } from '../shared/api/client';
 import { qk } from '../shared/api/queries';
 import type { components } from '../shared/api/schema';
 import { moveListLocal, upsertList, type BoardData } from './board-cache';
-import { useMoveFailure } from './useMoveCard';
+import { moveKey, useMoveFailure } from './useMoveCard';
 
 type S = components['schemas'];
 export type MoveListInput = {
@@ -17,8 +17,9 @@ export type MoveListInput = {
 export function useMoveList(projectId: number) {
   const qc = useQueryClient();
   const key = qk.board(projectId);
-  const onFail = useMoveFailure(projectId);
+  const fail = useMoveFailure(projectId);
   const m = useMutation({
+    mutationKey: moveKey(projectId),
     mutationFn: ({ listId, beforeId, afterId }: MoveListInput) =>
       api<S['List']>(`/lists/${listId}/move`, {
         method: 'POST',
@@ -30,7 +31,8 @@ export function useMoveList(projectId: number) {
       if (prev) qc.setQueryData<BoardData>(key, moveListLocal(prev, v));
       return { prev };
     },
-    onError: (e, v, ctx) => onFail(e, ctx?.prev, () => m.mutate(v)),
+    onError: (e, v, ctx) => fail.onFail(e, ctx?.prev, () => m.mutate(v)),
+    onSettled: fail.onSettled,
     onSuccess: (l) => qc.setQueryData<BoardData>(key, (b) => (b ? upsertList(b, l) : b)),
   });
   return m;

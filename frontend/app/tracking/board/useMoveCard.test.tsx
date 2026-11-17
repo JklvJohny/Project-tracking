@@ -147,8 +147,7 @@ describe('useMoveCard', () => {
     expect(opts?.action).toMatchObject({ label: 'Retry' });
     apiMock.mockResolvedValue(detail(crd(10, 2)));
     act(() => (opts!.action as unknown as { onClick: () => void }).onClick());
-    await waitFor(() => expect(apiMock).toHaveBeenCalledTimes(2));
-    expect(apiMock.mock.calls[1][0]).toBe('/cards/10/move');
+    await waitFor(() => expect(apiMock.mock.calls.filter(([p]) => p === '/cards/10/move')).toHaveLength(2));
   });
 
   it('stale_order triggers board refetch', async () => {
@@ -163,6 +162,27 @@ describe('useMoveCard', () => {
     expect(apiMock).toHaveBeenCalledWith('/projects/1/board');
     expect(toast.error).not.toHaveBeenCalled();
     expect(toastMock).toHaveBeenCalledWith(expect.stringContaining('Reloading'));
+  });
+});
+
+describe('concurrent failing moves', () => {
+  it('two failures in order end on the server state, not a resurrected first move', async () => {
+    const r = setup();
+    const rejects: Array<() => void> = [];
+    apiMock.mockImplementation(async (path: string) => {
+      if (path === '/projects/1/board') return board();
+      return new Promise((_, rej) => rejects.push(() => rej(new ApiError('server_error', 500, 'boom'))));
+    });
+    act(() => r.result.current.move.mutate({ cardId: 10, toListId: 2, beforeId: 12 }));
+    await waitFor(() => expect(rejects).toHaveLength(1));
+    act(() => r.result.current.move.mutate({ cardId: 11, toListId: 2, beforeId: 10 }));
+    await waitFor(() => expect(rejects).toHaveLength(2));
+    expect(ids(r)).toEqual(['12@2', '10@2', '11@2']);
+    await act(async () => rejects[0]());
+    await act(async () => rejects[1]());
+    await waitFor(() => expect(apiMock).toHaveBeenCalledWith('/projects/1/board'));
+    await waitFor(() => expect(ids(r)).toEqual(['10@1', '11@1', '12@2']));
+    expect(apiMock.mock.calls.filter(([p]) => p === '/projects/1/board')).toHaveLength(1);
   });
 });
 

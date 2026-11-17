@@ -4,7 +4,6 @@ import { api } from '../shared/api/client';
 import type { components } from '../shared/api/schema';
 import { TrackingProvider } from '../shared/provider';
 import { Board } from './Board';
-import { neighboursAt } from './dnd';
 
 vi.mock('../shared/api/client', async (orig) => ({ ...(await orig<object>()), api: vi.fn() }));
 vi.mock('next/navigation', () => ({ usePathname: () => '/tracking/1' }));
@@ -67,14 +66,6 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-describe('neighboursAt', () => {
-  it('excludes the dragged item and reads the visible order', () => {
-    expect(neighboursAt([1, 9, 2], 9)).toEqual({ beforeId: 1, afterId: 2 });
-    expect(neighboursAt([9, 2], 9)).toEqual({ beforeId: null, afterId: 2 });
-    expect(neighboursAt([1, 9], 9)).toEqual({ beforeId: 1, afterId: null });
-  });
-});
-
 describe('keyboard moves', () => {
   it('Alt+ArrowDown moves a card down inside its list', async () => {
     await renderAs('member');
@@ -91,6 +82,12 @@ describe('keyboard moves', () => {
     fireEvent.keyDown(row('C11'), { key: 'ArrowRight', altKey: true });
     await waitFor(() => expect(writes()).toHaveLength(1));
     expect(writes()[0][1]).toMatchObject({ json: { toListId: 2, beforeId: null, afterId: 12 } });
+  });
+
+  it('announces where a keyboard move went', async () => {
+    await renderAs('member');
+    fireEvent.keyDown(row('C11'), { key: 'ArrowRight', altKey: true });
+    expect(await screen.findByText('Card C11 moved to L2, position 1 of 2')).toBeTruthy();
   });
 
   it('does nothing at the edge', async () => {

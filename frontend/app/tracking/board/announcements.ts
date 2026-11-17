@@ -14,6 +14,9 @@ const TEXT = {
     end: (what: string, over: string) => `วาง${what}ที่ ${over} แล้ว`,
     endFree: (what: string) => `วาง${what}แล้ว`,
     cancel: (what: string) => `ยกเลิกการย้าย${what}`,
+    movedCard: (title: string, list: string, pos: number, n: number) =>
+      `ย้ายการ์ด ${title} ไปที่ ${list} ตำแหน่ง ${pos} จาก ${n}`,
+    movedList: (name: string, pos: number, n: number) => `ย้ายลิสต์ ${name} ไปตำแหน่ง ${pos} จาก ${n}`,
   },
   en: {
     card: 'card',
@@ -23,6 +26,9 @@ const TEXT = {
     end: (what: string, over: string) => `${what} dropped on ${over}`,
     endFree: (what: string) => `${what} dropped`,
     cancel: (what: string) => `Move of ${what} cancelled`,
+    movedCard: (title: string, list: string, pos: number, n: number) =>
+      `Card ${title} moved to ${list}, position ${pos} of ${n}`,
+    movedList: (name: string, pos: number, n: number) => `List ${name} moved to position ${pos} of ${n}`,
   },
 };
 
@@ -40,4 +46,17 @@ export function announcements(lang: Lang, name?: (id: UniqueIdentifier) => strin
     onDragEnd: ({ active, over }) => (over ? t.end(label(active.id), label(over.id)) : t.endFree(label(active.id))),
     onDragCancel: ({ active }) => t.cancel(label(active.id)),
   };
+}
+
+/** Live-region text for Alt+Arrow moves, which dnd-kit does not announce itself. */
+export function movedText(
+  lang: Lang,
+  kind: 'card' | 'list',
+  name: string,
+  listName: string | undefined,
+  pos: number,
+  total: number,
+) {
+  const t = TEXT[lang];
+  return kind === 'card' ? t.movedCard(name, listName ?? '', pos, total) : t.movedList(name, pos, total);
 }
