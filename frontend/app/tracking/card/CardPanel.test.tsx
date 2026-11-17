@@ -1,6 +1,6 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { api } from '../shared/api/client';
+import { ApiError, api } from '../shared/api/client';
 import type { components } from '../shared/api/schema';
 import { TrackingProvider } from '../shared/provider';
 import { CardPanel } from './CardPanel';
@@ -25,16 +25,25 @@ const board = (myRole: B['myRole']): B => ({
   users: [{ id: 2, name: 'Somchai', avatarUrl: '' }],
 });
 
-function renderPanel(role: B['myRole']) {
+function renderPanel(role: B['myRole'], onClose: () => void = () => {}) {
   apiMock.mockImplementation(async (path: string) => (path === '/cards/5' ? detail : board(role)));
   render(
     <TrackingProvider lang="en">
-      <CardPanel projectId={1} cardId={5} onClose={() => {}} />
+      <CardPanel projectId={1} cardId={5} onClose={onClose} />
     </TrackingProvider>,
   );
 }
 
-beforeEach(() => apiMock.mockReset());
+beforeEach(() => {
+  apiMock.mockReset();
+  // cmdk needs these in jsdom.
+  Element.prototype.scrollIntoView = vi.fn();
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+});
 afterEach(cleanup);
 
 describe('CardPanel', () => {
@@ -51,5 +60,67 @@ describe('CardPanel', () => {
   it('member sees editable title', async () => {
     renderPanel('member');
     expect(await screen.findByLabelText('Title')).toBeTruthy();
+  });
+
+  it('Escape in a dirty title cancels the edit first and closes on the next press', async () => {
+    const onClose = vi.fn();
+    renderPanel('member', onClose);
+    const input = (await screen.findByLabelText('Title')) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'Changed' } });
+    fireEvent.keyDown(input, { key: 'Escape' });
+    expect(onClose).not.toHaveBeenCalled();
+    expect(input.value).toBe('Fix login');
+    expect(apiMock.mock.calls.filter(([, init]) => init?.method)).toHaveLength(0);
+    fireEvent.keyDown(input, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('a missing card shows a translated message with no Retry', async () => {
+    apiMock.mockImplementation(async (path: string) => {
+      if (path === '/cards/5') throw new ApiError('not_found', 404, 'not found');
+      return board('pm');
+    });
+    render(
+      <TrackingProvider lang="en">
+        <CardPanel projectId={1} cardId={5} onClose={() => {}} />
+      </TrackingProvider>,
+    );
+    expect(await screen.findByText('Card not found, or you do not have access to it')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+  });
+
+  it('assignee picker toggles with DELETE then PUT', async () => {
+    apiMock.mockImplementation(async (path: string, init?: { method?: string }) => {
+      if (path === '/cards/5/assignees/2') return { ...detail, assigneeIds: init?.method === 'DELETE' ? [] : [2] };
+      return path === '/cards/5' ? detail : board('member');
+    });
+    render(
+      <TrackingProvider lang="en">
+        <CardPanel projectId={1} cardId={5} onClose={() => {}} />
+      </TrackingProvider>,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Manage assignees' }));
+    fireEvent.click(await screen.findByRole('option', { name: /Somchai/ }));
+    await waitFor(() => expect(apiMock).toHaveBeenCalledWith('/cards/5/assignees/2', { method: 'DELETE' }));
+    await waitFor(() => expect(screen.getByText('Nobody assigned')).toBeTruthy());
+    fireEvent.click(screen.getByRole('option', { name: /Somchai/ }));
+    await waitFor(() => expect(apiMock).toHaveBeenCalledWith('/cards/5/assignees/2', { method: 'PUT' }));
+  });
+
+  it('a label create conflict shows translated text', async () => {
+    apiMock.mockImplementation(async (path: string, init?: { method?: string }) => {
+      if (path === '/projects/1/labels' && init?.method === 'POST') throw new ApiError('conflict', 409, 'duplicate');
+      return path === '/cards/5' ? detail : board('pm');
+    });
+    render(
+      <TrackingProvider lang="en">
+        <CardPanel projectId={1} cardId={5} onClose={() => {}} />
+      </TrackingProvider>,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Manage labels' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Create label' }));
+    fireEvent.change(screen.getByLabelText('Label name'), { target: { value: 'Bug' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByText('This conflicts with the current state')).toBeTruthy();
   });
 });

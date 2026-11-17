@@ -8,7 +8,7 @@ import { LABEL_CLASS } from '../board/CardPreview';
 import type { components } from '../shared/api/schema';
 import { useConfirm } from '../shared/confirm';
 import { useT } from '../shared/i18n';
-import { SaveStatus, useInlineSave } from './inline';
+import { SaveStatus, inlineEscape, useInlineSave } from './inline';
 import { useCardLabel, useLabelCrud } from './mutations';
 
 type S = components['schemas'];
@@ -97,6 +97,8 @@ function LabelForm({
         value={name}
         maxLength={40}
         aria-label={t.name}
+        data-inline-edit
+        data-dirty="true"
         onChange={(e) => setName(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === 'Escape') {
@@ -194,7 +196,12 @@ export function LabelPicker({
                 <Tag aria-hidden />
               </Button>
             </PopoverTrigger>
-            <PopoverContent align="start" className="flex w-72 flex-col gap-1.5 p-2">
+            <PopoverContent
+              align="start"
+              className="flex w-72 flex-col gap-1.5 p-2"
+              // The open label form closes first; the next Escape closes the popover.
+              onEscapeKeyDown={(e) => inlineEscape(e)}
+            >
               {labels.length === 0 && <p className="px-1 py-2 text-sm text-muted-foreground">{t.noLabels}</p>}
               <ul className="flex flex-col gap-1">
                 {labels.map((l) => {

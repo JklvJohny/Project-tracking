@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import type { components } from '../shared/api/schema';
 import { fmtDate, priorityLabel, type Priority } from '../shared/format';
 import { useLang, useT } from '../shared/i18n';
-import { SaveStatus, useInlineSave } from './inline';
+import { SaveStatus, useFlushOnUnmount, useInlineSave } from './inline';
 import { useUpdateCard } from './mutations';
 
 type S = components['schemas'];
@@ -38,18 +38,25 @@ function DateField({
     setDraft(value ?? '');
   }
 
+  // Close flushes a changed, complete date only; an empty draft is never flushed as a clear.
+  useFlushOnUnmount(() => {
+    if (!readOnly && !settled.current && draft && draft !== (value ?? '')) void onSave(draft);
+  });
+
   if (readOnly)
     return <p className="text-sm">{value ? fmtDate(value, lang) : <span className="text-muted-foreground">{t.none}</span>}</p>;
 
-  async function commit(raw: string) {
+  async function commit(el: HTMLInputElement) {
     if (settled.current) return;
     settled.current = true;
-    if (raw === (value ?? '')) return;
+    const raw = el.value;
+    // A partly typed date reads as '' with badInput set: it must not clear the stored date.
+    if (el.validity.badInput || raw === (value ?? '')) return;
     // A rejected date (e.g. due before start) goes back to the server's value; the error stays visible.
     if (!(await onSave(raw || null))) setDraft(value ?? '');
   }
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') void commit(e.currentTarget.value);
+    if (e.key === 'Enter') void commit(e.currentTarget);
     else if (e.key === 'Escape') {
       settled.current = true;
       setDraft(value ?? '');
@@ -61,9 +68,14 @@ function DateField({
       aria-label={label}
       value={draft}
       onFocus={() => (settled.current = false)}
-      onChange={(e) => setDraft(e.target.value)}
+      onChange={(e) => {
+        settled.current = false;
+        setDraft(e.target.value);
+      }}
+      data-inline-edit
+      data-dirty={draft !== (value ?? '')}
       onKeyDown={onKeyDown}
-      onBlur={(e) => void commit(e.currentTarget.value)}
+      onBlur={(e) => void commit(e.currentTarget)}
       className="w-auto"
     />
   );

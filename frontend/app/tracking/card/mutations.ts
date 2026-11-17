@@ -104,7 +104,7 @@ export function useLabelCrud(projectId: number) {
 
 export type MoveItem = { id: number; beforeId: number | null; afterId: number | null };
 
-/** Reorders locally first (the list must not jump back while the request is in flight), refetches the card on failure. */
+/** Reorders locally first (the list must not jump back while the request is in flight); a failure restores the snapshot, then refetches the card. */
 export function useChecklist(projectId: number, cardId: number) {
   const qc = useQueryClient();
   const add = useMutation({
@@ -123,7 +123,10 @@ export function useChecklist(projectId: number, cardId: number) {
   const move = useMutation({
     mutationFn: ({ id, beforeId, afterId }: MoveItem) =>
       api<Item>(`/checklist/${id}/move`, { method: 'POST', json: { beforeId, afterId } }),
-    onMutate: ({ id, beforeId, afterId }) => {
+    onMutate: async ({ id, beforeId, afterId }) => {
+      // A refetch landing mid-move would overwrite the local order with the pre-move one.
+      await qc.cancelQueries({ queryKey: qk.card(cardId) });
+      const prev = { card: qc.getQueryData<Detail>(qk.card(cardId)), board: qc.getQueryData<BoardData>(qk.board(projectId)) };
       putChecklist(qc, projectId, cardId, (items) => {
         const item = items.find((i) => i.id === id);
         if (!item) return items;
@@ -133,11 +136,17 @@ export function useChecklist(projectId: number, cardId: number) {
         const at = above >= 0 ? above + 1 : below >= 0 ? below : rest.length;
         return [...rest.slice(0, at), item, ...rest.slice(at)];
       });
+      return prev;
     },
     // The response carries the new position only; order is already right locally.
     onSuccess: (item) => qc.setQueryData<Detail>(qk.card(cardId), (d) =>
       d ? { ...d, checklist: d.checklist.map((i) => (i.id === item.id ? item : i)) } : d),
-    onError: () => qc.invalidateQueries({ queryKey: qk.card(cardId) }),
+    onError: (_e, _v, prev) => {
+      if (prev?.card) qc.setQueryData(qk.card(cardId), prev.card);
+      if (prev?.board) qc.setQueryData(qk.board(projectId), prev.board);
+      // The server may have reordered meanwhile (stale_order): take its view of this card (not the board).
+      void qc.invalidateQueries({ queryKey: qk.card(cardId) });
+    },
   });
   return { add, update, remove, move };
 }

@@ -6,6 +6,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useArchiveCard } from '../board/mutations';
 import { detailToSummary } from '../board/board-cache';
 import { useBoard, useCard } from '../shared/api/queries';
+import { ApiError } from '../shared/api/client';
 import { errorMessage } from '../shared/errors';
 import { useLang, useT } from '../shared/i18n';
 import { AssigneePicker } from './AssigneePicker';
@@ -13,6 +14,7 @@ import { Checklist } from './Checklist';
 import { DescriptionField } from './DescriptionField';
 import { LabelPicker } from './LabelPicker';
 import { MetaFields } from './MetaFields';
+import { inlineEscape } from './inline';
 import { TitleField } from './TitleField';
 
 const TEXT = {
@@ -24,6 +26,7 @@ const TEXT = {
     retry: 'ลองอีกครั้ง',
     archived: 'การ์ดนี้ถูกเก็บถาวรแล้ว',
     loading: 'กำลังโหลดการ์ด',
+    gone: 'ไม่พบการ์ดนี้ หรือคุณไม่มีสิทธิ์เข้าถึง',
   },
   en: {
     panel: 'Card details',
@@ -33,6 +36,7 @@ const TEXT = {
     retry: 'Retry',
     archived: 'This card is archived',
     loading: 'Loading card',
+    gone: 'Card not found, or you do not have access to it',
   },
 };
 
@@ -50,6 +54,8 @@ export function CardPanel({ projectId, cardId, onClose }: { projectId: number; c
   const role = board.data?.myRole;
   const canEdit = role === 'admin' || role === 'pm' || role === 'member';
   const d = card.data;
+  // A deleted card or a stale ?card id answers not_found/forbidden for good: retrying cannot help.
+  const gone = card.error instanceof ApiError && (card.error.code === 'not_found' || card.error.code === 'forbidden');
   const readOnly = !canEdit || !!d?.archivedAt;
 
   return (
@@ -58,6 +64,7 @@ export function CardPanel({ projectId, cardId, onClose }: { projectId: number; c
         showCloseButton={false}
         aria-describedby={undefined}
         className="data-[side=right]:w-full data-[side=right]:sm:max-w-xl"
+        onEscapeKeyDown={inlineEscape}
         onOpenAutoFocus={(e) => {
           // Autofocusing the title would pop the keyboard on phones; the dialog itself takes focus.
           e.preventDefault();
@@ -78,10 +85,16 @@ export function CardPanel({ projectId, cardId, onClose }: { projectId: number; c
         {!(d && board.data && readOnly) && <SheetTitle className="sr-only">{t.panel}</SheetTitle>}
         {card.isError ? (
           <div role="alert" className="m-4 flex flex-col items-start gap-3 rounded-lg border p-4">
-            <p className="text-sm">{errorMessage(card.error, lang)}</p>
-            <Button variant="outline" onClick={() => card.refetch()}>
-              {t.retry}
-            </Button>
+            <p className="text-sm">{gone ? t.gone : errorMessage(card.error, lang)}</p>
+            {gone ? (
+              <Button variant="outline" onClick={onClose}>
+                {t.close}
+              </Button>
+            ) : (
+              <Button variant="outline" onClick={() => card.refetch()}>
+                {t.retry}
+              </Button>
+            )}
           </div>
         ) : !d || !board.data ? (
           <div role="status" aria-label={t.loading} className="flex flex-col gap-4 p-4">

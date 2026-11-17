@@ -4,7 +4,7 @@ import Markdown from 'react-markdown';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useT } from '../shared/i18n';
-import { SaveStatus, useInlineSave } from './inline';
+import { SaveStatus, useFlushOnUnmount, useInlineSave } from './inline';
 import { useUpdateCard } from './mutations';
 
 const TEXT = {
@@ -53,6 +53,10 @@ export function DescriptionField({
     setDraft(value);
   }
 
+  useFlushOnUnmount(() => {
+    if (!readOnly && !settled.current && draft !== value) update.mutate({ descriptionMd: draft });
+  });
+
   if (readOnly) return value ? <Rendered source={value} /> : <p className="text-sm text-muted-foreground">{t.empty}</p>;
 
   function commit(raw: string) {
@@ -93,13 +97,21 @@ export function DescriptionField({
           aria-label={t.label}
           placeholder={t.hint}
           onFocus={() => (settled.current = false)}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={(e) => {
+            settled.current = false;
+            setDraft(e.target.value);
+          }}
+          data-inline-edit
+          data-dirty={draft !== value}
           onBlur={(e) => commit(e.currentTarget.value)}
           onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              settled.current = true;
+              setDraft(value);
+            }
             // Enter is a newline here; Ctrl/Cmd+Enter saves and keeps focus.
             if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !e.nativeEvent.isComposing) {
               commit(e.currentTarget.value);
-              settled.current = false;
             }
           }}
         />

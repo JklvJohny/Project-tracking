@@ -3,7 +3,7 @@ import { useRef, useState, type KeyboardEvent } from 'react';
 import { Input } from '@/components/ui/input';
 import { SheetTitle } from '@/components/ui/sheet';
 import { useT } from '../shared/i18n';
-import { SaveStatus, useInlineSave } from './inline';
+import { SaveStatus, useFlushOnUnmount, useInlineSave } from './inline';
 import { useUpdateCard } from './mutations';
 
 const TEXT = {
@@ -36,6 +36,11 @@ export function TitleField({
     setDraft(value);
   }
 
+  useFlushOnUnmount(() => {
+    const next = draft.trim();
+    if (!readOnly && !settled.current && next && next !== value) update.mutate({ title: next });
+  });
+
   if (readOnly) return <SheetTitle className="pr-8 text-lg font-semibold break-words">{value}</SheetTitle>;
 
   function commit(raw: string) {
@@ -66,7 +71,13 @@ export function TitleField({
         aria-label={t.label}
         aria-invalid={state.kind === 'error'}
         onFocus={() => (settled.current = false)}
-        onChange={(e) => setDraft(e.target.value)}
+        onChange={(e) => {
+          // Typing after a commit (Enter keeps focus) is a new edit that must save too.
+          settled.current = false;
+          setDraft(e.target.value);
+        }}
+        data-inline-edit
+        data-dirty={draft !== value}
         onKeyDown={onKeyDown}
         onBlur={(e) => commit(e.currentTarget.value)}
         className="h-auto border-transparent px-2 py-1.5 text-lg font-semibold shadow-none hover:border-input"

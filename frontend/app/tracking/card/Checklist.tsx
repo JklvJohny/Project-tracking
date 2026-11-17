@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { useCard } from '../shared/api/queries';
 import type { components } from '../shared/api/schema';
 import { useT } from '../shared/i18n';
-import { SaveStatus, useInlineSave } from './inline';
+import { SaveStatus, useFlushOnUnmount, useInlineSave } from './inline';
 import { useChecklist } from './mutations';
 
 type Item = components['schemas']['ChecklistItem'];
@@ -73,6 +73,11 @@ function ItemRow({
   }
   const settled = useRef(false);
 
+  useFlushOnUnmount(() => {
+    const text = draft.trim();
+    if (!readOnly && !settled.current && text && text !== item.text) void onRename(text);
+  });
+
   async function commit(raw: string) {
     if (settled.current) return;
     settled.current = true;
@@ -110,7 +115,12 @@ function ItemRow({
             aria-label={t.text(item.text)}
             aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
             onFocus={() => (settled.current = false)}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={(e) => {
+              settled.current = false;
+              setDraft(e.target.value);
+            }}
+            data-inline-edit
+            data-dirty={draft !== item.text}
             onBlur={(e) => void commit(e.currentTarget.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.nativeEvent.isComposing) void commit(e.currentTarget.value);
@@ -148,6 +158,12 @@ export function Checklist({ projectId, cardId, readOnly }: { projectId: number; 
   const [newText, setNewText] = useState('');
   const done = items.filter((i) => i.isDone).length;
   const pct = items.length ? Math.round((done / items.length) * 100) : 0;
+
+  // An unsent new item is flushed on close like every other draft.
+  useFlushOnUnmount(() => {
+    const text = newText.trim();
+    if (!readOnly && text) cl.add.mutate(text);
+  });
 
   function move(index: number, dir: -1 | 1) {
     const to = index + dir;
@@ -210,7 +226,10 @@ export function Checklist({ projectId, cardId, readOnly }: { projectId: number; 
             aria-label={t.add}
             placeholder={t.addPlaceholder}
             onChange={(e) => setNewText(e.target.value)}
+            data-inline-edit
+            data-dirty={newText !== ''}
             onKeyDown={(e) => {
+              if (e.key === 'Escape') setNewText('');
               if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
                 e.preventDefault();
                 void add();

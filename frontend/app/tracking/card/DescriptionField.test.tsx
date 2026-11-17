@@ -50,6 +50,19 @@ describe('DescriptionField', () => {
     expect(apiMock).toHaveBeenCalledWith('/cards/5', { method: 'PATCH', json: { descriptionMd: 'hello' } });
   });
 
+  it('does not render a clickable javascript: href', () => {
+    const { container } = renderField('[x](javascript:alert(1))');
+    for (const a of container.querySelectorAll('a')) expect(a.getAttribute('href') ?? '').not.toMatch(/^javascript:/i);
+  });
+
+  it('closing the panel with a typed draft flushes one PATCH', async () => {
+    const { unmount } = renderField('');
+    fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'unsaved' } });
+    unmount();
+    await waitFor(() => expect(apiMock).toHaveBeenCalledTimes(1));
+    expect(apiMock).toHaveBeenCalledWith('/cards/5', { method: 'PATCH', json: { descriptionMd: 'unsaved' } });
+  });
+
   it('read-only shows no textarea', () => {
     renderField('hi', true);
     expect(screen.queryByRole('textbox')).toBeNull();

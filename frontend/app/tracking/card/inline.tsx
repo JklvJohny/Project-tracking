@@ -58,3 +58,20 @@ export function SaveStatus({ state, id }: { state: State; id?: string }) {
     </span>
   );
 }
+
+/**
+ * Runs `flush` once when the field unmounts (panel closed by Escape, overlay, Back). React fires no blur on removal,
+ * so without this a half-typed edit would be lost. The latest closure is kept in a ref, so it sees the final draft.
+ */
+export function useFlushOnUnmount(flush: () => void) {
+  const ref = useRef(flush);
+  useEffect(() => {
+    ref.current = flush;
+  });
+  useEffect(() => () => ref.current(), []);
+}
+
+/** Escape in a dirty inline field only cancels that field (it resets itself); the next Escape closes the layer. */
+export function inlineEscape(e: KeyboardEvent) {
+  if ((e.target as HTMLElement | null)?.closest?.('[data-inline-edit][data-dirty="true"]')) e.preventDefault();
+}

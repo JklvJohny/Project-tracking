@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { api, type ApiInit } from '../shared/api/client';
+import { ApiError, api, type ApiInit } from '../shared/api/client';
 import { TrackingProvider } from '../shared/provider';
 import { Checklist } from './Checklist';
 
@@ -54,6 +54,19 @@ describe('Checklist', () => {
     );
     const order = screen.getAllByRole('checkbox').map((c) => c.getAttribute('aria-label'));
     expect(order).toEqual(['One', 'Three', 'Two']);
+  });
+
+  it('a rejected move restores the order and shows the translated error', async () => {
+    apiMock.mockImplementation(async (path: string) => {
+      if (path === '/cards/5') return detail;
+      throw new ApiError('conflict', 409, 'stale_order');
+    });
+    renderList();
+    fireEvent.keyDown(await screen.findByLabelText('Item text: Two'), { key: 'ArrowDown', altKey: true });
+    expect(await screen.findByText('Someone else changed this. Reloading')).toBeTruthy();
+    await waitFor(() =>
+      expect(screen.getAllByRole('checkbox').map((c) => c.getAttribute('aria-label'))).toEqual(['One', 'Two', 'Three']),
+    );
   });
 
   it('read-only has no inputs or buttons', async () => {
