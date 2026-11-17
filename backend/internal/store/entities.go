@@ -156,3 +156,14 @@ type ActivityEvent struct {
 	Payload   json.RawMessage
 	CreatedAt time.Time
 }
+
+// BoardSnapshot is the read model behind GET /projects/{id}/board.
+type BoardSnapshot struct {
+	Board   Board
+	Project Project
+	Lists   []List
+	Cards   []CardSummary
+	Labels  []Label
+	Members []Member
+	Users   []CachedUser
+}

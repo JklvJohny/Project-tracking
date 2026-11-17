@@ -4,7 +4,6 @@ import (
 	"context"
 	"sort"
 	"strings"
-	"time"
 
 	"tracking-service/internal/store"
 )
@@ -112,50 +111,4 @@ func (r *memberRepo) CountPM(_ context.Context, projectID int64) (int, error) {
 		}
 	}
 	return n, nil
-}
-
-type boardRepo struct{ d *data }
-
-func (r *boardRepo) Create(_ context.Context, b store.Board) (store.Board, error) {
-	b.ID = r.d.nextID("boards")
-	r.d.boards[b.ID] = b
-	return b, nil
-}
-
-func (r *boardRepo) ByProject(_ context.Context, projectID int64) (store.Board, error) {
-	for _, b := range r.d.boards {
-		if b.ProjectID == projectID {
-			return b, nil
-		}
-	}
-	return store.Board{}, store.ErrNotFound
-}
-
-func (r *boardRepo) Touch(_ context.Context, boardID int64, at time.Time) error {
-	b, ok := r.d.boards[boardID]
-	if !ok {
-		return store.ErrNotFound
-	}
-	b.UpdatedAt = at
-	r.d.boards[boardID] = b
-	return nil
-}
-
-type listRepo struct{ d *data }
-
-func (r *listRepo) Create(_ context.Context, l store.List) (store.List, error) {
-	l.ID = r.d.nextID("lists")
-	r.d.lists[l.ID] = cloneList(l)
-	return cloneList(l), nil
-}
-
-func (r *listRepo) ByBoard(_ context.Context, boardID int64) ([]store.List, error) {
-	out := []store.List{}
-	for _, l := range r.d.lists {
-		if l.BoardID == boardID {
-			out = append(out, cloneList(l))
-		}
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Position < out[j].Position })
-	return out, nil
 }

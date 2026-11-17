@@ -84,7 +84,7 @@ func (s *Store) repos(d *data) store.Repos {
 		Members:   &memberRepo{d: d},
 		Boards:    &boardRepo{d: d},
 		Lists:     &listRepo{d: d},
-		Cards:     stub{},
+		Cards:     &cardRepo{d: d},
 		Labels:    stub{},
 		Checklist: stub{},
 		Comments:  stub{},

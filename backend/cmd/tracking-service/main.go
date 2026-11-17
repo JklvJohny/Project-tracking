@@ -14,6 +14,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"tracking-service/internal/auth"
+	"tracking-service/internal/board"
 	"tracking-service/internal/config"
 	"tracking-service/internal/events"
 	"tracking-service/internal/httpx"
@@ -46,6 +47,7 @@ func run() error {
 	userProvider := users.NewStub()
 	publisher := events.NewLog(slog.Default())
 	projects := project.New(st, userProvider, publisher, time.Now)
+	boards := board.New(st, publisher, time.Now)
 	// Later modules mount in the same group.
 
 	srv := &http.Server{
@@ -54,6 +56,7 @@ func run() error {
 			r.Group(func(r chi.Router) {
 				r.Use(auth.Middleware(authn))
 				project.Mount(r, projects)
+				board.Mount(r, boards)
 			})
 		}),
 		ReadHeaderTimeout: 5 * time.Second,

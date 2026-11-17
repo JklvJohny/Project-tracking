@@ -24,7 +24,6 @@ type Repos struct {
 }
 
 type (
-	CardRepo      interface{}
 	LabelRepo     interface{}
 	ChecklistRepo interface{}
 	CommentRepo   interface{}
@@ -122,6 +121,23 @@ type BoardRepo interface {
 	// SQL: SELECT ... FROM boards WHERE project_id = $1.
 	ByProject(ctx context.Context, projectID int64) (Board, error)
 
+	// Get returns ErrNotFound for a missing board.
+	// SQL: SELECT ... FROM boards WHERE id = $1.
+	Get(ctx context.Context, id int64) (Board, error)
+
+	// Snapshot returns everything the board screen shows, from one read
+	// snapshot. Lists and cards exclude archived rows (cards of an archived
+	// list too) and are ordered by position, then id. Users holds the cached
+	// profiles of the members and of every assignee. CardSummary counts
+	// exclude soft-deleted comments. ErrNotFound if the project has no board.
+	// SQL: one View, constant number of queries and no N+1: boards by
+	// project_id; lists WHERE board_id AND archived_at IS NULL; cards JOIN lists
+	// WHERE archived_at IS NULL on both, with checklist and comment counts via
+	// grouped subqueries (idx_cards_list, idx_checklist_card, idx_comments_card);
+	// card_assignees and card_labels with card_id = ANY(...); labels, members
+	// and user_cache WHERE user_id = ANY(...). All ORDER BY position COLLATE "C".
+	Snapshot(ctx context.Context, projectID int64) (BoardSnapshot, error)
+
 	// Touch sets boards.updated_at, which is the board's ETag source.
 	// SQL: UPDATE boards SET updated_at = $2 WHERE id = $1.
 	Touch(ctx context.Context, boardID int64, at time.Time) error
@@ -136,4 +152,62 @@ type ListRepo interface {
 	// position.
 	// SQL: SELECT ... FROM lists WHERE board_id = $1 ORDER BY position COLLATE "C".
 	ByBoard(ctx context.Context, boardID int64) ([]List, error)
+
+	// Get returns ErrNotFound for a missing list.
+	// SQL: SELECT ... FROM lists WHERE id = $1.
+	Get(ctx context.Context, id int64) (List, error)
+
+	// Save overwrites every column of an existing list; ErrNotFound if absent.
+	// SQL: UPDATE lists SET all columns WHERE id = $1.
+	Save(ctx context.Context, l List) error
+
+	// LockBoard serialises position changes on one board for the rest of the
+	// transaction. ErrNotFound if the board is absent.
+	// SQL: SELECT id FROM boards WHERE id = $1 FOR UPDATE.
+	LockBoard(ctx context.Context, boardID int64) error
+
+	// Positions returns every list of the board, archived included, ordered
+	// by position.
+	// SQL: SELECT id, position FROM lists WHERE board_id = $1 ORDER BY position COLLATE "C".
+	Positions(ctx context.Context, boardID int64) ([]IDPos, error)
+
+	// SetPositions rewrites the position of each listed list. The unique
+	// index (board_id, position) is not deferrable, so a plain UPDATE can
+	// collide mid-statement.
+	// SQL: step 1 UPDATE lists SET position = '~' || id WHERE id = ANY($1);
+	// step 2 UPDATE lists SET position = v.position FROM (VALUES ...) v WHERE lists.id = v.id.
+	SetPositions(ctx context.Context, ps []IDPos) error
+
+	// Archived returns the board's archived lists (ordered by position) and
+	// its archived cards (ordered by position, then id).
+	// SQL: SELECT ... FROM lists WHERE board_id = $1 AND archived_at IS NOT NULL;
+	// cards JOIN lists ON list_id WHERE lists.board_id = $1 AND cards.archived_at IS NOT NULL.
+	Archived(ctx context.Context, boardID int64) ([]List, []CardSummary, error)
+}
+
+type CardRepo interface {
+	// Create assigns ID and stores c as given.
+	// SQL: INSERT INTO cards ... RETURNING id.
+	Create(ctx context.Context, c Card) (Card, error)
+
+	// Get returns ErrNotFound for a missing card.
+	// SQL: SELECT ... FROM cards WHERE id = $1.
+	Get(ctx context.Context, id int64) (Card, error)
+
+	// Save overwrites every column of an existing card; ErrNotFound if absent.
+	// SQL: UPDATE cards SET all columns WHERE id = $1.
+	Save(ctx context.Context, c Card) error
+
+	// SetCompletedForList sets completed_at on the list's active cards. A
+	// non-nil at is written only to cards that have none; nil clears it on
+	// every active card.
+	// SQL: UPDATE cards SET completed_at = $2 WHERE list_id = $1 AND archived_at IS NULL
+	// AND completed_at IS NULL (non-nil at) | AND completed_at IS NOT NULL (nil at).
+	SetCompletedForList(ctx context.Context, listID int64, at *time.Time) error
+}
+
+// IDPos is a row id with its LexoRank position.
+type IDPos struct {
+	ID       int64
+	Position string
 }
