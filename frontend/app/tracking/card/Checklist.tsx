@@ -159,12 +159,6 @@ export function Checklist({ projectId, cardId, readOnly }: { projectId: number; 
   const done = items.filter((i) => i.isDone).length;
   const pct = items.length ? Math.round((done / items.length) * 100) : 0;
 
-  // An unsent new item is flushed on close like every other draft.
-  useFlushOnUnmount(() => {
-    const text = newText.trim();
-    if (!readOnly && text) cl.add.mutate(text);
-  });
-
   function move(index: number, dir: -1 | 1) {
     const to = index + dir;
     if (to < 0 || to >= items.length) return;

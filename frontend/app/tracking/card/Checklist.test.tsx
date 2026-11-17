@@ -69,6 +69,18 @@ describe('Checklist', () => {
     );
   });
 
+  it('closing with text in the new-item input sends no POST', async () => {
+    const { unmount } = render(
+      <TrackingProvider lang="en">
+        <Checklist projectId={1} cardId={5} readOnly={false} />
+      </TrackingProvider>,
+    );
+    fireEvent.change(await screen.findByLabelText('Add item'), { target: { value: 'half typed' } });
+    unmount();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(apiMock.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
+  });
+
   it('read-only has no inputs or buttons', async () => {
     renderList(true);
     await screen.findByText('1/3 · 33%');
