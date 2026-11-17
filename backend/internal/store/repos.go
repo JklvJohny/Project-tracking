@@ -23,10 +23,42 @@ type Repos struct {
 	Activity  ActivityRepo
 }
 
-type (
-	ChecklistRepo interface{}
-	CommentRepo   interface{}
-)
+type CommentRepo interface{}
+
+type ChecklistRepo interface {
+	// LockCard serialises checklist position changes on one card for the rest
+	// of the transaction. ErrNotFound if the card is absent.
+	// SQL: SELECT id FROM cards WHERE id = $1 FOR UPDATE.
+	LockCard(ctx context.Context, cardID int64) error
+
+	// Create assigns ID and stores it as given.
+	// SQL: INSERT INTO checklist_items ... RETURNING id.
+	Create(ctx context.Context, it ChecklistItem) (ChecklistItem, error)
+
+	// Get returns ErrNotFound for a missing item.
+	// SQL: SELECT ... FROM checklist_items WHERE id = $1.
+	Get(ctx context.Context, id int64) (ChecklistItem, error)
+
+	// Save overwrites an existing item; ErrNotFound if absent.
+	// SQL: UPDATE checklist_items SET all columns WHERE id = $1.
+	Save(ctx context.Context, it ChecklistItem) error
+
+	// Delete removes the item (hard delete); ErrNotFound if absent.
+	// SQL: DELETE FROM checklist_items WHERE id = $1.
+	Delete(ctx context.Context, id int64) error
+
+	// Positions returns the card's items ordered by position then id.
+	// Archived is always false: items have no archive.
+	// SQL: SELECT id, position, false FROM checklist_items WHERE card_id = $1
+	// ORDER BY position COLLATE "C", id.
+	Positions(ctx context.Context, cardID int64) ([]IDPos, error)
+
+	// SetPositions rewrites the position of each listed item. The unique index
+	// (card_id, position) is not deferrable, so use the two-step update.
+	// SQL: step 1 UPDATE checklist_items SET position = '~' || id WHERE id = ANY($1);
+	// step 2 UPDATE checklist_items SET position = v.position FROM (VALUES ...) v WHERE checklist_items.id = v.id.
+	SetPositions(ctx context.Context, ps []IDPos) error
+}
 
 type LabelRepo interface {
 	// Create assigns ID and stores l.

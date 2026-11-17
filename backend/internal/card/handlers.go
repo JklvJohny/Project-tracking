@@ -8,6 +8,7 @@ import (
 
 	"tracking-service/internal/apperr"
 	"tracking-service/internal/auth"
+	"tracking-service/internal/board"
 	"tracking-service/internal/httpx"
 )
 
@@ -111,6 +112,37 @@ func Mount(r chi.Router, s *Service) {
 	}))
 	r.Delete("/cards/{cardID}/assignees/{userID}", assignee(func(req *http.Request, uid, cardID, memberID int64) (CardDetail, error) {
 		return s.Unassign(req.Context(), uid, cardID, memberID)
+	}))
+	r.Post("/cards/{cardID}/checklist", with("cardID", func(w http.ResponseWriter, req *http.Request, uid, id int64) {
+		var in addItemInput
+		if err := httpx.Decode(req, &in); err != nil {
+			httpx.Fail(w, req, err)
+			return
+		}
+		v, err := s.AddItem(req.Context(), uid, id, in.Text)
+		respond(w, req, http.StatusCreated, v, err)
+	}))
+	r.Patch("/checklist/{itemID}", with("itemID", func(w http.ResponseWriter, req *http.Request, uid, id int64) {
+		var in ItemPatch
+		if err := httpx.Decode(req, &in); err != nil {
+			httpx.Fail(w, req, err)
+			return
+		}
+		v, err := s.UpdateItem(req.Context(), uid, id, in)
+		respond(w, req, http.StatusOK, v, err)
+	}))
+	r.Post("/checklist/{itemID}/move", with("itemID", func(w http.ResponseWriter, req *http.Request, uid, id int64) {
+		var in board.MoveInput
+		if err := httpx.Decode(req, &in); err != nil {
+			httpx.Fail(w, req, err)
+			return
+		}
+		v, err := s.MoveItem(req.Context(), uid, id, in)
+		respond(w, req, http.StatusOK, v, err)
+	}))
+	r.Delete("/checklist/{itemID}", with("itemID", func(w http.ResponseWriter, req *http.Request, uid, id int64) {
+		err := s.DeleteItem(req.Context(), uid, id)
+		respond(w, req, http.StatusOK, struct{}{}, err)
 	}))
 	r.Put("/cards/{cardID}/labels/{labelID}", label(func(req *http.Request, uid, cardID, labelID int64) (CardDetail, error) {
 		return s.AddLabel(req.Context(), uid, cardID, labelID)
