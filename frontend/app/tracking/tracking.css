@@ -1,0 +1,27 @@
+/* Series tokens copied from index.html (the visual reference). They sit on :root
+   so portalled dialogs/popovers see them too. The surface tokens (background,
+   border, primary...) come from the host's shadcn theme, not from here. */
+:root {
+  /* status series */
+  --s-done: #059669; --s-active: #2563eb; --s-todo: #64748b; --s-overdue: #dc2626;
+  /* priority series */
+  --p-urgent: #b91c1c; --p-high: #d97706; --p-medium: #2563eb; --p-low: #64748b;
+  /* solid priority badge backgrounds under white text */
+  --pb-urgent: #b91c1c; --pb-high: #b45309; --pb-medium: #2563eb; --pb-low: #475569;
+}
+.dark {
+  --s-done: #059669; --s-active: #3b82f6; --s-todo: #64748b; --s-overdue: #ef4444;
+  --p-urgent: #e11d48; --p-high: #d97706; --p-medium: #3b82f6; --p-low: #64748b;
+  --pb-urgent: #b91c1c; --pb-high: #b45309; --pb-medium: #2563eb; --pb-low: #475569;
+}
+
+/* Compact type scale: tracking pages are dense (body 13px in index.html). */
+.tracking-root { font-size: 13px; }
+
+/* drag & drop and motion, as in index.html */
+.tracking-root .is-dragging { opacity: .4; transform: rotate(1deg); }
+.tracking-root .drop-ind { height: 4px; flex-shrink: 0; border-radius: 9999px; background: var(--primary); box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 20%, transparent); }
+.tracking-root .list-drop { width: 4px; align-self: stretch; flex-shrink: 0; border-radius: 9999px; background: var(--primary); }
+.tracking-root .just-dropped { animation: pt-dropped .9s ease-out; }
+@keyframes pt-dropped { 0% { box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 50%, transparent); } 100% { box-shadow: 0 0 0 0 transparent; } }
+@media (prefers-reduced-motion: reduce) { .tracking-root *, .tracking-root *::before, .tracking-root *::after { animation: none !important; transition: none !important; } }
