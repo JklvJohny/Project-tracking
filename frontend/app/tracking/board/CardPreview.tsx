@@ -1,9 +1,11 @@
 'use client';
 import { CheckSquare, MessageSquare } from 'lucide-react';
 import Link from 'next/link';
+import { useQueryClient } from '@tanstack/react-query';
 import { memo } from 'react';
 import { usePathname } from 'next/navigation';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { prefetchCard } from '../shared/api/queries';
 import type { components } from '../shared/api/schema';
 import { fmtDate, isOverdue, priorityLabel, todayIso } from '../shared/format';
 import { useLang, useT } from '../shared/i18n';
@@ -26,7 +28,7 @@ const TEXT = {
 };
 
 // Label colours as utility palette classes (no raw hex), light + dark, as in index.html.
-const LABEL_CLASS: Record<S['LabelColor'], string> = {
+export const LABEL_CLASS: Record<S['LabelColor'], string> = {
   green: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-400/15 dark:text-emerald-200',
   yellow: 'bg-amber-100 text-amber-900 dark:bg-amber-400/15 dark:text-amber-200',
   red: 'bg-red-100 text-red-800 dark:bg-red-400/15 dark:text-red-200',
@@ -59,6 +61,7 @@ export const CardPreview = memo(function CardPreview({
   const t = useT(TEXT);
   const { lang } = useLang();
   const pathname = usePathname();
+  const qc = useQueryClient();
   const overdue = isOverdue(card.dueDate, card.completedAt, todayIso());
   const assignees = card.assigneeIds.map((id) => users.find((u) => u.id === id)).filter((u) => !!u);
   const cardLabels = card.labelIds.map((id) => labels.find((l) => l.id === id)).filter((l) => !!l);
@@ -70,6 +73,8 @@ export const CardPreview = memo(function CardPreview({
       href={`${pathname}?card=${card.id}`}
       scroll={false}
       draggable={false}
+      onPointerEnter={() => prefetchCard(qc, card.id)}
+      onFocus={() => prefetchCard(qc, card.id)}
       className="block px-4 py-3.5 transition-colors hover:bg-muted/40 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
     >
       <div className={`flex flex-wrap items-center gap-1.5 ${actionSpace ? 'pr-7' : ''}`}>

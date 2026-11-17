@@ -1,5 +1,5 @@
 'use client';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, type QueryClient } from '@tanstack/react-query';
 import { api } from './client';
 import type { components } from './schema';
 
@@ -34,4 +34,12 @@ export const useComments = (cardId: number | undefined) =>
     queryKey: qk.comments(cardId ?? 0),
     queryFn: () => api<S['Comment'][]>(`/cards/${cardId}/comments`),
     enabled: cardId !== undefined,
+  });
+
+/** Warms the card detail on hover/focus so the panel opens without a spinner. Skipped while the cache is fresh. */
+export const prefetchCard = (qc: QueryClient, cardId: number) =>
+  qc.prefetchQuery({
+    queryKey: qk.card(cardId),
+    queryFn: () => api<S['CardDetail']>(`/cards/${cardId}`),
+    staleTime: 30_000,
   });
