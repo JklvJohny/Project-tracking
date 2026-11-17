@@ -1,14 +1,17 @@
 'use client';
-import { CheckCircle2, Archive } from 'lucide-react';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CheckCircle2, Archive, GripVertical } from 'lucide-react';
 import { useRef, useState, type KeyboardEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { components } from '../shared/api/schema';
 import { useT } from '../shared/i18n';
 import { AddCard } from './AddCard';
+import { cardDndId } from './announcements';
 import { COLUMN_W } from './AddList';
 import type { CardSummary, ListData } from './board-cache';
 import { CardPreview } from './CardPreview';
+import { SortableCard, useDndCtx, useSortableList } from './dnd';
 import { ListMenu } from './ListMenu';
 import { useArchiveCard, useUpdateList } from './mutations';
 
@@ -22,6 +25,7 @@ const TEXT = {
     empty: 'ยังไม่มีการ์ด',
     cards: (n: string) => `การ์ดใน ${n}`,
     archiveCard: (title: string) => `เก็บการ์ด ${title} ถาวร`,
+    dragList: (n: string) => `ย้ายลิสต์ ${n} (Space หรือ Alt+ลูกศร)`,
   },
   en: {
     renameLabel: 'List name',
@@ -30,6 +34,7 @@ const TEXT = {
     empty: 'No cards yet',
     cards: (n: string) => `Cards in ${n}`,
     archiveCard: (title: string) => `Archive card ${title}`,
+    dragList: (n: string) => `Move list ${n} (Space or Alt+arrows)`,
   },
 };
 
@@ -53,6 +58,8 @@ export function ListColumn({
   const t = useT(TEXT);
   const update = useUpdateList(projectId);
   const archiveCard = useArchiveCard(projectId);
+  const { canDragCards, canDragLists } = useDndCtx();
+  const { setColumn, columnStyle, setHandle, handleProps, setDrop, isDragging, isOver } = useSortableList(list.id);
   const [renaming, setRenaming] = useState(false);
   // Enter/Escape unmount the focused input, which can fire blur: settled makes commit run once and never after Escape.
   const settled = useRef(false);
@@ -74,10 +81,27 @@ export function ListColumn({
 
   return (
     <section
+      ref={setColumn}
+      style={columnStyle}
       aria-labelledby={`list-h-${list.id}`}
-      className={`${COLUMN_W} flex max-h-full flex-col rounded-xl border border-border/70 bg-muted/50`}
+      className={`${COLUMN_W} flex max-h-full flex-col rounded-xl border border-border/70 bg-muted/50 ${
+        isDragging ? 'opacity-40' : ''
+      }`}
     >
       <div className="flex items-center gap-1 px-3 pt-2 pb-1">
+        {canDragLists && (
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="-ml-2 cursor-grab touch-none text-muted-foreground"
+            aria-label={t.dragList(list.name)}
+            title={t.dragList(list.name)}
+            ref={setHandle}
+            {...handleProps}
+          >
+            <GripVertical aria-hidden />
+          </Button>
+        )}
         {renaming ? (
           <Input
             autoFocus
@@ -98,33 +122,48 @@ export function ListColumn({
           <span aria-hidden>{cards.length}</span>
           <span className="sr-only">{t.count(cards.length)}</span>
         </span>
-        {canManage && <ListMenu projectId={projectId} list={list} onRename={() => {
+        {canManage && (
+          <ListMenu
+            projectId={projectId}
+            list={list}
+            onRename={() => {
               settled.current = false;
               setRenaming(true);
-            }} />}
+            }}
+          />
+        )}
       </div>
       <ol
+        ref={setDrop}
         aria-label={t.cards(list.name)}
-        className="mx-2 mt-1 flex min-h-14 flex-col divide-y divide-border overflow-y-auto rounded-lg bg-card shadow-sm ring-1 ring-border/60"
+        className={`mx-2 mt-1 flex min-h-14 flex-col divide-y divide-border overflow-y-auto rounded-lg bg-card shadow-sm ring-1 ring-border/60 ${
+          isOver && canDragCards ? 'bg-primary/5 outline-2 -outline-offset-2 outline-primary/60 outline-dashed' : ''
+        }`}
       >
-        {cards.length === 0 && <li className="px-3 py-6 text-center text-xs text-muted-foreground">{t.empty}</li>}
-        {cards.map((c) => (
-          <li key={c.id} className="group relative">
-            <CardPreview card={c} users={users} labels={labels} actionSpace={canAddCards} />
-            {canAddCards && (
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                className="absolute top-2 right-2 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
-                aria-label={t.archiveCard(c.title)}
-                title={t.archiveCard(c.title)}
-                onClick={() => archiveCard.mutate(c)}
-              >
-                <Archive aria-hidden />
-              </Button>
-            )}
-          </li>
-        ))}
+        <SortableContext items={cards.map((c) => cardDndId(c.id))} strategy={verticalListSortingStrategy}>
+          {cards.length === 0 && <li className="px-3 py-6 text-center text-xs text-muted-foreground">{t.empty}</li>}
+          {cards.map((c) => (
+            <SortableCard key={c.id} card={c}>
+              <CardPreview card={c} users={users} labels={labels} actionSpace={canAddCards} />
+              {canAddCards && (
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  className="absolute top-2 right-2 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
+                  aria-label={t.archiveCard(c.title)}
+                  title={t.archiveCard(c.title)}
+                  onClick={() => archiveCard.mutate(c)}
+                  // Pressing the button must never start a drag from the row around it.
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onTouchStart={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
+                >
+                  <Archive aria-hidden />
+                </Button>
+              )}
+            </SortableCard>
+          ))}
+        </SortableContext>
       </ol>
       {canAddCards && <AddCard projectId={projectId} listId={list.id} listName={list.name} />}
       {!canAddCards && <div className="h-2" />}

@@ -6,6 +6,7 @@ import { errorMessage } from '../shared/errors';
 import { useLang, useT } from '../shared/i18n';
 import { AddList, COLUMN_W } from './AddList';
 import { cardsByList } from './board-cache';
+import { BoardDnd } from './dnd';
 import { ListColumn } from './ListColumn';
 
 const TEXT = {
@@ -19,7 +20,11 @@ const SKELETON_CARDS = [3, 2, 4, 2];
 export function BoardSkeleton() {
   const t = useT(TEXT);
   return (
-    <div className="flex min-h-[28rem] items-start gap-3 overflow-x-auto px-4 pb-4" role="status" aria-label={t.loading}>
+    <div
+      className="flex min-h-[28rem] items-start gap-3 overflow-x-auto px-4 pb-4"
+      role="status"
+      aria-label={t.loading}
+    >
       {SKELETON_CARDS.map((n, i) => (
         <div key={i} aria-hidden className={`${COLUMN_W} animate-pulse rounded-xl border bg-muted/50 p-2`}>
           <div className="mb-2 h-7 w-32 rounded bg-muted" />
@@ -58,20 +63,28 @@ export function Board({ projectId }: { projectId: number }) {
   const canAddCards = canManage || data.myRole === 'member';
 
   return (
-    <div role="group" aria-label={t.lists} className="flex min-h-[28rem] items-start gap-3 overflow-x-auto px-4 pb-4">
-      {data.lists.map((l) => (
-        <ListColumn
-          key={l.id}
-          projectId={projectId}
-          list={l}
-          cards={byList.get(l.id) ?? []}
-          users={data.users}
-          labels={data.labels}
-          canManage={canManage}
-          canAddCards={canAddCards}
-        />
-      ))}
-      {canManage && <AddList projectId={projectId} />}
-    </div>
+    <BoardDnd projectId={projectId} data={data} byList={byList} canDragCards={canAddCards} canDragLists={canManage}>
+      {(cardsOf) => (
+        <div
+          role="group"
+          aria-label={t.lists}
+          className="flex min-h-[28rem] items-start gap-3 overflow-x-auto px-4 pb-4"
+        >
+          {data.lists.map((l) => (
+            <ListColumn
+              key={l.id}
+              projectId={projectId}
+              list={l}
+              cards={cardsOf(l.id)}
+              users={data.users}
+              labels={data.labels}
+              canManage={canManage}
+              canAddCards={canAddCards}
+            />
+          ))}
+          {canManage && <AddList projectId={projectId} />}
+        </div>
+      )}
+    </BoardDnd>
   );
 }

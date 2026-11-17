@@ -1,6 +1,7 @@
 'use client';
 import { CheckSquare, MessageSquare } from 'lucide-react';
 import Link from 'next/link';
+import { memo } from 'react';
 import { usePathname } from 'next/navigation';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { components } from '../shared/api/schema';
@@ -43,7 +44,7 @@ const initials = (name: string) =>
     .join('')
     .toUpperCase();
 
-export function CardPreview({
+export const CardPreview = memo(function CardPreview({
   card,
   users,
   labels,
@@ -68,6 +69,7 @@ export function CardPreview({
     <Link
       href={`${pathname}?card=${card.id}`}
       scroll={false}
+      draggable={false}
       className="block px-4 py-3.5 transition-colors hover:bg-muted/40 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
     >
       <div className={`flex flex-wrap items-center gap-1.5 ${actionSpace ? 'pr-7' : ''}`}>
@@ -95,7 +97,9 @@ export function CardPreview({
               <AvatarFallback className="text-[10px]">{initials(u.name)}</AvatarFallback>
             </Avatar>
           ))}
-          {assignees.length > 4 && <span className="z-10 pl-2.5 text-xs text-muted-foreground">+{assignees.length - 4}</span>}
+          {assignees.length > 4 && (
+            <span className="z-10 pl-2.5 text-xs text-muted-foreground">+{assignees.length - 4}</span>
+          )}
         </div>
       )}
       {card.checklistTotal > 0 && (
@@ -143,4 +147,4 @@ export function CardPreview({
       )}
     </Link>
   );
-}
+});
