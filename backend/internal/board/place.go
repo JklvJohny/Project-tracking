@@ -1,6 +1,7 @@
 package board
 
 import (
+	"context"
 	"errors"
 
 	"tracking-service/internal/apperr"
@@ -31,9 +32,10 @@ func staleOrder() error { return apperr.Conflict("stale_order") }
 // pure and not list-specific: lists, cards and checklist items all use it.
 //
 // sibs are the positions of every sibling in the container (archived ones
-// included, so keys never collide), ascending, as read under a lock the caller
-// already holds. movingID is ignored among the siblings (0 for a new item).
-// A neighbour that is missing from sibs, or neighbours that are not ordered
+// included and flagged: they keep keys from colliding but cannot be
+// neighbours), ascending, as read under a lock the caller already holds.
+// movingID is ignored among the siblings (0 for a new item). A neighbour that
+// is missing from sibs or archived, or neighbours that are not ordered
 // before < after, answer conflict "stale_order" and nothing is computed.
 // With one neighbour the item lands right next to it; with none it goes to
 // the end. When no key fits between the neighbours, the siblings are re-spread
@@ -47,7 +49,7 @@ func Place(sibs []store.IDPos, movingID int64, in MoveInput) (Placement, error) 
 	}
 	find := func(id int64) int {
 		for i, s := range others {
-			if s.ID == id {
+			if s.ID == id && !s.Archived {
 				return i
 			}
 		}
@@ -91,10 +93,50 @@ func Place(sibs []store.IDPos, movingID int64, in MoveInput) (Placement, error) 
 	keys := rank.Spread(len(others))
 	spread := make([]store.IDPos, len(others))
 	for i, s := range others {
-		spread[i] = store.IDPos{ID: s.ID, Position: keys[i]}
+		spread[i] = store.IDPos{ID: s.ID, Position: keys[i], Archived: s.Archived}
 	}
 	if pos, err = between(spread); err != nil {
 		return Placement{}, err
 	}
 	return Placement{Position: pos, Rebalanced: spread}, nil
+}
+
+// PlaceLocked is the whole move flow for any ordered container (lists, cards,
+// checklist items). The caller supplies three callbacks bound to its own
+// transaction:
+//
+//	lock  - takes the container's lock and may re-check the moving item (for
+//	        example that it is still active). It runs first, so every check
+//	        below sees state no concurrent writer can change.
+//	read  - returns the siblings' positions ascending, archived rows flagged.
+//	write - stores new positions for the given rows; used only on rebalance.
+//
+// It then validates the neighbours (present, active, ordered, else conflict
+// "stale_order"), computes the key and, when no key fits, rebalances with
+// rank.Spread and retries once (see Place). The caller saves the moving item
+// with the returned key in the same transaction.
+func PlaceLocked(
+	ctx context.Context,
+	lock func(context.Context) error,
+	read func(context.Context) ([]store.IDPos, error),
+	write func(context.Context, []store.IDPos) error,
+	movingID int64, in MoveInput,
+) (string, error) {
+	if err := lock(ctx); err != nil {
+		return "", err
+	}
+	sibs, err := read(ctx)
+	if err != nil {
+		return "", err
+	}
+	pl, err := Place(sibs, movingID, in)
+	if err != nil {
+		return "", err
+	}
+	if pl.Rebalanced != nil {
+		if err := write(ctx, pl.Rebalanced); err != nil {
+			return "", err
+		}
+	}
+	return pl.Position, nil
 }

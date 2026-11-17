@@ -168,7 +168,8 @@ type ListRepo interface {
 
 	// Positions returns every list of the board, archived included, ordered
 	// by position.
-	// SQL: SELECT id, position FROM lists WHERE board_id = $1 ORDER BY position COLLATE "C".
+	// Archived rows are flagged.
+	// SQL: SELECT id, position, archived_at IS NOT NULL FROM lists WHERE board_id = $1 ORDER BY position COLLATE "C".
 	Positions(ctx context.Context, boardID int64) ([]IDPos, error)
 
 	// SetPositions rewrites the position of each listed list. The unique
@@ -206,8 +207,11 @@ type CardRepo interface {
 	SetCompletedForList(ctx context.Context, listID int64, at *time.Time) error
 }
 
-// IDPos is a row id with its LexoRank position.
+// IDPos is a row id with its LexoRank position. Archived is filled by the
+// Positions readers (archived rows stay in the key space but cannot be
+// neighbours); writers ignore it.
 type IDPos struct {
 	ID       int64
 	Position string
+	Archived bool
 }

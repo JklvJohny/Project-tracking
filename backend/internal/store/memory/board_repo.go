@@ -197,7 +197,7 @@ func (r *listRepo) Positions(ctx context.Context, boardID int64) ([]store.IDPos,
 	ls, _ := r.ByBoard(ctx, boardID)
 	out := make([]store.IDPos, len(ls))
 	for i, l := range ls {
-		out[i] = store.IDPos{ID: l.ID, Position: l.Position}
+		out[i] = store.IDPos{ID: l.ID, Position: l.Position, Archived: l.ArchivedAt != nil}
 	}
 	return out, nil
 }

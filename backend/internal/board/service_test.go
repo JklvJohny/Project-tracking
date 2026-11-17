@@ -522,3 +522,36 @@ func TestListRoute_NonMemberNotFound(t *testing.T) {
 		t.Fatalf("unknown list err = %v", err)
 	}
 }
+
+func TestUpdateList_IsDoneAgainStampsNewCards(t *testing.T) {
+	e := newEnv(t)
+	ls := e.lists(t)
+	if _, err := e.svc.UpdateList(e.ctx, manager, ls[1].ID, board.UpdateListInput{IsDone: ptr(true)}); err != nil {
+		t.Fatal(err)
+	}
+	late := e.card(t, ls[1].ID, "late", "m")
+	*e.tick = 2
+	if _, err := e.svc.UpdateList(e.ctx, manager, ls[1].ID, board.UpdateListInput{IsDone: ptr(true)}); err != nil {
+		t.Fatal(err)
+	}
+	if c := e.getCard(t, late.ID); c.CompletedAt == nil || !c.CompletedAt.Equal(t0.Add(2*time.Minute)) {
+		t.Fatalf("new card completedAt = %v", c.CompletedAt)
+	}
+}
+
+func TestPlaceLocked_LockFirstAndArchivedNeighbourStale(t *testing.T) {
+	var order []string
+	sibs := []store.IDPos{{ID: 1, Position: "d"}, {ID: 2, Position: "m", Archived: true}, {ID: 3, Position: "t"}}
+	lock := func(context.Context) error { order = append(order, "lock"); return nil }
+	read := func(context.Context) ([]store.IDPos, error) { order = append(order, "read"); return sibs, nil }
+	write := func(context.Context, []store.IDPos) error { return nil }
+	two, one := int64(2), int64(1)
+	_, err := board.PlaceLocked(context.Background(), lock, read, write, 9, board.MoveInput{BeforeID: &two})
+	if msg(err) != "stale_order" || len(order) != 2 || order[0] != "lock" {
+		t.Fatalf("err = %v order = %v", err, order)
+	}
+	pos, err := board.PlaceLocked(context.Background(), lock, read, write, 9, board.MoveInput{BeforeID: &one})
+	if err != nil || pos <= "d" {
+		t.Fatalf("pos = %q err = %v", pos, err)
+	}
+}

@@ -282,23 +282,20 @@ func (s *Service) Archived(ctx context.Context, userID, projectID int64) (Archiv
 	return out, err
 }
 
-// place locks the board, reads sibling positions, runs Place and writes any
-// rebalance; the caller then saves the moving list with the returned key.
-func place(ctx context.Context, r store.Repos, boardID, movingID int64, in MoveInput) (string, error) {
-	sibs, err := r.Lists.Positions(ctx, boardID)
-	if err != nil {
-		return "", err
-	}
-	pl, err := Place(sibs, movingID, in)
-	if err != nil {
-		return "", err
-	}
-	if pl.Rebalanced != nil {
-		if err := r.Lists.SetPositions(ctx, pl.Rebalanced); err != nil {
-			return "", err
+// placeList runs the shared move flow (PlaceLocked) against one board's
+// lists. recheck, if set, runs right after the board lock.
+func placeList(ctx context.Context, r store.Repos, boardID, movingID int64, in MoveInput, recheck func() error) (string, error) {
+	lock := func(ctx context.Context) error {
+		if err := r.Lists.LockBoard(ctx, boardID); err != nil {
+			return err
 		}
+		if recheck != nil {
+			return recheck()
+		}
+		return nil
 	}
-	return pl.Position, nil
+	read := func(ctx context.Context) ([]store.IDPos, error) { return r.Lists.Positions(ctx, boardID) }
+	return PlaceLocked(ctx, lock, read, r.Lists.SetPositions, movingID, in)
 }
 
 func (s *Service) CreateList(ctx context.Context, userID, projectID int64, name string) (ListView, error) {
@@ -316,10 +313,7 @@ func (s *Service) CreateList(ctx context.Context, userID, projectID int64, name 
 		if err != nil {
 			return err
 		}
-		if err := r.Lists.LockBoard(ctx, b.ID); err != nil {
-			return err
-		}
-		pos, err := place(ctx, r, b.ID, 0, MoveInput{})
+		pos, err := placeList(ctx, r, b.ID, 0, MoveInput{}, nil)
 		if err != nil {
 			return err
 		}
@@ -355,14 +349,14 @@ func (s *Service) UpdateList(ctx context.Context, userID, listID int64, in Updat
 		}
 		now := s.now()
 		if in.IsDone != nil {
-			if *in.IsDone != l.IsDone {
-				var at *time.Time
-				if *in.IsDone {
-					at = &now
-				}
-				if err := r.Cards.SetCompletedForList(ctx, l.ID, at); err != nil {
-					return err
-				}
+			// every request carrying isDone re-applies it, so cards added since
+			// the flag was set are caught up
+			var at *time.Time
+			if *in.IsDone {
+				at = &now
+			}
+			if err := r.Cards.SetCompletedForList(ctx, l.ID, at); err != nil {
+				return err
 			}
 			l.IsDone = *in.IsDone
 			payload["isDone"] = l.IsDone
@@ -380,19 +374,6 @@ func (s *Service) UpdateList(ctx context.Context, userID, listID int64, in Updat
 	return out, err
 }
 
-// neighbourActive turns a neighbour that is gone, archived or on another
-// board into stale_order, never into not_found or a write.
-func neighbourActive(ctx context.Context, r store.Repos, boardID int64, id *int64) error {
-	if id == nil {
-		return nil
-	}
-	n, err := r.Lists.Get(ctx, *id)
-	if errors.Is(err, store.ErrNotFound) || (err == nil && (n.BoardID != boardID || n.ArchivedAt != nil)) {
-		return staleOrder()
-	}
-	return err
-}
-
 func (s *Service) MoveList(ctx context.Context, userID, listID int64, in MoveInput) (ListView, error) {
 	var out ListView
 	err := s.st.Update(ctx, func(r store.Repos) error {
@@ -400,18 +381,18 @@ func (s *Service) MoveList(ctx context.Context, userID, listID int64, in MoveInp
 		if err != nil {
 			return err
 		}
-		if l.ArchivedAt != nil {
-			return apperr.Conflict("list is archived")
-		}
-		for _, id := range []*int64{in.BeforeID, in.AfterID} {
-			if err := neighbourActive(ctx, r, l.BoardID, id); err != nil {
+		// the archived check runs under the lock, so a concurrent archive
+		// cannot slip between check and write
+		pos, err := placeList(ctx, r, l.BoardID, l.ID, in, func() error {
+			cur, err := r.Lists.Get(ctx, l.ID)
+			if err != nil {
 				return err
 			}
-		}
-		if err := r.Lists.LockBoard(ctx, l.BoardID); err != nil {
-			return err
-		}
-		pos, err := place(ctx, r, l.BoardID, l.ID, in)
+			if cur.ArchivedAt != nil {
+				return apperr.Conflict("list is archived")
+			}
+			return nil
+		})
 		if err != nil {
 			return err
 		}
@@ -455,10 +436,7 @@ func (s *Service) setArchived(ctx context.Context, userID, listID int64, archive
 		} else {
 			typ = "list.restored"
 			l.ArchivedAt = nil
-			if err := r.Lists.LockBoard(ctx, l.BoardID); err != nil {
-				return err
-			}
-			if l.Position, err = place(ctx, r, l.BoardID, l.ID, MoveInput{}); err != nil {
+			if l.Position, err = placeList(ctx, r, l.BoardID, l.ID, MoveInput{}, nil); err != nil {
 				return err
 			}
 		}
