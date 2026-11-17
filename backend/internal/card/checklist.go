@@ -56,25 +56,39 @@ func (s *Service) touch(ctx context.Context, r store.Repos, sc scope, userID int
 	return s.record(ctx, r, sc.project.ID, sc.card.ID, userID, typ, payload)
 }
 
-// placeItem runs the shared move flow against one card's checklist. The card
-// row is the lock; it is re-read after the lock so a concurrent archive cannot
-// slip in.
-func placeItem(ctx context.Context, r store.Repos, cardID, movingID int64, in board.MoveInput) (string, error) {
-	lock := func(ctx context.Context) error {
-		if err := r.Checklist.LockCard(ctx, cardID); err != nil {
-			return err
-		}
-		c, err := r.Cards.Get(ctx, cardID)
-		if err != nil {
-			return err
-		}
-		if c.ArchivedAt != nil {
-			return apperr.Conflict("card is archived")
-		}
-		return nil
+// lockLiveCard takes the card row lock and re-reads the card, so a concurrent
+// archive cannot slip between the earlier check and the write.
+func lockLiveCard(ctx context.Context, r store.Repos, cardID int64) error {
+	if err := r.Checklist.LockCard(ctx, cardID); err != nil {
+		return err
 	}
+	c, err := r.Cards.Get(ctx, cardID)
+	if err != nil {
+		return err
+	}
+	if c.ArchivedAt != nil {
+		return apperr.Conflict("card is archived")
+	}
+	return nil
+}
+
+// placeItem runs the shared move flow against one card's checklist.
+func placeItem(ctx context.Context, r store.Repos, cardID, movingID int64, in board.MoveInput) (string, error) {
+	lock := func(ctx context.Context) error { return lockLiveCard(ctx, r, cardID) }
 	read := func(ctx context.Context) ([]store.IDPos, error) { return r.Checklist.Positions(ctx, cardID) }
 	return board.PlaceLocked(ctx, lock, read, r.Checklist.SetPositions, movingID, in)
+}
+
+// lockedItem locks the parent card and re-reads the item under the lock.
+func lockedItem(ctx context.Context, r store.Repos, it store.ChecklistItem) (store.ChecklistItem, error) {
+	if err := lockLiveCard(ctx, r, it.CardID); err != nil {
+		return it, err
+	}
+	cur, err := r.Checklist.Get(ctx, it.ID)
+	if errors.Is(err, store.ErrNotFound) {
+		return cur, apperr.NotFound("checklist item")
+	}
+	return cur, err
 }
 
 // AddItem appends an item at the end of the card's checklist.
@@ -113,6 +127,9 @@ func (s *Service) UpdateItem(ctx context.Context, userID, itemID int64, in ItemP
 		}
 		if in.Text == nil && in.IsDone == nil {
 			return apperr.BadRequest("empty patch")
+		}
+		if it, err = lockedItem(ctx, r, it); err != nil {
+			return err
 		}
 		fields := map[string]string{}
 		changed := []string{}
@@ -163,6 +180,9 @@ func (s *Service) DeleteItem(ctx context.Context, userID, itemID int64) error {
 	return s.st.Update(ctx, func(r store.Repos) error {
 		it, sc, err := resolveItem(ctx, r, userID, itemID)
 		if err != nil {
+			return err
+		}
+		if _, err := lockedItem(ctx, r, it); err != nil {
 			return err
 		}
 		if err := r.Checklist.Delete(ctx, it.ID); err != nil {

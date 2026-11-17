@@ -145,6 +145,16 @@ func TestMoveItem_ReordersAndNeighbourFromOtherCardConflict(t *testing.T) {
 	if _, err := e.svc.MoveItem(e.ctx, member, a.ID, board.MoveInput{BeforeID: &other.ID}); code(err) != "conflict" {
 		t.Fatalf("foreign neighbour: %v", err)
 	}
+	if got := e.itemOrder(t, c1.ID); got[0] != d.ID || got[1] != a.ID || got[2] != b.ID {
+		t.Fatalf("order changed after conflict: %v", got)
+	}
+	// beforeId: d lands right after b, at the end
+	if _, err := e.svc.MoveItem(e.ctx, member, d.ID, board.MoveInput{BeforeID: &b.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.itemOrder(t, c1.ID); got[0] != a.ID || got[1] != b.ID || got[2] != d.ID {
+		t.Fatalf("beforeId order = %v", got)
+	}
 }
 
 func TestDeleteItem_RemovesAndLogs(t *testing.T) {
@@ -203,5 +213,26 @@ func TestItemRoute_NonMemberNotFound(t *testing.T) {
 	}
 	if rec, body := do(h, member, "DELETE", "/checklist/"+id(it.ID), ""); rec.Code != 200 || body["data"] == nil {
 		t.Fatalf("delete = %d %s", rec.Code, rec.Body)
+	}
+}
+
+func TestItemWrites_ArchivedCardConflict(t *testing.T) {
+	e := newEnv(t)
+	c := e.mk(t, e.lists(t)[0].ID, "c")
+	a, b := e.addItem(t, c.ID, "a"), e.addItem(t, c.ID, "b")
+	if _, err := e.svc.Archive(e.ctx, member, c.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.svc.UpdateItem(e.ctx, member, a.ID, card.ItemPatch{IsDone: ptr(true)}); code(err) != "conflict" {
+		t.Fatalf("update: %v", err)
+	}
+	if _, err := e.svc.MoveItem(e.ctx, member, b.ID, board.MoveInput{AfterID: &a.ID}); code(err) != "conflict" {
+		t.Fatalf("move: %v", err)
+	}
+	if err := e.svc.DeleteItem(e.ctx, member, a.ID); code(err) != "conflict" {
+		t.Fatalf("delete: %v", err)
+	}
+	if got := e.itemOrder(t, c.ID); len(got) != 2 || got[0] != a.ID {
+		t.Fatalf("items changed: %v", got)
 	}
 }
