@@ -102,3 +102,31 @@ func TestRouter_PanicReturnsJSON500(t *testing.T) {
 		t.Fatalf("got %d %q", rec.Code, rec.Body.String())
 	}
 }
+
+func TestRouter_UnknownRouteIsEnvelope404(t *testing.T) {
+	h := httpx.NewRouter(func(chi.Router) {})
+	for _, path := range []string{"/nope", "/api/tracking/v1/nope"} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		var env envelope
+		_ = json.Unmarshal(rec.Body.Bytes(), &env)
+		if rec.Code != 404 || env.Code != "not_found" || env.Success {
+			t.Fatalf("%s: got %d %q", path, rec.Code, rec.Body.String())
+		}
+	}
+}
+
+func TestRouter_WrongMethodIsEnvelope400(t *testing.T) {
+	h := httpx.NewRouter(func(r chi.Router) {
+		r.Get("/thing", func(http.ResponseWriter, *http.Request) {})
+	})
+	for _, path := range []string{"/healthz", "/api/tracking/v1/thing"} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodDelete, path, nil))
+		var env envelope
+		_ = json.Unmarshal(rec.Body.Bytes(), &env)
+		if rec.Code != 400 || env.Code != "bad_request" || env.Success {
+			t.Fatalf("%s: got %d %q", path, rec.Code, rec.Body.String())
+		}
+	}
+}

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"log"
 	"log/slog"
 	"net/http"
 	"os"
@@ -12,8 +13,12 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"tracking-service/internal/auth"
 	"tracking-service/internal/config"
+	"tracking-service/internal/events"
 	"tracking-service/internal/httpx"
+	"tracking-service/internal/store/memory"
+	"tracking-service/internal/users"
 )
 
 func main() {
@@ -28,7 +33,20 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	// Auth and modules are mounted by later tasks.
+	var authn auth.Authenticator
+	if cfg.Env == "local" {
+		if authn = auth.NewLocal(); authn == nil {
+			log.Fatal("ENV=local needs a build with -tags local")
+		}
+	} else {
+		log.Fatal("no production authenticator wired")
+	}
+	st := memory.New(time.Now)
+	userProvider := users.NewStub()
+	publisher := events.NewLog(slog.Default())
+	// Modules that consume these are mounted by later tasks.
+	_, _, _, _ = authn, st, userProvider, publisher
+
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
 		Handler:           httpx.NewRouter(func(chi.Router) {}),

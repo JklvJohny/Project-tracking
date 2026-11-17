@@ -17,6 +17,12 @@ const basePath = "/api/tracking/v1"
 func NewRouter(mount func(chi.Router)) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID, recoverJSON, middleware.Compress(5), requestLog)
+	// chi's defaults are plain text; keep the envelope. 405 is reported as
+	// bad_request because the API has no 405 code.
+	r.NotFound(func(w http.ResponseWriter, r *http.Request) { Fail(w, r, apperr.NotFound("route")) })
+	r.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
+		Fail(w, r, apperr.BadRequest("method not allowed"))
+	})
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		OK(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
