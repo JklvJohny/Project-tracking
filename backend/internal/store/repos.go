@@ -205,6 +205,51 @@ type CardRepo interface {
 	// SQL: UPDATE cards SET completed_at = $2 WHERE list_id = $1 AND archived_at IS NULL
 	// AND completed_at IS NULL (non-nil at) | AND completed_at IS NOT NULL (nil at).
 	SetCompletedForList(ctx context.Context, listID int64, at *time.Time) error
+
+	// Touch sets cards.updated_at; used when only a child row changed.
+	// SQL: UPDATE cards SET updated_at = $2 WHERE id = $1.
+	Touch(ctx context.Context, cardID int64, at time.Time) error
+
+	// LockList serialises position changes in one list for the rest of the
+	// transaction. ErrNotFound if the list is absent.
+	// SQL: SELECT id FROM lists WHERE id = $1 FOR UPDATE.
+	LockList(ctx context.Context, listID int64) error
+
+	// Positions returns every card of the list, archived included and
+	// flagged, ordered by position then id.
+	// SQL: SELECT id, position, archived_at IS NOT NULL FROM cards WHERE list_id = $1
+	// ORDER BY position COLLATE "C", id.
+	Positions(ctx context.Context, listID int64) ([]IDPos, error)
+
+	// SetPositions rewrites the position of each listed card. The unique
+	// index (list_id, position) is not deferrable, so use the two-step update.
+	// SQL: step 1 UPDATE cards SET position = '~' || id WHERE id = ANY($1);
+	// step 2 UPDATE cards SET position = v.position FROM (VALUES ...) v WHERE cards.id = v.id.
+	SetPositions(ctx context.Context, ps []IDPos) error
+
+	// AddAssignee reports whether a row was added; an existing one is left
+	// alone (false).
+	// SQL: INSERT INTO card_assignees (card_id, user_id, assigned_at) VALUES (...)
+	// ON CONFLICT DO NOTHING; added = rows affected is 1.
+	AddAssignee(ctx context.Context, cardID, userID int64, at time.Time) (bool, error)
+
+	// RemoveAssignee reports whether a row was removed.
+	// SQL: DELETE FROM card_assignees WHERE card_id = $1 AND user_id = $2;
+	// removed = rows affected is 1.
+	RemoveAssignee(ctx context.Context, cardID, userID int64) (bool, error)
+
+	// Children returns what the card detail shows besides the card row:
+	// assignee ids and label ids ascending, checklist items by position.
+	// SQL: three queries by card_id (card_assignees, card_labels,
+	// checklist_items ORDER BY position COLLATE "C").
+	Children(ctx context.Context, cardID int64) (CardChildren, error)
+}
+
+// CardChildren is the child data of one card, read for the detail view.
+type CardChildren struct {
+	AssigneeIDs []int64
+	LabelIDs    []int64
+	Checklist   []ChecklistItem
 }
 
 // IDPos is a row id with its LexoRank position. Archived is filled by the

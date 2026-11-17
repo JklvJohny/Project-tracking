@@ -15,6 +15,7 @@ import (
 
 	"tracking-service/internal/auth"
 	"tracking-service/internal/board"
+	"tracking-service/internal/card"
 	"tracking-service/internal/config"
 	"tracking-service/internal/events"
 	"tracking-service/internal/httpx"
@@ -48,6 +49,7 @@ func run() error {
 	publisher := events.NewLog(slog.Default())
 	projects := project.New(st, userProvider, publisher, time.Now)
 	boards := board.New(st, publisher, time.Now)
+	cards := card.New(st, userProvider, publisher, time.Now)
 	// Later modules mount in the same group.
 
 	srv := &http.Server{
@@ -57,6 +59,7 @@ func run() error {
 				r.Use(auth.Middleware(authn))
 				project.Mount(r, projects)
 				board.Mount(r, boards)
+				card.Mount(r, cards)
 			})
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
