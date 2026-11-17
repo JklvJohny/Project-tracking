@@ -1,7 +1,9 @@
 'use client';
 import Link from 'next/link';
 import { usePathname, useParams, useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useCallback } from 'react';
+import { Settings, Users } from 'lucide-react';
+import { Suspense, useCallback, useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useBoard } from '../shared/api/queries';
 import { useT } from '../shared/i18n';
@@ -9,16 +11,20 @@ import { routes } from '../shared/routes';
 import { ArchivedSheet } from '../board/ArchivedSheet';
 import { Board } from '../board/Board';
 import { CardPanel } from '../card/CardPanel';
+import { MembersDialog } from '../projects/MembersDialog';
+import { ProjectSettingsDialog } from '../projects/ProjectSettingsDialog';
 
 const TEXT = {
-  th: { projects: 'โปรเจกต์', invalid: 'ไม่พบโปรเจกต์' },
-  en: { projects: 'Projects', invalid: 'Project not found' },
+  th: { projects: 'โปรเจกต์', invalid: 'ไม่พบโปรเจกต์', settings: 'ตั้งค่า', members: 'สมาชิก' },
+  en: { projects: 'Projects', invalid: 'Project not found', settings: 'Settings', members: 'Members' },
 };
 
 function Header({ projectId }: { projectId: number }) {
   const t = useT(TEXT);
   const board = useBoard(projectId);
   const role = board.data?.myRole;
+  const canManage = role === 'admin' || role === 'pm';
+  const [dialog, setDialog] = useState<'settings' | 'members' | null>(null);
   return (
     <div className="flex h-14 items-center justify-between gap-3 px-4">
       <div className="flex min-w-0 items-center gap-2">
@@ -34,7 +40,23 @@ function Header({ projectId }: { projectId: number }) {
           <Skeleton className="h-6 w-40" />
         )}
       </div>
-      {role && role !== 'viewer' && <ArchivedSheet projectId={projectId} />}
+      <div className="flex shrink-0 items-center gap-2">
+        {canManage && (
+          <>
+            <Button variant="outline" size="sm" onClick={() => setDialog('members')}>
+              <Users aria-hidden />
+              {t.members}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setDialog('settings')}>
+              <Settings aria-hidden />
+              {t.settings}
+            </Button>
+            <ProjectSettingsDialog projectId={projectId} open={dialog === 'settings'} onOpenChange={(o) => !o && setDialog(null)} />
+            <MembersDialog projectId={projectId} open={dialog === 'members'} onOpenChange={(o) => !o && setDialog(null)} />
+          </>
+        )}
+        {role && role !== 'viewer' && <ArchivedSheet projectId={projectId} />}
+      </div>
     </div>
   );
 }

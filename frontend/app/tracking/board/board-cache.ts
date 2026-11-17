@@ -120,3 +120,38 @@ export function bumpCommentCount(b: BoardData, cardId: number, delta: number): B
     ? { ...b, cards: b.cards.map((c) => (c.id === cardId ? { ...c, commentCount: Math.max(0, c.commentCount + delta) } : c)) }
     : b;
 }
+
+type BoardProjectData = BoardData['project'];
+type BoardMember = S['BoardMember'];
+
+/** Copies the board-visible fields of a Project response onto the cached board project. */
+export function patchBoardProject(b: BoardData, p: S['Project']): BoardData {
+  const project: BoardProjectData = {
+    id: p.id,
+    name: p.name,
+    description: p.description,
+    ownerId: p.ownerId,
+    status: p.status,
+    startDate: p.startDate,
+    endDate: p.endDate,
+    archivedAt: p.archivedAt,
+  };
+  return { ...b, project };
+}
+
+/** Adds or replaces a member and makes sure the board knows the person's profile. */
+export function upsertMember(b: BoardData, m: S['Member']): BoardData {
+  const member: BoardMember = { userId: m.userId, name: m.name, avatarUrl: m.avatarUrl, role: m.role };
+  const members = b.members.some((x) => x.userId === m.userId)
+    ? b.members.map((x) => (x.userId === m.userId ? member : x))
+    : [...b.members, member];
+  const users = b.users.some((u) => u.id === m.userId)
+    ? b.users
+    : [...b.users, { id: m.userId, name: m.name, avatarUrl: m.avatarUrl }];
+  return { ...b, members, users };
+}
+
+/** The profile stays in `users`: the person may still be an assignee on cards. */
+export function dropMember(b: BoardData, userId: number): BoardData {
+  return b.members.some((x) => x.userId === userId) ? { ...b, members: b.members.filter((x) => x.userId !== userId) } : b;
+}

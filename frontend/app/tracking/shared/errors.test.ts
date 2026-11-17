@@ -5,6 +5,7 @@ import { errorKey, errorText } from './errors';
 const CODES = [
   'bad_request', 'unauthorized', 'forbidden', 'not_found', 'conflict', 'validation_failed', 'server_error',
   'network_error', 'stale_order', 'required', 'too_long', 'invalid', 'invalid_date', 'before_start', 'not_member',
+  'last_pm', 'already_member', 'name_in_use',
 ];
 
 describe('errorText', () => {

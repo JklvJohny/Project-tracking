@@ -20,6 +20,9 @@ const TEXT: Record<Lang, Record<string, string>> = {
     invalid_date: 'รูปแบบวันที่ไม่ถูกต้อง',
     before_start: 'ต้องไม่ก่อนวันเริ่มต้น',
     not_member: 'ผู้ใช้ไม่ได้เป็นสมาชิกโปรเจกต์',
+    last_pm: 'โปรเจกต์ต้องมี PM อย่างน้อยหนึ่งคน',
+    already_member: 'ผู้ใช้เป็นสมาชิกโปรเจกต์อยู่แล้ว',
+    name_in_use: 'มีโปรเจกต์ชื่อนี้อยู่แล้ว',
   },
   en: {
     bad_request: 'Invalid request',
@@ -37,6 +40,9 @@ const TEXT: Record<Lang, Record<string, string>> = {
     invalid_date: 'Invalid date',
     before_start: 'Must not be before the start date',
     not_member: 'User is not a project member',
+    last_pm: 'A project must keep at least one PM',
+    already_member: 'This person is already a member',
+    name_in_use: 'A project with this name already exists',
   },
 };
 
@@ -45,10 +51,18 @@ export function errorText(code: string, lang: Lang): string {
   return TEXT[lang][code] ?? TEXT[lang].server_error;
 }
 
-/** conflict + error "stale_order" is its own case (the client refetches the board); everything else keys on code. */
+// Conflict sub-cases, keyed by the server's English message (the discriminator, like stale_order).
+const CONFLICTS: Record<string, string> = {
+  stale_order: 'stale_order',
+  'a project must keep at least one PM': 'last_pm',
+  'already a member': 'already_member',
+  'project name already in use': 'name_in_use',
+};
+
+/** A conflict with a known message gets its own key (stale_order makes the client refetch); everything else keys on code. */
 export function errorKey(e: unknown): string {
   if (!(e instanceof ApiError)) return 'server_error';
-  return e.code === 'conflict' && e.message === 'stale_order' ? 'stale_order' : e.code;
+  return e.code === 'conflict' ? (CONFLICTS[e.message] ?? 'conflict') : e.code;
 }
 
 export function errorMessage(e: unknown, lang: Lang): string {
