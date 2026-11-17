@@ -9,6 +9,7 @@ export const qk = {
   me: ['me'] as const,
   projects: ['projects'] as const,
   board: (id: number) => ['board', id] as const,
+  archived: (id: number) => ['archived', id] as const,
   card: (id: number) => ['card', id] as const,
   comments: (id: number) => ['comments', id] as const,
 };
