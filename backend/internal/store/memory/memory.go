@@ -75,9 +75,6 @@ func New(now clock.Clock) *Store { return &Store{d: newData(), now: now} }
 
 var _ store.Store = (*Store)(nil)
 
-// stub is the placeholder for repos whose interface has no methods yet.
-type stub struct{}
-
 func (s *Store) repos(d *data) store.Repos {
 	return store.Repos{
 		Projects:  &projectRepo{d: d},
@@ -87,7 +84,7 @@ func (s *Store) repos(d *data) store.Repos {
 		Cards:     &cardRepo{d: d},
 		Labels:    &labelRepo{d: d},
 		Checklist: &checklistRepo{d: d},
-		Comments:  stub{},
+		Comments:  &commentRepo{d: d},
 		UserRoles: &userRolesRepo{d: d},
 		Users:     &usersRepo{d: d, now: s.now},
 		Activity:  &activityRepo{d: d, now: s.now},

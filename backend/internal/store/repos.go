@@ -23,7 +23,41 @@ type Repos struct {
 	Activity  ActivityRepo
 }
 
-type CommentRepo interface{}
+type CommentRepo interface {
+	// Create assigns ID and stores c as given.
+	// SQL: INSERT INTO comments ... RETURNING id.
+	Create(ctx context.Context, c Comment) (Comment, error)
+
+	// Get returns a comment even when soft-deleted (the caller checks
+	// DeletedAt); ErrNotFound if absent.
+	// SQL: SELECT ... FROM comments WHERE id = $1.
+	Get(ctx context.Context, id int64) (Comment, error)
+
+	// Save overwrites body, edited_at and deleted_at of an existing comment;
+	// ErrNotFound if absent.
+	// SQL: UPDATE comments SET body_md = $2, edited_at = $3, deleted_at = $4 WHERE id = $1.
+	Save(ctx context.Context, c Comment) error
+
+	// ByCard returns the card's non-deleted comments, oldest first.
+	// SQL: SELECT ... FROM comments WHERE card_id = $1 AND deleted_at IS NULL
+	// ORDER BY created_at, id.
+	ByCard(ctx context.Context, cardID int64) ([]Comment, error)
+
+	// Mentions returns the mentioned user ids of one comment, ascending.
+	// SQL: SELECT user_id FROM comment_mentions WHERE comment_id = $1 ORDER BY user_id.
+	Mentions(ctx context.Context, commentID int64) ([]int64, error)
+
+	// MentionsByCard returns mentioned user ids (ascending) per comment id for
+	// the card's non-deleted comments; comments without mentions are absent.
+	// SQL: SELECT m.comment_id, m.user_id FROM comment_mentions m JOIN comments c
+	// ON c.id = m.comment_id WHERE c.card_id = $1 AND c.deleted_at IS NULL ORDER BY m.user_id.
+	MentionsByCard(ctx context.Context, cardID int64) (map[int64][]int64, error)
+
+	// SetMentions replaces the comment's mention rows with userIDs.
+	// SQL: DELETE FROM comment_mentions WHERE comment_id = $1;
+	// INSERT INTO comment_mentions (comment_id, user_id) SELECT $1, unnest($2::bigint[]).
+	SetMentions(ctx context.Context, commentID int64, userIDs []int64) error
+}
 
 type ChecklistRepo interface {
 	// LockCard serialises checklist position changes on one card for the rest

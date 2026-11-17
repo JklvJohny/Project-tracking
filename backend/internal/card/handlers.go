@@ -150,4 +150,30 @@ func Mount(r chi.Router, s *Service) {
 	r.Delete("/cards/{cardID}/labels/{labelID}", label(func(req *http.Request, uid, cardID, labelID int64) (CardDetail, error) {
 		return s.RemoveLabel(req.Context(), uid, cardID, labelID)
 	}))
+	r.Get("/cards/{cardID}/comments", with("cardID", func(w http.ResponseWriter, req *http.Request, uid, id int64) {
+		v, err := s.Comments(req.Context(), uid, id)
+		respond(w, req, http.StatusOK, v, err)
+	}))
+	r.Post("/cards/{cardID}/comments", with("cardID", func(w http.ResponseWriter, req *http.Request, uid, id int64) {
+		var in commentInput
+		if err := httpx.Decode(req, &in); err != nil {
+			httpx.Fail(w, req, err)
+			return
+		}
+		v, err := s.AddComment(req.Context(), uid, id, in.Body)
+		respond(w, req, http.StatusCreated, v, err)
+	}))
+	r.Patch("/comments/{commentID}", with("commentID", func(w http.ResponseWriter, req *http.Request, uid, id int64) {
+		var in commentInput
+		if err := httpx.Decode(req, &in); err != nil {
+			httpx.Fail(w, req, err)
+			return
+		}
+		v, err := s.EditComment(req.Context(), uid, id, in.Body)
+		respond(w, req, http.StatusOK, v, err)
+	}))
+	r.Delete("/comments/{commentID}", with("commentID", func(w http.ResponseWriter, req *http.Request, uid, id int64) {
+		err := s.DeleteComment(req.Context(), uid, id)
+		respond(w, req, http.StatusOK, struct{}{}, err)
+	}))
 }

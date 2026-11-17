@@ -27,7 +27,7 @@ const (
 type Service struct {
 	st  store.Store
 	up  users.Provider   // reserved: members are cached when they join the project
-	ev  events.Publisher // reserved: card events are not published yet
+	ev  events.Publisher // comment mentions, published after commit
 	now clock.Clock
 }
 
