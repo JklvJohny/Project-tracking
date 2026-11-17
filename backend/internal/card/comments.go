@@ -78,8 +78,11 @@ func resolveComment(ctx context.Context, r store.Repos, userID, commentID int64)
 	if err != nil {
 		return cm, scope{}, err
 	}
-	sc, err := resolveCard(ctx, r, userID, cm.CardID)
+	sc, err := relock(ctx, r, func() (scope, error) { return resolveCard(ctx, r, userID, cm.CardID) })
 	if err != nil {
+		return cm, sc, err
+	}
+	if cm, err = r.Comments.Get(ctx, commentID); err != nil { // fresh, under the lock
 		return cm, sc, err
 	}
 	if cm.DeletedAt != nil {
@@ -194,7 +197,7 @@ func (s *Service) AddComment(ctx context.Context, userID, cardID int64, body str
 	var fresh []int64
 	var projectID int64
 	err := s.st.Update(ctx, func(r store.Repos) error {
-		sc, err := resolveCard(ctx, r, userID, cardID)
+		sc, err := relock(ctx, r, func() (scope, error) { return resolveCard(ctx, r, userID, cardID) })
 		if err != nil {
 			return err
 		}

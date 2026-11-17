@@ -89,7 +89,11 @@ type ChecklistRepo interface {
 
 	// SetPositions rewrites the position of each listed item. The unique index
 	// (card_id, position) is not deferrable, so use the two-step update.
-	// SQL: step 1 UPDATE checklist_items SET position = '~' || id WHERE id = ANY($1);
+	// SQL: step 1 (park) UPDATE checklist_items SET position = '~' || id WHERE id = ANY($1)
+	// OR (card_id IN (SELECT card_id FROM checklist_items WHERE id = ANY($1)) AND position = ANY($newPositions)
+	// AND id <> ALL($1)); the container is found from the rows themselves, and the
+	// one parked row outside ps is the moving row, which the caller Saves with its
+	// new position in the same transaction;
 	// step 2 UPDATE checklist_items SET position = v.position FROM (VALUES ...) v WHERE checklist_items.id = v.id.
 	SetPositions(ctx context.Context, ps []IDPos) error
 }
@@ -233,6 +237,15 @@ type BoardRepo interface {
 	// and user_cache WHERE user_id = ANY(...). All ORDER BY position COLLATE "C".
 	Snapshot(ctx context.Context, projectID int64) (BoardSnapshot, error)
 
+	// Lock takes the board's row lock for the rest of the transaction. It is
+	// the first lock of every write that changes anything the board shows
+	// (lock order: board, then list, then card; see docs/db-contract.md).
+	// It serialises writes per board, so concurrent writers cannot deadlock on
+	// the board row that Touch and the list/card writes also reach.
+	// ErrNotFound if the board is absent.
+	// SQL: SELECT id FROM boards WHERE id = $1 FOR UPDATE.
+	Lock(ctx context.Context, boardID int64) error
+
 	// Touch sets boards.updated_at, which is the board's ETag source.
 	// SQL: UPDATE boards SET updated_at = $2 WHERE id = $1.
 	Touch(ctx context.Context, boardID int64, at time.Time) error
@@ -256,11 +269,6 @@ type ListRepo interface {
 	// SQL: UPDATE lists SET all columns WHERE id = $1.
 	Save(ctx context.Context, l List) error
 
-	// LockBoard serialises position changes on one board for the rest of the
-	// transaction. ErrNotFound if the board is absent.
-	// SQL: SELECT id FROM boards WHERE id = $1 FOR UPDATE.
-	LockBoard(ctx context.Context, boardID int64) error
-
 	// Positions returns every list of the board, archived included, ordered
 	// by position.
 	// Archived rows are flagged.
@@ -270,7 +278,11 @@ type ListRepo interface {
 	// SetPositions rewrites the position of each listed list. The unique
 	// index (board_id, position) is not deferrable, so a plain UPDATE can
 	// collide mid-statement.
-	// SQL: step 1 UPDATE lists SET position = '~' || id WHERE id = ANY($1);
+	// SQL: step 1 (park) UPDATE lists SET position = '~' || id WHERE id = ANY($1)
+	// OR (board_id IN (SELECT board_id FROM lists WHERE id = ANY($1)) AND position = ANY($newPositions)
+	// AND id <> ALL($1) AND archived_at IS NULL); the container is found from the rows themselves, and the
+	// one parked row outside ps is the moving row, which the caller Saves with its
+	// new position in the same transaction;
 	// step 2 UPDATE lists SET position = v.position FROM (VALUES ...) v WHERE lists.id = v.id.
 	SetPositions(ctx context.Context, ps []IDPos) error
 
@@ -318,7 +330,11 @@ type CardRepo interface {
 
 	// SetPositions rewrites the position of each listed card. The unique
 	// index (list_id, position) is not deferrable, so use the two-step update.
-	// SQL: step 1 UPDATE cards SET position = '~' || id WHERE id = ANY($1);
+	// SQL: step 1 (park) UPDATE cards SET position = '~' || id WHERE id = ANY($1)
+	// OR (list_id IN (SELECT list_id FROM cards WHERE id = ANY($1)) AND position = ANY($newPositions)
+	// AND id <> ALL($1) AND archived_at IS NULL); the container is found from the rows themselves, and the
+	// one parked row outside ps is the moving row, which the caller Saves with its
+	// new position in the same transaction;
 	// step 2 UPDATE cards SET position = v.position FROM (VALUES ...) v WHERE cards.id = v.id.
 	SetPositions(ctx context.Context, ps []IDPos) error
 

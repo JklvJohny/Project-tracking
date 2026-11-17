@@ -135,3 +135,33 @@ func TestListHandlers_Flow(t *testing.T) {
 		t.Fatalf("unknown field = %d", rec.Code)
 	}
 }
+
+// The board payload carries the project name, status and archivedAt, so
+// project writes must change the board ETag.
+func TestBoardHandler_ProjectWritesChangeETag(t *testing.T) {
+	e := newEnv(t)
+	h := e.handler()
+	pid := strconv.FormatInt(e.pid, 10)
+	etag := func() string {
+		rec, _ := do(h, manager, "GET", "/projects/"+pid+"/board", "")
+		return rec.Header().Get("ETag")
+	}
+	steps := []struct{ method, path, body string }{
+		{"PATCH", "/projects/" + pid, `{"name":"Renamed"}`},
+		{"PATCH", "/projects/" + pid, `{"status":"on_hold"}`},
+		{"POST", "/projects/" + pid + "/archive", ""},
+		{"POST", "/projects/" + pid + "/restore", ""},
+	}
+	prev := etag()
+	for i, st := range steps {
+		*e.tick = i + 1
+		if rec, _ := do(h, manager, st.method, st.path, st.body); rec.Code != 200 {
+			t.Fatalf("%s %s = %d %s", st.method, st.path, rec.Code, rec.Body)
+		}
+		cur := etag()
+		if cur == prev {
+			t.Fatalf("%s %s did not change the board ETag", st.method, st.path)
+		}
+		prev = cur
+	}
+}

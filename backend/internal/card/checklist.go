@@ -36,7 +36,14 @@ func resolveItem(ctx context.Context, r store.Repos, userID, itemID int64) (stor
 	if err != nil {
 		return it, scope{}, err
 	}
-	sc, err := resolveEditable(ctx, r, userID, it.CardID)
+	sc, err := resolveEditable(ctx, r, userID, it.CardID) // takes the board lock
+	if err != nil {
+		return it, sc, err
+	}
+	it, err = r.Checklist.Get(ctx, itemID) // fresh, now that the lock is held
+	if errors.Is(err, store.ErrNotFound) {
+		return it, sc, apperr.NotFound("checklist item")
+	}
 	return it, sc, err
 }
 

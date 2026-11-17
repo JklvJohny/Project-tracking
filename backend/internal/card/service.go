@@ -187,6 +187,24 @@ func writable(role authz.Role, p store.Project) error {
 
 // resolveEditable is resolveCard for a write on a live card.
 func resolveEditable(ctx context.Context, r store.Repos, userID, cardID int64) (scope, error) {
+	return relock(ctx, r, func() (scope, error) { return resolveEditableUnlocked(ctx, r, userID, cardID) })
+}
+
+// relock resolves, takes the board row lock (the first lock of every write;
+// order: board, list, card) and resolves again, so the caller works on rows
+// read under the lock, not on a read another writer may have outdated.
+func relock(ctx context.Context, r store.Repos, resolve func() (scope, error)) (scope, error) {
+	sc, err := resolve()
+	if err != nil {
+		return sc, err
+	}
+	if err := r.Boards.Lock(ctx, sc.list.BoardID); err != nil {
+		return sc, err
+	}
+	return resolve()
+}
+
+func resolveEditableUnlocked(ctx context.Context, r store.Repos, userID, cardID int64) (scope, error) {
 	sc, err := resolveCard(ctx, r, userID, cardID)
 	if err != nil {
 		return sc, err
@@ -247,6 +265,12 @@ func (s *Service) Create(ctx context.Context, userID, listID int64, in CreateCar
 	err := s.st.Update(ctx, func(r store.Repos) error {
 		l, p, role, err := resolveList(ctx, r, userID, listID)
 		if err != nil {
+			return err
+		}
+		if err := r.Boards.Lock(ctx, l.BoardID); err != nil {
+			return err
+		}
+		if l, p, role, err = resolveList(ctx, r, userID, listID); err != nil {
 			return err
 		}
 		if err := writable(role, p); err != nil {
@@ -435,7 +459,7 @@ func (s *Service) Restore(ctx context.Context, userID, cardID int64) (CardDetail
 func (s *Service) setArchived(ctx context.Context, userID, cardID int64, archive bool) (CardDetail, error) {
 	var out CardDetail
 	err := s.st.Update(ctx, func(r store.Repos) error {
-		sc, err := resolveCard(ctx, r, userID, cardID)
+		sc, err := relock(ctx, r, func() (scope, error) { return resolveCard(ctx, r, userID, cardID) })
 		if err != nil {
 			return err
 		}

@@ -185,8 +185,8 @@ func (r *listRepo) Save(_ context.Context, l store.List) error {
 	return nil
 }
 
-// LockBoard needs no work here: Update already holds the store's write lock.
-func (r *listRepo) LockBoard(_ context.Context, boardID int64) error {
+// Lock needs no work here: Update already holds the store's write lock.
+func (r *boardRepo) Lock(_ context.Context, boardID int64) error {
 	if _, ok := r.d.boards[boardID]; !ok {
 		return store.ErrNotFound
 	}

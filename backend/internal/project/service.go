@@ -125,9 +125,28 @@ func load(ctx context.Context, r store.Repos, userID, id int64) (store.Project, 
 	return p, role, err
 }
 
-// loadManaged is load plus the ManageProject check.
+// loadManaged is load plus the ManageProject check, for writes: once the
+// caller is known to be allowed it takes the board row lock (the first lock of
+// every write; order: board, list, card) and reads again under it.
 func loadManaged(ctx context.Context, r store.Repos, userID, id int64) (store.Project, authz.Role, error) {
 	p, role, err := load(ctx, r, userID, id)
+	if err != nil {
+		return p, role, err
+	}
+	if err := authz.Require(role, authz.ManageProject); err != nil {
+		return p, role, err
+	}
+	b, err := r.Boards.ByProject(ctx, id)
+	if errors.Is(err, store.ErrNotFound) {
+		return p, role, apperr.NotFound("board")
+	}
+	if err != nil {
+		return p, role, err
+	}
+	if err := r.Boards.Lock(ctx, b.ID); err != nil {
+		return p, role, err
+	}
+	p, role, err = load(ctx, r, userID, id)
 	if err != nil {
 		return p, role, err
 	}
@@ -327,6 +346,10 @@ func (s *Service) Update(ctx context.Context, userID, id int64, in UpdateProject
 		if err := r.Projects.Save(ctx, p); err != nil {
 			return err
 		}
+		// the board payload carries the project's name, status, dates and archivedAt
+		if err := s.touchBoard(ctx, r, p.ID); err != nil {
+			return err
+		}
 		if err := s.record(ctx, r, p.ID, userID, "project.updated", map[string]any{"fields": changed}); err != nil {
 			return err
 		}
@@ -378,6 +401,9 @@ func (s *Service) setArchived(ctx context.Context, userID, id int64, archive boo
 		}
 		p.UpdatedAt = s.now()
 		if err := r.Projects.Save(ctx, p); err != nil {
+			return err
+		}
+		if err := s.touchBoard(ctx, r, p.ID); err != nil {
 			return err
 		}
 		if err := s.record(ctx, r, p.ID, userID, typ, map[string]any{}); err != nil {

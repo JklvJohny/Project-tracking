@@ -58,7 +58,14 @@ func loadLabel(ctx context.Context, r store.Repos, userID, labelID int64) (store
 	if err != nil {
 		return l, store.Project{}, err
 	}
-	p, err := writableProject(ctx, r, userID, l.ProjectID)
+	p, err := writableProject(ctx, r, userID, l.ProjectID) // takes the board lock
+	if err != nil {
+		return l, p, err
+	}
+	l, err = r.Labels.Get(ctx, labelID) // fresh, now that the lock is held
+	if errors.Is(err, store.ErrNotFound) {
+		return l, p, apperr.NotFound("label")
+	}
 	return l, p, err
 }
 

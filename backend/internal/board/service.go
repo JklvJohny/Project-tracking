@@ -171,6 +171,32 @@ func loadManaged(ctx context.Context, r store.Repos, userID, projectID int64) (s
 	if p.ArchivedAt != nil {
 		return p, apperr.Conflict("project is archived")
 	}
+	// Lock order: the board row is the first lock of every write. The checks
+	// above ran unlocked, so they are repeated on fresh rows once it is held.
+	b, err := r.Boards.ByProject(ctx, projectID)
+	if errors.Is(err, store.ErrNotFound) {
+		return p, apperr.NotFound("board")
+	}
+	if err != nil {
+		return p, err
+	}
+	if err := r.Boards.Lock(ctx, b.ID); err != nil {
+		return p, err
+	}
+	return recheckManaged(ctx, r, userID, projectID)
+}
+
+func recheckManaged(ctx context.Context, r store.Repos, userID, projectID int64) (store.Project, error) {
+	p, role, err := loadProject(ctx, r, userID, projectID)
+	if err != nil {
+		return p, err
+	}
+	if err := authz.Require(role, authz.ManageProject); err != nil {
+		return p, err
+	}
+	if p.ArchivedAt != nil {
+		return p, apperr.Conflict("project is archived")
+	}
 	return p, nil
 }
 
@@ -188,7 +214,14 @@ func loadList(ctx context.Context, r store.Repos, userID, listID int64) (store.L
 	if err != nil {
 		return l, store.Project{}, err
 	}
-	p, err := loadManaged(ctx, r, userID, b.ProjectID)
+	p, err := loadManaged(ctx, r, userID, b.ProjectID) // takes the board lock
+	if err != nil {
+		return l, p, err
+	}
+	l, err = r.Lists.Get(ctx, listID) // fresh, now that the lock is held
+	if errors.Is(err, store.ErrNotFound) {
+		return l, p, apperr.NotFound("list")
+	}
 	return l, p, err
 }
 
@@ -286,7 +319,7 @@ func (s *Service) Archived(ctx context.Context, userID, projectID int64) (Archiv
 // lists. recheck, if set, runs right after the board lock.
 func placeList(ctx context.Context, r store.Repos, boardID, movingID int64, in MoveInput, recheck func() error) (string, error) {
 	lock := func(ctx context.Context) error {
-		if err := r.Lists.LockBoard(ctx, boardID); err != nil {
+		if err := r.Boards.Lock(ctx, boardID); err != nil {
 			return err
 		}
 		if recheck != nil {

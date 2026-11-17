@@ -10,7 +10,7 @@ Ground rules:
 - Services never see SQL. They call the repo interfaces in `internal/store/repos.go` inside `Store.View` or `Store.Update`.
 - Every id is `int64` (`bigint`), user ids included. User ids have no foreign key (they come from user-service).
 - A missing row is `store.ErrNotFound`, never `sql.ErrNoRows` and never a nil value. Services map it to `not_found`.
-- Dates are `DATE` and travel as `store.Date` (`"YYYY-MM-DD"`). Timestamps are `timestamptz`, stored as UTC instants.
+- Dates are `DATE` and travel as `store.Date` (`"YYYY-MM-DD"`). Timestamps are `timestamptz`, handled in UTC.
 - Priority is `smallint` 0-3. The API never sees the number (`store.PriorityName`).
 - Position keys (`lists`, `cards`, `checklist_items`) are LexoRank text from `internal/rank`: base-36 digits `0-9a-z`.
   Always compare them bytewise, so every `ORDER BY position` uses `COLLATE "C"`. A locale collation orders differently and breaks drag and drop.
@@ -27,23 +27,33 @@ Ground rules:
 - Do not nest. Calling `View` or `Update` inside a callback is a bug (the memory store deadlocks on it). Every `Repos` handed to `fn` is bound to that one transaction; the implementation must not open another connection for it.
 - Default `READ COMMITTED` is fine for `Update`; correctness comes from the row locks below, not from a stricter level.
 - A service never keeps a `Repos` after `fn` returns.
-- Retry policy: none. A serialization or deadlock error is returned as an error and becomes `server_error`. With the lock order below it should not happen.
+- Retry policy: none by design. With one global lock order (below) a deadlock cannot happen between the service's own writes. If PostgreSQL still reports a deadlock (`40P01`) or a serialization failure (`40001`), that is a bug in the lock order: return it as an error (`server_error`), do not retry around it.
 
 ## Locks and lock order
 
-Three methods take a row lock for the rest of the transaction. They exist so two concurrent moves in one container cannot compute the same position.
+Row locks are held until the transaction ends. In PostgreSQL a plain `UPDATE` also takes the row lock, so these statements take locks implicitly, not only the `FOR UPDATE` ones:
 
-| Method | SQL | Guards |
+| Statement | Locks | Where it happens |
 |---|---|---|
-| `ListRepo.LockBoard(boardID)` | `SELECT id FROM boards WHERE id = $1 FOR UPDATE` | list positions on the board |
-| `CardRepo.LockList(listID)` | `SELECT id FROM lists WHERE id = $1 FOR UPDATE` | card positions in the list |
-| `ChecklistRepo.LockCard(cardID)` | `SELECT id FROM cards WHERE id = $1 FOR UPDATE` | checklist positions on the card |
+| `BoardRepo.Lock(boardID)`: `SELECT id FROM boards WHERE id = $1 FOR UPDATE` | the board row | first statement of every board-visible write |
+| `BoardRepo.Touch(boardID, at)`: `UPDATE boards SET updated_at = ...` | the board row | end of every board-visible write (already held) |
+| `CardRepo.LockList(listID)`: `SELECT id FROM lists WHERE id = $1 FOR UPDATE` | a list row | card position changes |
+| `ListRepo.Save`, `ListRepo.SetPositions` (`UPDATE lists ...`) | list rows | list writes |
+| `ChecklistRepo.LockCard(cardID)`: `SELECT id FROM cards WHERE id = $1 FOR UPDATE` | a card row | checklist position changes |
+| `CardRepo.Save`, `Touch`, `SetPositions` (`UPDATE cards ...`) | card rows | card writes |
 
-All three return `ErrNotFound` when the row is absent.
+`Lock`, `LockList` and `LockCard` return `ErrNotFound` when the row is absent.
 
-**Lock order: board, then list, then card; within one level, ascending id.** Today no service call holds two of these locks at once, and the order keeps it that way: any future code that needs more than one must take them in this order. Never lock a card and then ask for its list.
+**Lock order (one global order for every transaction): board row first, then list rows, then card rows; within one level, ascending id.** Every service write that changes anything the board shows takes `BoardRepo.Lock` as its first lock, before any `LockList`, `LockCard` or row write. This covers: list create/update/move/archive/restore; card create/update/move/archive/restore, assignees and card labels; checklist writes; comment writes; label create/update/delete; member add/role/remove; project update/archive/restore. A card move between two lists of the same board needs only the one board lock. Without this, `Touch` (a board row lock taken at the end of a write) and `Save` on a list (a list row lock) can be reached in opposite orders by two requests and deadlock; so can a three-way cycle through a card row.
 
-Every position change follows the same sequence (`board.PlaceLocked`): take the lock, re-check what could have changed (the list is still live, the card is not archived), read `Positions`, compute, write rebalanced siblings with `SetPositions`, then `Save` the moved row. All inside one `Update`.
+Consequences the owner should accept:
+
+- Board-visible writes are serialised per board. That is intended: one department, short transactions.
+- The service re-reads the rows it checks after taking the board lock (`relock`, `loadManaged`), because a read made before the lock may be outdated. This also removes the "Move/Restore build the row from a pre-lock read" problem for the board-visible fields.
+- Unlocked reads (the `GET` routes, run in `View`) never block and never wait.
+- Never lock a card and then ask for its list or board. A test (`card/lockorder_test.go`) records the calls of 20 write paths and asserts `Boards.Lock` is first; keep it passing when you add a write.
+
+Every position change follows the same sequence (`board.PlaceLocked`): hold the board lock, take the container lock, re-check what could have changed (the list is still live, the card is not archived), read `Positions`, compute, write rebalanced siblings with `SetPositions`, then `Save` the moved row. All inside one `Update`.
 
 ## `SetPositions` and the two-step rebalance
 
@@ -57,13 +67,13 @@ CREATE UNIQUE INDEX ON checklist_items (card_id, position);  -- no archive, so n
 
 PostgreSQL checks a non-deferrable unique index per row while one `UPDATE` runs, so a single statement that shifts keys (`a -> b`, `b -> c`) can fail halfway even though the final state is valid. A rebalance therefore takes two statements, in this order, in the same transaction:
 
-1. Park: `UPDATE <table> SET position = '~' || id WHERE id = ANY($1)`. `~` sorts after every base-36 digit and the suffix is the id, so a parked key never collides with a real key or with another parked key.
+1. Park (binding, as written in the `// SQL:` of `SetPositions`): `UPDATE <table> SET position = '~' || id WHERE id = ANY($1) OR (<container> IN (SELECT <container> FROM <table> WHERE id = ANY($1)) AND position = ANY($newPositions) AND id <> ALL($1) [AND archived_at IS NULL])`. `~` sorts after every base-36 digit and the suffix is the id, so a parked key never collides with a real key or with another parked key. `<container>` is `board_id` (lists), `list_id` (cards) or `card_id` (checklist items); the method only receives `[]IDPos`, so the container is looked up from the given rows themselves (`ps` is never empty for a rebalance; with an empty `ps` do nothing). The `archived_at IS NULL` part exists for lists and cards, whose unique index is partial.
 2. Write: `UPDATE <table> SET position = v.position FROM (VALUES ...) v WHERE <table>.id = v.id`.
 
 Notes for the owner:
 
 - `SetPositions` writes the rows it is given, archived or not. `Positions` reports archived rows (flagged `Archived`) so keys stay unique, but they are not valid drop neighbours.
-- The moved row is not in the rebalanced list. The service computes its key against the new sibling keys and writes it afterwards with `Save`. In the memory store there is no unique index, so a collision between that row's old key and a new sibling key is invisible. In PostgreSQL it is not: when the moved row stays in the same container, step 1 should also park any row of that container whose current `position` equals one of the new values (`... OR (container = $x AND position = ANY($new) AND id <> ALL($ids))`). The moved row is always `Save`d afterwards, so parking it is safe.
+- The extra parking clause in step 1 is not optional. The moved row is not in the rebalanced list: the service computes its key against the new sibling keys and writes it afterwards with `Save`. The memory store has no unique index, so a collision between that row's old key and a new sibling key is invisible there; in PostgreSQL it fails the statement. The one row parked outside `ps` is that moving row, and the caller always `Save`s it with its final position in the same transaction, so nothing is left parked.
 - A write that violates a unique index is a bug in the caller, not a user error: return it as an error (`server_error`).
 
 ## ETag: when `boards.updated_at` must change
@@ -82,10 +92,11 @@ Services call `Touch` for these writes (the repo does not do it implicitly):
 | Comments | add, edit, delete (the board shows the comment count) |
 | Labels | create, update, delete |
 | Members | add, change role, remove |
+| Project | update (name, description, status, dates), archive, restore |
 
 Writes that also touch the card (`CardRepo.Touch(cardID, now)`, `cards.updated_at`): checklist add/update/move/delete, comment add/edit/delete, assign/unassign and label add/remove when a row changed, and label delete for every card that lost the label (the ids come from `LabelRepo.Delete`).
 
-Known gap, not a contract change: `project.Service.Update`, `Archive` and `Restore` do not touch the board, although the board payload includes the project's name, status and `archivedAt`. A rename can therefore answer 304 until the next board change. Fixing it is a service change (one `Touch` call), not a store change.
+Project writes (`Update`, `Archive`, `Restore`) touch the board too, because the board payload includes the project name, status, dates and `archivedAt`. A test in `board/handlers_test.go` pins it.
 
 ## `completed_at`
 
@@ -118,7 +129,7 @@ These were found in review and deliberately left for the PostgreSQL work.
 1. **Last-PM guard under concurrency.** `MemberRepo.CountPM` must lock the project's member rows (`SELECT ... FROM project_members WHERE project_id = $1 FOR UPDATE`, then count) so two concurrent demotions or removals cannot both see two PMs and leave none. `SELECT count(*)` alone is not safe at `READ COMMITTED`. Sort the locked rows by `user_id` to keep the lock order stable.
 2. **Name comparison: pick one rule.** `ProjectRepo.NameTaken` and `LabelRepo.NameTaken` use `lower(name)` in SQL; the memory store uses `strings.EqualFold`. They differ for some Unicode characters (for example `İ`, `ß`, final sigma). Choose one rule and make the unique indexes (`lower(name)`) and the memory store agree. Thai has no case, so the common data is unaffected.
 3. **User-service calls inside `Update`.** In `project.Service`, `Create`, `AddMember`, `SetRole` and `Me` call user-service (`up.Get`) from inside the `Update` callback. With the memory store that is free; with PostgreSQL it holds a transaction (and, for `SetRole`, member-row locks) open across a network call. When wiring PostgreSQL, move the `up.Get` call before `Update` and pass the result in.
-4. **Card `Move` and `Restore` use a pre-lock read.** Both build the row they `Save` from a card read before the list lock. After `LockList`, re-read the card (and its list) and apply the change to that fresh row before `Save`, or a concurrent edit between the read and the lock is overwritten. The memory store cannot show this because `Update` is serialised.
+4. **Card `Move` and `Restore` and the pre-lock read.** Fixed in the services: every write re-reads its rows after taking the board lock (see Locks). `Move` and `Restore` still read the destination list before `LockList`; the list is re-checked live under `LockList` (`listLive`). Keep that order in the PostgreSQL wiring.
 
 ## Per-method reference
 
@@ -277,6 +288,15 @@ Snapshot(ctx context.Context, projectID int64) (BoardSnapshot, error)
 - Does: Snapshot returns everything the board screen shows, from one read snapshot. Lists and cards exclude archived rows (cards of an archived list too) and are ordered by position, then id. Users holds the cached profiles of the members and of every assignee. CardSummary counts exclude soft-deleted comments. ErrNotFound if the project has no board.
 - SQL obligation: one View, constant number of queries and no N+1: boards by project_id; lists WHERE board_id AND archived_at IS NULL; cards JOIN lists WHERE archived_at IS NULL on both, with checklist and comment counts via grouped subqueries (idx_cards_list, idx_checklist_card, idx_comments_card); card_assignees and card_labels with card_id = ANY(...); labels, members and user_cache WHERE user_id = ANY(...). All ORDER BY position COLLATE "C".
 
+**`Lock`**
+
+```go
+Lock(ctx context.Context, boardID int64) error
+```
+
+- Does: Lock takes the board's row lock for the rest of the transaction. It is the first lock of every write that changes anything the board shows (lock order: board, then list, then card; see docs/db-contract.md). It serialises writes per board, so concurrent writers cannot deadlock on the board row that Touch and the list/card writes also reach. ErrNotFound if the board is absent.
+- SQL obligation: SELECT id FROM boards WHERE id = $1 FOR UPDATE.
+
 **`Touch`**
 
 ```go
@@ -324,15 +344,6 @@ Save(ctx context.Context, l List) error
 - Does: Save overwrites every column of an existing list; ErrNotFound if absent.
 - SQL obligation: UPDATE lists SET all columns WHERE id = $1.
 
-**`LockBoard`**
-
-```go
-LockBoard(ctx context.Context, boardID int64) error
-```
-
-- Does: LockBoard serialises position changes on one board for the rest of the transaction. ErrNotFound if the board is absent.
-- SQL obligation: SELECT id FROM boards WHERE id = $1 FOR UPDATE.
-
 **`Positions`**
 
 ```go
@@ -349,7 +360,7 @@ SetPositions(ctx context.Context, ps []IDPos) error
 ```
 
 - Does: SetPositions rewrites the position of each listed list. The unique index (board_id, position) is not deferrable, so a plain UPDATE can collide mid-statement.
-- SQL obligation: step 1 UPDATE lists SET position = '~' || id WHERE id = ANY($1); step 2 UPDATE lists SET position = v.position FROM (VALUES ...) v WHERE lists.id = v.id.
+- SQL obligation: step 1 (park) UPDATE lists SET position = '~' || id WHERE id = ANY($1) OR (board_id IN (SELECT board_id FROM lists WHERE id = ANY($1)) AND position = ANY($newPositions) AND id <> ALL($1) AND archived_at IS NULL); the container is found from the rows themselves, and the one parked row outside ps is the moving row, which the caller Saves with its new position in the same transaction; step 2 UPDATE lists SET position = v.position FROM (VALUES ...) v WHERE lists.id = v.id.
 
 **`Archived`**
 
@@ -432,7 +443,7 @@ SetPositions(ctx context.Context, ps []IDPos) error
 ```
 
 - Does: SetPositions rewrites the position of each listed card. The unique index (list_id, position) is not deferrable, so use the two-step update.
-- SQL obligation: step 1 UPDATE cards SET position = '~' || id WHERE id = ANY($1); step 2 UPDATE cards SET position = v.position FROM (VALUES ...) v WHERE cards.id = v.id.
+- SQL obligation: step 1 (park) UPDATE cards SET position = '~' || id WHERE id = ANY($1) OR (list_id IN (SELECT list_id FROM cards WHERE id = ANY($1)) AND position = ANY($newPositions) AND id <> ALL($1) AND archived_at IS NULL); the container is found from the rows themselves, and the one parked row outside ps is the moving row, which the caller Saves with its new position in the same transaction; step 2 UPDATE cards SET position = v.position FROM (VALUES ...) v WHERE cards.id = v.id.
 
 **`AddAssignee`**
 
@@ -598,7 +609,7 @@ SetPositions(ctx context.Context, ps []IDPos) error
 ```
 
 - Does: SetPositions rewrites the position of each listed item. The unique index (card_id, position) is not deferrable, so use the two-step update.
-- SQL obligation: step 1 UPDATE checklist_items SET position = '~' || id WHERE id = ANY($1); step 2 UPDATE checklist_items SET position = v.position FROM (VALUES ...) v WHERE checklist_items.id = v.id.
+- SQL obligation: step 1 (park) UPDATE checklist_items SET position = '~' || id WHERE id = ANY($1) OR (card_id IN (SELECT card_id FROM checklist_items WHERE id = ANY($1)) AND position = ANY($newPositions) AND id <> ALL($1)); the container is found from the rows themselves, and the one parked row outside ps is the moving row, which the caller Saves with its new position in the same transaction; step 2 UPDATE checklist_items SET position = v.position FROM (VALUES ...) v WHERE checklist_items.id = v.id.
 
 ### CommentRepo
 
