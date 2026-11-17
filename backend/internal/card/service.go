@@ -541,3 +541,61 @@ func (s *Service) setAssignee(ctx context.Context, userID, cardID, memberID int6
 	})
 	return out, err
 }
+
+// AddLabel puts a label of the card's own project on the card. A repeat is a
+// no-op: no write, no event.
+func (s *Service) AddLabel(ctx context.Context, userID, cardID, labelID int64) (CardDetail, error) {
+	return s.setLabel(ctx, userID, cardID, labelID, true)
+}
+
+func (s *Service) RemoveLabel(ctx context.Context, userID, cardID, labelID int64) (CardDetail, error) {
+	return s.setLabel(ctx, userID, cardID, labelID, false)
+}
+
+func (s *Service) setLabel(ctx context.Context, userID, cardID, labelID int64, add bool) (CardDetail, error) {
+	var out CardDetail
+	err := s.st.Update(ctx, func(r store.Repos) error {
+		sc, err := resolveEditable(ctx, r, userID, cardID)
+		if err != nil {
+			return err
+		}
+		var did bool
+		typ := "card.unlabeled"
+		if add {
+			typ = "card.labeled"
+			// a label of another project is "not found", never confirmed to exist
+			l, err := r.Labels.Get(ctx, labelID)
+			if errors.Is(err, store.ErrNotFound) || (err == nil && l.ProjectID != sc.project.ID) {
+				return apperr.NotFound("label")
+			}
+			if err != nil {
+				return err
+			}
+			did, err = r.Cards.AddLabel(ctx, cardID, labelID)
+			if err != nil {
+				return err
+			}
+		} else if did, err = r.Cards.RemoveLabel(ctx, cardID, labelID); err != nil {
+			return err
+		}
+		if did {
+			now := s.now()
+			if err := r.Cards.Touch(ctx, cardID, now); err != nil {
+				return err
+			}
+			if err := r.Boards.Touch(ctx, sc.list.BoardID, now); err != nil {
+				return err
+			}
+			if err := s.record(ctx, r, sc.project.ID, cardID, userID, typ, map[string]any{"cardId": cardID, "labelId": labelID}); err != nil {
+				return err
+			}
+		}
+		c, err := r.Cards.Get(ctx, cardID)
+		if err != nil {
+			return err
+		}
+		out, err = s.detail(ctx, r, c)
+		return err
+	})
+	return out, err
+}

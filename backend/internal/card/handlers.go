@@ -65,6 +65,19 @@ func assignee(fn func(r *http.Request, uid, cardID, memberID int64) (CardDetail,
 	})
 }
 
+// label runs fn for /cards/{cardID}/labels/{labelID}.
+func label(fn func(r *http.Request, uid, cardID, labelID int64) (CardDetail, error)) http.HandlerFunc {
+	return with("cardID", func(w http.ResponseWriter, r *http.Request, uid, id int64) {
+		lid, err := idParam(r, "labelID")
+		if err != nil {
+			httpx.Fail(w, r, err)
+			return
+		}
+		v, err := fn(r, uid, id, lid)
+		respond(w, r, http.StatusOK, v, err)
+	})
+}
+
 // Mount registers the card routes on r, which must sit behind the auth
 // middleware. Routes are flat so they coexist with the project and board
 // routers.
@@ -98,5 +111,11 @@ func Mount(r chi.Router, s *Service) {
 	}))
 	r.Delete("/cards/{cardID}/assignees/{userID}", assignee(func(req *http.Request, uid, cardID, memberID int64) (CardDetail, error) {
 		return s.Unassign(req.Context(), uid, cardID, memberID)
+	}))
+	r.Put("/cards/{cardID}/labels/{labelID}", label(func(req *http.Request, uid, cardID, labelID int64) (CardDetail, error) {
+		return s.AddLabel(req.Context(), uid, cardID, labelID)
+	}))
+	r.Delete("/cards/{cardID}/labels/{labelID}", label(func(req *http.Request, uid, cardID, labelID int64) (CardDetail, error) {
+		return s.RemoveLabel(req.Context(), uid, cardID, labelID)
 	}))
 }

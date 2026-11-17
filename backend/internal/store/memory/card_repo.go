@@ -78,6 +78,27 @@ func (r *cardRepo) RemoveAssignee(_ context.Context, cardID, userID int64) (bool
 	return true, nil
 }
 
+func (r *cardRepo) AddLabel(_ context.Context, cardID, labelID int64) (bool, error) {
+	if _, ok := r.d.cards[cardID]; !ok {
+		return false, store.ErrNotFound
+	}
+	k := cardLabelKey{CardID: cardID, LabelID: labelID}
+	if _, ok := r.d.cardLabels[k]; ok {
+		return false, nil
+	}
+	r.d.cardLabels[k] = store.CardLabel{CardID: cardID, LabelID: labelID}
+	return true, nil
+}
+
+func (r *cardRepo) RemoveLabel(_ context.Context, cardID, labelID int64) (bool, error) {
+	k := cardLabelKey{CardID: cardID, LabelID: labelID}
+	if _, ok := r.d.cardLabels[k]; !ok {
+		return false, nil
+	}
+	delete(r.d.cardLabels, k)
+	return true, nil
+}
+
 func (r *cardRepo) Children(_ context.Context, cardID int64) (store.CardChildren, error) {
 	ch := store.CardChildren{AssigneeIDs: []int64{}, LabelIDs: []int64{}, Checklist: []store.ChecklistItem{}}
 	for k := range r.d.cardAssignees {

@@ -101,7 +101,46 @@ func Mount(r chi.Router, s *Service) {
 			err := s.RemoveMember(req.Context(), uid, pid, mid)
 			respond(w, req, http.StatusOK, map[string]any{}, err)
 		}))
+		r.Get("/labels", withProject(func(w http.ResponseWriter, req *http.Request, uid, pid int64) {
+			v, err := s.Labels(req.Context(), uid, pid)
+			respond(w, req, http.StatusOK, v, err)
+		}))
+		r.Post("/labels", withProject(func(w http.ResponseWriter, req *http.Request, uid, pid int64) {
+			var in LabelInput
+			if err := httpx.Decode(req, &in); err != nil {
+				httpx.Fail(w, req, err)
+				return
+			}
+			v, err := s.CreateLabel(req.Context(), uid, pid, in)
+			respond(w, req, http.StatusCreated, v, err)
+		}))
 	})
+
+	// Flat, like the card routes: the label resolves its own project.
+	r.Patch("/labels/{labelID}", withLabel(func(w http.ResponseWriter, req *http.Request, uid, lid int64) {
+		var in LabelPatch
+		if err := httpx.Decode(req, &in); err != nil {
+			httpx.Fail(w, req, err)
+			return
+		}
+		v, err := s.UpdateLabel(req.Context(), uid, lid, in)
+		respond(w, req, http.StatusOK, v, err)
+	}))
+	r.Delete("/labels/{labelID}", withLabel(func(w http.ResponseWriter, req *http.Request, uid, lid int64) {
+		err := s.DeleteLabel(req.Context(), uid, lid)
+		respond(w, req, http.StatusOK, map[string]any{}, err)
+	}))
+}
+
+func withLabel(h func(w http.ResponseWriter, r *http.Request, uid, lid int64)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		lid, err := idParam(r, "labelID")
+		if err != nil {
+			httpx.Fail(w, r, err)
+			return
+		}
+		h(w, r, auth.UserID(r.Context()), lid)
+	}
 }
 
 func respond(w http.ResponseWriter, r *http.Request, status int, data any, err error) {

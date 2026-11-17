@@ -24,10 +24,39 @@ type Repos struct {
 }
 
 type (
-	LabelRepo     interface{}
 	ChecklistRepo interface{}
 	CommentRepo   interface{}
 )
+
+type LabelRepo interface {
+	// Create assigns ID and stores l.
+	// SQL: INSERT INTO labels ... RETURNING id.
+	Create(ctx context.Context, l Label) (Label, error)
+
+	// Get returns ErrNotFound for a missing label.
+	// SQL: SELECT ... FROM labels WHERE id = $1.
+	Get(ctx context.Context, id int64) (Label, error)
+
+	// Save overwrites name and color of an existing label; ErrNotFound if absent.
+	// SQL: UPDATE labels SET name = $2, color = $3 WHERE id = $1.
+	Save(ctx context.Context, l Label) error
+
+	// ByProject returns the project's labels ordered by id.
+	// SQL: SELECT ... FROM labels WHERE project_id = $1 ORDER BY id.
+	ByProject(ctx context.Context, projectID int64) ([]Label, error)
+
+	// NameTaken reports whether another label of the project has this name,
+	// ignoring case.
+	// SQL: SELECT EXISTS (SELECT 1 FROM labels WHERE project_id = $1
+	// AND lower(name) = lower($2) AND id <> $3).
+	NameTaken(ctx context.Context, projectID int64, name string, exceptID int64) (bool, error)
+
+	// Delete removes the label and its card_labels rows and returns the ids
+	// of the cards that lost it, ascending. ErrNotFound if absent.
+	// SQL: DELETE FROM card_labels WHERE label_id = $1 RETURNING card_id;
+	// DELETE FROM labels WHERE id = $1.
+	Delete(ctx context.Context, id int64) ([]int64, error)
+}
 
 type UserRoleRepo interface {
 	// Get returns the caller's system role, or nil when the user has no row
@@ -237,6 +266,17 @@ type CardRepo interface {
 	// SQL: DELETE FROM card_assignees WHERE card_id = $1 AND user_id = $2;
 	// removed = rows affected is 1.
 	RemoveAssignee(ctx context.Context, cardID, userID int64) (bool, error)
+
+	// AddLabel reports whether a row was added; an existing one is left alone
+	// (false). ErrNotFound if the card is absent.
+	// SQL: INSERT INTO card_labels (card_id, label_id) VALUES (...)
+	// ON CONFLICT DO NOTHING; added = rows affected is 1.
+	AddLabel(ctx context.Context, cardID, labelID int64) (bool, error)
+
+	// RemoveLabel reports whether a row was removed.
+	// SQL: DELETE FROM card_labels WHERE card_id = $1 AND label_id = $2;
+	// removed = rows affected is 1.
+	RemoveLabel(ctx context.Context, cardID, labelID int64) (bool, error)
 
 	// Children returns what the card detail shows besides the card row:
 	// assignee ids and label ids ascending, checklist items by position.
