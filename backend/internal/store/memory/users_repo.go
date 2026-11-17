@@ -2,6 +2,8 @@ package memory
 
 import (
 	"context"
+	"sort"
+	"time"
 
 	"tracking-service/internal/clock"
 	"tracking-service/internal/store"
@@ -40,4 +42,27 @@ func (r *usersRepo) Get(_ context.Context, ids []int64) ([]store.CachedUser, err
 		}
 	}
 	return out, nil
+}
+
+func (r *usersRepo) Stale(_ context.Context, before time.Time, limit int) ([]int64, error) {
+	var stale []store.CachedUser
+	for _, u := range r.d.userCache {
+		if u.SyncedAt.Before(before) {
+			stale = append(stale, u)
+		}
+	}
+	sort.Slice(stale, func(i, j int) bool {
+		if !stale[i].SyncedAt.Equal(stale[j].SyncedAt) {
+			return stale[i].SyncedAt.Before(stale[j].SyncedAt)
+		}
+		return stale[i].UserID < stale[j].UserID
+	})
+	ids := []int64{}
+	for _, u := range stale {
+		if len(ids) == limit {
+			break
+		}
+		ids = append(ids, u.UserID)
+	}
+	return ids, nil
 }

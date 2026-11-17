@@ -17,6 +17,7 @@ import (
 	"tracking-service/internal/config"
 	"tracking-service/internal/events"
 	"tracking-service/internal/httpx"
+	"tracking-service/internal/project"
 	"tracking-service/internal/store/memory"
 	"tracking-service/internal/users"
 )
@@ -44,17 +45,23 @@ func run() error {
 	st := memory.New(time.Now)
 	userProvider := users.NewStub()
 	publisher := events.NewLog(slog.Default())
-	// Modules that consume these are mounted by later tasks.
-	_, _, _, _ = authn, st, userProvider, publisher
+	projects := project.New(st, userProvider, publisher, time.Now)
+	// Later modules mount in the same group.
 
 	srv := &http.Server{
-		Addr:              ":" + cfg.Port,
-		Handler:           httpx.NewRouter(func(chi.Router) {}),
+		Addr: ":" + cfg.Port,
+		Handler: httpx.NewRouter(func(r chi.Router) {
+			r.Group(func(r chi.Router) {
+				r.Use(auth.Middleware(authn))
+				project.Mount(r, projects)
+			})
+		}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	go refreshUserCache(ctx, projects)
 	errc := make(chan error, 1)
 	go func() { errc <- srv.ListenAndServe() }()
 	slog.Info("listening", "port", cfg.Port, "env", cfg.Env)
@@ -70,4 +77,23 @@ func run() error {
 		return err
 	}
 	return nil
+}
+
+// refreshUserCache keeps names in user_cache from going stale; it stops when
+// ctx is cancelled at shutdown.
+func refreshUserCache(ctx context.Context, p *project.Service) {
+	t := time.NewTicker(time.Hour)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			if n, err := p.RefreshUserCache(ctx, 24*time.Hour); err != nil {
+				slog.Error("refresh user cache", "err", err)
+			} else if n > 0 {
+				slog.Info("refreshed user cache", "rows", n)
+			}
+		}
+	}
 }

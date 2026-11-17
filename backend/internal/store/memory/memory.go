@@ -80,10 +80,10 @@ type stub struct{}
 
 func (s *Store) repos(d *data) store.Repos {
 	return store.Repos{
-		Projects:  stub{},
-		Members:   stub{},
-		Boards:    stub{},
-		Lists:     stub{},
+		Projects:  &projectRepo{d: d},
+		Members:   &memberRepo{d: d},
+		Boards:    &boardRepo{d: d},
+		Lists:     &listRepo{d: d},
 		Cards:     stub{},
 		Labels:    stub{},
 		Checklist: stub{},
@@ -116,4 +116,11 @@ func (s *Store) Activity() []store.ActivityEvent {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return cloneEvents(s.d.activity)
+}
+
+// SeedUserRole grants a system role without a service call, for seeds and tests.
+func (s *Store) SeedUserRole(ur store.UserRole) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.d.userRoles[ur.UserID] = ur
 }

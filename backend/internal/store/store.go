@@ -14,6 +14,10 @@ import (
 var ErrNotFound = errors.New("store: not found")
 
 // Store runs units of work against a consistent view of the data.
+//
+// View callbacks are read-only: never call a write method inside View.
+// View and Update must not be nested; the memory store's lock is not
+// reentrant, so a nested call deadlocks.
 type Store interface {
 	// View runs fn read-only.
 	// SQL: BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY ... COMMIT, so one
