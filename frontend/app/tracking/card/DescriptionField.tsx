@@ -1,9 +1,9 @@
 'use client';
 import { useRef, useState } from 'react';
-import Markdown from 'react-markdown';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useT } from '../shared/i18n';
+import { Rendered } from './Rendered';
 import { SaveStatus, useFlushOnUnmount, useInlineSave } from './inline';
 import { useUpdateCard } from './mutations';
 
@@ -11,24 +11,6 @@ const TEXT = {
   th: { label: 'รายละเอียด', edit: 'แก้ไข', preview: 'ตัวอย่าง', empty: 'ยังไม่มีรายละเอียด', hint: 'รองรับ Markdown' },
   en: { label: 'Description', edit: 'Edit', preview: 'Preview', empty: 'No description yet', hint: 'Markdown supported' },
 };
-
-// No rehype-raw: raw HTML in the source stays text. Links leave the app, so they never get the opener.
-function Rendered({ source }: { source: string }) {
-  return (
-    <div className="space-y-2 text-sm leading-relaxed break-words [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_h1]:text-base [&_h1]:font-semibold [&_h2]:font-semibold [&_h3]:font-semibold [&_ol]:list-decimal [&_ol]:pl-5 [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-muted [&_pre]:p-2 [&_ul]:list-disc [&_ul]:pl-5">
-      <Markdown
-        components={{
-          a: ({ node, ...props }) => {
-            void node; // the hast node is not a DOM attribute
-            return <a {...props} target="_blank" rel="noopener noreferrer" className="text-primary underline" />;
-          },
-        }}
-      >
-        {source}
-      </Markdown>
-    </div>
-  );
-}
 
 export function DescriptionField({
   projectId,

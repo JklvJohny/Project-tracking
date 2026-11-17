@@ -11,6 +11,7 @@ import { errorMessage } from '../shared/errors';
 import { useLang, useT } from '../shared/i18n';
 import { AssigneePicker } from './AssigneePicker';
 import { Checklist } from './Checklist';
+import { Comments } from './Comments';
 import { DescriptionField } from './DescriptionField';
 import { LabelPicker } from './LabelPicker';
 import { MetaFields } from './MetaFields';
@@ -126,6 +127,7 @@ export function CardPanel({ projectId, cardId, onClose }: { projectId: number; c
               <DescriptionField projectId={projectId} cardId={cardId} value={d.descriptionMd} readOnly={readOnly} />
             </section>
             <Checklist projectId={projectId} cardId={cardId} readOnly={readOnly} />
+            <Comments projectId={projectId} cardId={cardId} readOnly={readOnly} />
             {!readOnly && (
               <div className="border-t pt-3">
                 <Button

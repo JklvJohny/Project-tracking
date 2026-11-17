@@ -3,11 +3,12 @@ import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-q
 import { api } from '../shared/api/client';
 import { qk } from '../shared/api/queries';
 import type { components } from '../shared/api/schema';
-import { detailToSummary, upsertCard, type BoardData } from '../board/board-cache';
+import { bumpCommentCount, detailToSummary, upsertCard, type BoardData } from '../board/board-cache';
 
 type S = components['schemas'];
 type Detail = S['CardDetail'];
 type Item = S['ChecklistItem'];
+type Comment = S['Comment'];
 
 // Card writes patch two caches from the server's answer: the detail (qk.card) and the board summary.
 // The board is never invalidated; a board that is not cached is left alone.
@@ -149,4 +150,42 @@ export function useChecklist(projectId: number, cardId: number) {
     },
   });
   return { add, update, remove, move };
+}
+
+function bumpBoard(qc: QueryClient, projectId: number, cardId: number, delta: number) {
+  qc.setQueryData<BoardData>(qk.board(projectId), (b) => (b ? bumpCommentCount(b, cardId, delta) : b));
+}
+
+/** Comment writes patch the cached list from the server's answer (no refetch) and keep the board badge in step. */
+export function useAddComment(projectId: number, cardId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (bodyMd: string) => api<Comment>(`/cards/${cardId}/comments`, { method: 'POST', json: { bodyMd } }),
+    onSuccess: (c) => {
+      qc.setQueryData<Comment[]>(qk.comments(cardId), (list) =>
+        list && !list.some((x) => x.id === c.id) ? [...list, c] : list,
+      );
+      bumpBoard(qc, projectId, cardId, 1);
+    },
+  });
+}
+
+export function useEditComment(cardId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, bodyMd }: { id: number; bodyMd: string }) =>
+      api<Comment>(`/comments/${id}`, { method: 'PATCH', json: { bodyMd } }),
+    onSuccess: (c) => qc.setQueryData<Comment[]>(qk.comments(cardId), (list) => list?.map((x) => (x.id === c.id ? c : x))),
+  });
+}
+
+export function useDeleteComment(projectId: number, cardId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => api<unknown>(`/comments/${id}`, { method: 'DELETE' }),
+    onSuccess: (_r, id) => {
+      qc.setQueryData<Comment[]>(qk.comments(cardId), (list) => list?.filter((x) => x.id !== id));
+      bumpBoard(qc, projectId, cardId, -1);
+    },
+  });
 }

@@ -113,3 +113,10 @@ export function detailToSummary(d: S['CardDetail'], prev?: CardSummary): CardSum
     commentCount: prev?.commentCount ?? 0,
   };
 }
+
+/** Mirrors a comment add (+1) or delete (-1) onto the board card's badge. */
+export function bumpCommentCount(b: BoardData, cardId: number, delta: number): BoardData {
+  return b.cards.some((c) => c.id === cardId)
+    ? { ...b, cards: b.cards.map((c) => (c.id === cardId ? { ...c, commentCount: Math.max(0, c.commentCount + delta) } : c)) }
+    : b;
+}

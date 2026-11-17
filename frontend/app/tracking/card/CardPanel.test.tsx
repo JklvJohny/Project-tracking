@@ -25,8 +25,18 @@ const board = (myRole: B['myRole']): B => ({
   users: [{ id: 2, name: 'Somchai', avatarUrl: '' }],
 });
 
+/** Everything the panel fetches besides the card itself. */
+function elsewhere(path: string, role: B['myRole']) {
+  if (path === '/cards/5/comments') return [];
+  if (path === '/me') return { user: { id: 2, name: 'Somchai', avatarUrl: '' }, isAdmin: false, canCreateProject: false };
+  return board(role);
+}
+
 function renderPanel(role: B['myRole'], onClose: () => void = () => {}) {
-  apiMock.mockImplementation(async (path: string) => (path === '/cards/5' ? detail : board(role)));
+  apiMock.mockImplementation(async (path: string) => {
+    if (path === '/cards/5') return detail;
+    return elsewhere(path, role);
+  });
   render(
     <TrackingProvider lang="en">
       <CardPanel projectId={1} cardId={5} onClose={onClose} />
@@ -78,7 +88,7 @@ describe('CardPanel', () => {
   it('a missing card shows a translated message with no Retry', async () => {
     apiMock.mockImplementation(async (path: string) => {
       if (path === '/cards/5') throw new ApiError('not_found', 404, 'not found');
-      return board('pm');
+      return elsewhere(path, 'pm');
     });
     render(
       <TrackingProvider lang="en">
@@ -92,7 +102,7 @@ describe('CardPanel', () => {
   it('assignee picker toggles with DELETE then PUT', async () => {
     apiMock.mockImplementation(async (path: string, init?: { method?: string }) => {
       if (path === '/cards/5/assignees/2') return { ...detail, assigneeIds: init?.method === 'DELETE' ? [] : [2] };
-      return path === '/cards/5' ? detail : board('member');
+      return path === '/cards/5' ? detail : elsewhere(path, 'member');
     });
     render(
       <TrackingProvider lang="en">
@@ -110,7 +120,7 @@ describe('CardPanel', () => {
   it('a label create conflict shows translated text', async () => {
     apiMock.mockImplementation(async (path: string, init?: { method?: string }) => {
       if (path === '/projects/1/labels' && init?.method === 'POST') throw new ApiError('conflict', 409, 'duplicate');
-      return path === '/cards/5' ? detail : board('pm');
+      return path === '/cards/5' ? detail : elsewhere(path, 'pm');
     });
     render(
       <TrackingProvider lang="en">

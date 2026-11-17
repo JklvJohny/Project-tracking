@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { components } from '../shared/api/schema';
-import { cardsByList, detailToSummary, moveCardLocal, setListCompletion, moveListLocal, removeCard, upsertCard, upsertList, type BoardData } from './board-cache';
+import { cardsByList, bumpCommentCount, detailToSummary, moveCardLocal, setListCompletion, moveListLocal, removeCard, upsertCard, upsertList, type BoardData } from './board-cache';
 
 type Card = components['schemas']['CardSummary'];
 
@@ -134,5 +134,16 @@ describe('detailToSummary', () => {
     const s = detailToSummary(detail, card(9, 1, { commentCount: 4 }));
     expect([s.checklistTotal, s.checklistDone, s.commentCount]).toEqual([2, 1, 4]);
     expect(detailToSummary(detail).commentCount).toBe(0);
+  });
+});
+
+describe('bumpCommentCount', () => {
+  const b = { cards: [card(1, 1, { commentCount: 1 }), card(2, 1, { commentCount: 0 })] } as unknown as BoardData;
+  it('adds to one card and never goes below zero', () => {
+    expect(bumpCommentCount(b, 1, 1).cards.map((c) => c.commentCount)).toEqual([2, 0]);
+    expect(bumpCommentCount(b, 2, -1).cards.map((c) => c.commentCount)).toEqual([1, 0]);
+  });
+  it('ignores an unknown card', () => {
+    expect(bumpCommentCount(b, 9, 1)).toBe(b);
   });
 });
