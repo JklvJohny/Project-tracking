@@ -34,6 +34,11 @@ Edit `air.env` to change the port or add `SEED_LARGE=1` / `UPLOAD_DIR`. The bina
 `uploads/` is not watched, so uploading a PDF does not restart the service. Each restart re-seeds the in-memory
 store, so data you changed is lost on every rebuild. Local development only.
 
+In VS Code, `Ctrl+Shift+B` runs the default build task `dev` (`.vscode/tasks.json`). It starts this backend with air
+and the frontend dev server, each in its own terminal. Stop both with the `dev: stop` task
+(`scripts/dev-down.ps1`: stops whatever listens on 8081 and 3000, plus air). Bind it to a key in your user
+keybindings, for example `Ctrl+Alt+Shift+B` → `workbench.action.tasks.terminate` (`terminateAll`), then `dev: stop`.
+
 ### Dev users
 
 Pass the id in the `X-User-ID` header. Names come from the stub user-service (ids 1-8).
