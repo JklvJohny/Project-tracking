@@ -42,7 +42,7 @@ Required component APIs (check each one in the host's file before keeping it):
 The match-prototype work added files only under `app/tracking/`, so the copy above already includes them:
 `reports/` (the Reports page: folder list, document table, PDF viewer, upload zone, queries), `board/timeline/`
 (Timeline), `board/Splitter.tsx`, `board/BoardSection.tsx`, `board/BoardFilters.tsx`, `board/AssignPopover.tsx`,
-`card/StatusField.tsx`, and `shared/Avatar.tsx`, `AvatarStack.tsx`, `StatusPill.tsx`, `TrackingTabs.tsx`. It added no
+`card/StatusField.tsx`, and `shared/Avatar.tsx`, `AvatarStack.tsx`, `StatusPill.tsx`. It added no
 npm dependency and no shadcn part: the list above is unchanged. `tracking.css` gained colour tokens (light and dark)
 for the status pills, avatars and Timeline bars, so copy that file too.
 
@@ -182,9 +182,9 @@ export const routes = {
 };
 ```
 
-Add one sidebar item whose `href` is `routes.projects` (label "Projects" / "โปรเจกต์"). The tracking pages carry their
-own tab bar (Projects, Reports) from `shared/TrackingTabs.tsx`, so the Reports route needs no second sidebar entry;
-add one with `href: routes.reports` only if the host wants a direct link. The board and card links inside
+Add two sidebar items: `href: routes.projects` (label "Projects" / "โปรเจกต์") and `href: routes.reports` (label
+"Reports" / "รายงาน"). The tracking pages have no tab bar of their own; the host sidebar is the only way between
+them. Mark Projects as current for `/tracking` and `/tracking/<projectId>`, and Reports for `/tracking/reports`. The board and card links inside
 the tracking pages are built from the same file, so changing `BASE` there moves the whole feature to another mount
 point (and the route folder `app/tracking/` must move with it). Navigation inside tracking uses `<Link>`, never
 `router.push`.

@@ -168,8 +168,12 @@ function Chrome({ children }: { children: ReactNode }) {
           <span aria-hidden="true" className="h-6 w-6 rounded-md bg-primary" />
           {t.app}
         </span>
+        {/* The sidebar is hidden on phones, so its two live links move into the header there. */}
         <Link href={routes.projects} className="rounded px-2 py-1 font-medium hover:bg-accent sm:hidden">
           {t.projects}
+        </Link>
+        <Link href={routes.reports} className="rounded px-2 py-1 font-medium hover:bg-accent sm:hidden">
+          {t.reports}
         </Link>
         <div className="ml-auto flex items-center gap-3">
           {SHOW_USERS && devMode && (
