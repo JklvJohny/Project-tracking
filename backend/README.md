@@ -20,6 +20,20 @@ ENV=local go run -tags local ./cmd/tracking-service
 curl -s -H "X-User-ID: 2" localhost:8081/api/tracking/v1/projects
 ```
 
+### Hot reload (air)
+
+```sh
+go install github.com/air-verse/air@latest   # once
+cd backend
+air
+```
+
+`.air.toml` rebuilds and restarts the service on every `.go` change (test files excluded). It builds with
+`-tags local` and reads `ENV=local` and `PORT=8081` from `air.env`, so a plain `air` works in bash and PowerShell.
+Edit `air.env` to change the port or add `SEED_LARGE=1` / `UPLOAD_DIR`. The binary goes to `tmp/` (git-ignored).
+`uploads/` is not watched, so uploading a PDF does not restart the service. Each restart re-seeds the in-memory
+store, so data you changed is lost on every rebuild. Local development only.
+
 ### Dev users
 
 Pass the id in the `X-User-ID` header. Names come from the stub user-service (ids 1-8).

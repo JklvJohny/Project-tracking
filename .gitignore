@@ -5,3 +5,4 @@ backend/bin/
 .env*
 .superpowers/
 backend/uploads/
+backend/tmp/
