@@ -23,6 +23,7 @@ const TEXT: Record<Lang, Record<string, string>> = {
     last_pm: 'โปรเจกต์ต้องมี PM อย่างน้อยหนึ่งคน',
     already_member: 'ผู้ใช้เป็นสมาชิกโปรเจกต์อยู่แล้ว',
     name_in_use: 'มีโปรเจกต์ชื่อนี้อยู่แล้ว',
+    label_name_in_use: 'มีป้ายกำกับชื่อนี้อยู่แล้ว',
   },
   en: {
     bad_request: 'Invalid request',
@@ -43,6 +44,7 @@ const TEXT: Record<Lang, Record<string, string>> = {
     last_pm: 'A project must keep at least one PM',
     already_member: 'This person is already a member',
     name_in_use: 'A project with this name already exists',
+    label_name_in_use: 'A label with this name already exists',
   },
 };
 
@@ -51,12 +53,13 @@ export function errorText(code: string, lang: Lang): string {
   return TEXT[lang][code] ?? TEXT[lang].server_error;
 }
 
-// Conflict sub-cases, keyed by the server's English message (the discriminator, like stale_order).
+// Conflict sub-cases: the server puts a stable token in `error` (backend project.Conflict*, like stale_order).
 const CONFLICTS: Record<string, string> = {
   stale_order: 'stale_order',
-  'a project must keep at least one PM': 'last_pm',
-  'already a member': 'already_member',
-  'project name already in use': 'name_in_use',
+  last_pm: 'last_pm',
+  already_member: 'already_member',
+  name_in_use: 'name_in_use',
+  label_name_in_use: 'label_name_in_use',
 };
 
 /** A conflict with a known message gets its own key (stale_order makes the client refetch); everything else keys on code. */

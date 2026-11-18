@@ -27,6 +27,15 @@ const (
 	refreshBatch   = 200
 )
 
+// Machine tokens carried in the error field of conflicts the UI must tell apart
+// (like board's stale_order). Clients match on these, never on prose.
+const (
+	ConflictLastPM         = "last_pm"
+	ConflictAlreadyMember  = "already_member"
+	ConflictNameInUse      = "name_in_use"
+	ConflictLabelNameInUse = "label_name_in_use"
+)
+
 var listNames = map[string][4]string{
 	"th": {"สิ่งที่ต้องทำ", "กำลังทำ", "รอตรวจ", "เสร็จแล้ว"},
 	"en": {"To Do", "In Progress", "Review", "Done"},
@@ -247,7 +256,7 @@ func (s *Service) Create(ctx context.Context, userID int64, in CreateProjectInpu
 		if taken, err := r.Projects.NameTaken(ctx, name, 0); err != nil {
 			return err
 		} else if taken {
-			return apperr.Conflict("project name already in use")
+			return apperr.Conflict(ConflictNameInUse)
 		}
 
 		now := s.now()
@@ -339,7 +348,7 @@ func (s *Service) Update(ctx context.Context, userID, id int64, in UpdateProject
 			if taken, err := r.Projects.NameTaken(ctx, p.Name, p.ID); err != nil {
 				return err
 			} else if taken {
-				return apperr.Conflict("project name already in use")
+				return apperr.Conflict(ConflictNameInUse)
 			}
 		}
 		p.UpdatedAt = s.now()
@@ -396,7 +405,7 @@ func (s *Service) setArchived(ctx context.Context, userID, id int64, archive boo
 			if taken, err := r.Projects.NameTaken(ctx, p.Name, p.ID); err != nil {
 				return err
 			} else if taken {
-				return apperr.Conflict("project name already in use")
+				return apperr.Conflict(ConflictNameInUse)
 			}
 		}
 		p.UpdatedAt = s.now()
@@ -491,7 +500,7 @@ func (s *Service) AddMember(ctx context.Context, userID, projectID, memberID int
 			return apperr.NotFound("user")
 		}
 		if _, err := r.Members.Get(ctx, projectID, memberID); err == nil {
-			return apperr.Conflict("already a member")
+			return apperr.Conflict(ConflictAlreadyMember)
 		} else if !errors.Is(err, store.ErrNotFound) {
 			return err
 		}
@@ -599,7 +608,7 @@ func keepOnePM(ctx context.Context, r store.Repos, projectID int64) error {
 		return err
 	}
 	if n <= 1 {
-		return apperr.Conflict("a project must keep at least one PM")
+		return apperr.Conflict(ConflictLastPM)
 	}
 	return nil
 }

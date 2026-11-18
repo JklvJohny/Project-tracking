@@ -127,7 +127,7 @@ paths:
     post:
       tags: [projects]
       operationId: restoreProject
-      summary: Clear archivedAt. Conflict when another live project already uses the name. PM or admin.
+      summary: Clear archivedAt. 409 "name_in_use" when another live project already uses the name. PM or admin.
       responses:
         '200': { $ref: '#/components/responses/Project' }
         '400': { $ref: '#/components/responses/BadRequest' }
@@ -149,7 +149,7 @@ paths:
     post:
       tags: [members]
       operationId: addMember
-      summary: Add a user-service user to the project. 404 when the user does not exist, 409 when already a member. PM or admin.
+      summary: Add a user-service user to the project. 404 when the user does not exist, 409 with error "already_member" when already a member. PM or admin.
       requestBody:
         required: true
         content:
@@ -170,7 +170,7 @@ paths:
     patch:
       tags: [members]
       operationId: setMemberRole
-      summary: Change a role. Demoting the only PM answers 409. PM or admin.
+      summary: Change a role. Demoting the only PM answers 409 with error "last_pm". PM or admin.
       requestBody:
         required: true
         content:
@@ -187,7 +187,7 @@ paths:
     delete:
       tags: [members]
       operationId: removeMember
-      summary: Remove a member. Removing the only PM answers 409. PM or admin.
+      summary: Remove a member. Removing the only PM answers 409 with error "last_pm". PM or admin.
       responses:
         '200': { $ref: '#/components/responses/Empty' }
         '400': { $ref: '#/components/responses/BadRequest' }
@@ -209,7 +209,7 @@ paths:
     post:
       tags: [labels]
       operationId: createLabel
-      summary: Create a label (names are unique per project, ignoring case). PM or admin; 409 on an archived project.
+      summary: Create a label (names are unique per project, ignoring case; a duplicate answers 409 "label_name_in_use"). PM or admin; 409 on an archived project.
       requestBody:
         required: true
         content:

@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tansta
 import { api } from '../shared/api/client';
 import { qk } from '../shared/api/queries';
 import type { components } from '../shared/api/schema';
-import { dropMember, patchBoardProject, upsertMember, type BoardData } from '../board/board-cache';
+import { dropMember, patchBoardProject, setMyRole, upsertMember, type BoardData } from '../board/board-cache';
 
 type S = components['schemas'];
 
@@ -73,10 +73,15 @@ export function useAddMember(projectId: number) {
 
 export function useSetRole(projectId: number) {
   const w = useMemberWrites(projectId);
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ userId, role }: { userId: number; role: S['ProjectRole'] }) =>
       api<S['Member']>(`/projects/${projectId}/members/${userId}`, { method: 'PATCH', json: { role } }),
-    onSuccess: w.put,
+    onSuccess: (m) => {
+      w.put(m);
+      // Demoting yourself must close the manage controls now, not after a refetch.
+      if (m.userId === qc.getQueryData<S['Me']>(qk.me)?.user.id) patchBoard(qc, projectId, (b) => setMyRole(b, m.role));
+    },
   });
 }
 

@@ -155,3 +155,8 @@ export function upsertMember(b: BoardData, m: S['Member']): BoardData {
 export function dropMember(b: BoardData, userId: number): BoardData {
   return b.members.some((x) => x.userId === userId) ? { ...b, members: b.members.filter((x) => x.userId !== userId) } : b;
 }
+
+/** The caller changed their own role: without admin rights that is also their role on this board. */
+export function setMyRole(b: BoardData, role: S['ProjectRole']): BoardData {
+  return b.myRole === 'admin' ? b : { ...b, myRole: role };
+}

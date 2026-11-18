@@ -109,7 +109,7 @@ func (s *Service) CreateLabel(ctx context.Context, userID, projectID int64, in L
 		if taken, err := r.Labels.NameTaken(ctx, projectID, name, 0); err != nil {
 			return err
 		} else if taken {
-			return apperr.Conflict("label name already in use")
+			return apperr.Conflict(ConflictLabelNameInUse)
 		}
 		l, err := r.Labels.Create(ctx, store.Label{ProjectID: projectID, Name: name, Color: in.Color})
 		if err != nil {
@@ -152,7 +152,7 @@ func (s *Service) UpdateLabel(ctx context.Context, userID, labelID int64, in Lab
 			if taken, err := r.Labels.NameTaken(ctx, p.ID, l.Name, l.ID); err != nil {
 				return err
 			} else if taken {
-				return apperr.Conflict("label name already in use")
+				return apperr.Conflict(ConflictLabelNameInUse)
 			}
 		}
 		if err := r.Labels.Save(ctx, l); err != nil {

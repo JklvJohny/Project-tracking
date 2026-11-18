@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, api } from '../shared/api/client';
 import type { components } from '../shared/api/schema';
+import { useBoard } from '../shared/api/queries';
 import { TrackingProvider } from '../shared/provider';
 import { MembersDialog } from './MembersDialog';
 
@@ -12,7 +13,7 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ replace }) }));
 const apiMock = vi.mocked(api);
 type S = components['schemas'];
 
-const members: S['Member'][] = [
+const baseMembers: S['Member'][] = [
   { userId: 1, name: 'Ann', avatarUrl: '', role: 'pm', addedAt: '2026-11-01T00:00:00Z' },
   { userId: 2, name: 'Bob', avatarUrl: '', role: 'member', addedAt: '2026-11-01T00:00:00Z' },
 ];
@@ -23,14 +24,16 @@ const board = {
   lists: [],
   cards: [],
   labels: [],
-  members: members.map(({ userId, name, avatarUrl, role }) => ({ userId, name, avatarUrl, role })),
+  members: baseMembers.map(({ userId, name, avatarUrl, role }) => ({ userId, name, avatarUrl, role })),
   users: [],
 };
 
+let members: S['Member'][];
 let usersImpl: (q: string) => Promise<S['User'][]>;
 let writeImpl: (path: string, init: { method?: string }) => Promise<unknown>;
 
 beforeEach(() => {
+  members = baseMembers.map((m) => ({ ...m }));
   replace.mockReset();
   usersImpl = async () => [];
   writeImpl = async () => ({});
@@ -62,7 +65,7 @@ const writes = () => apiMock.mock.calls.filter(([, i]) => i && (i as { method?: 
 describe('MembersDialog', () => {
   it('last PM conflict shows translated message', async () => {
     writeImpl = async () => {
-      throw new ApiError('conflict', 409, 'a project must keep at least one PM');
+      throw new ApiError('conflict', 409, 'last_pm');
     };
     renderDialog();
     const select = await screen.findByLabelText('Role of Ann');
@@ -127,11 +130,31 @@ describe('MembersDialog', () => {
   });
 
   it('removing yourself as a non-admin leaves to the projects page', async () => {
-    members[1].role = 'pm'; // keep another PM so the server would allow it
+    // A second PM, so the server would allow it. `members` is a per-test copy.
+    members[1].role = 'pm';
     renderDialog();
     fireEvent.click(await screen.findByRole('button', { name: 'Remove Ann' }));
     fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Remove' }));
     await waitFor(() => expect(replace).toHaveBeenCalledWith('/tracking'));
-    members[1].role = 'member';
+  });
+});
+
+function RoleProbe() {
+  return <p data-testid="role">{useBoard(1).data?.myRole}</p>;
+}
+
+describe('MembersDialog self role change', () => {
+  it('a non-admin PM demoting themselves loses board.myRole at once', async () => {
+    members[1].role = 'pm';
+    writeImpl = async () => ({ ...members[0], role: 'member' });
+    render(
+      <TrackingProvider lang="en">
+        <RoleProbe />
+        <MembersDialog projectId={1} open onOpenChange={() => {}} />
+      </TrackingProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId('role').textContent).toBe('pm'));
+    fireEvent.change(await screen.findByLabelText('Role of Ann'), { target: { value: 'member' } });
+    await waitFor(() => expect(screen.getByTestId('role').textContent).toBe('member'));
   });
 });

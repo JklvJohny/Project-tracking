@@ -226,7 +226,7 @@ function MembersBody({ projectId, onOpenChange }: { projectId: number; onOpenCha
                       </option>
                     ))}
                   </select>
-                  <Button size="sm" variant="ghost" aria-label={t.remove(m.name)} onClick={() => onRemove(m)}>
+                  <Button size="sm" variant="ghost" aria-label={t.remove(m.name)} disabled={remove.isPending} onClick={() => onRemove(m)}>
                     {t.removeOk}
                   </Button>
                 </span>

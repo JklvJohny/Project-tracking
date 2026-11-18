@@ -1,13 +1,19 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { api } from '../shared/api/client';
+import { toast } from 'sonner';
+import { ApiError, api } from '../shared/api/client';
 import { TrackingProvider } from '../shared/provider';
 import { ProjectSettingsDialog } from './ProjectSettingsDialog';
 
 vi.mock('../shared/api/client', async (orig) => ({ ...(await orig<object>()), api: vi.fn() }));
 const replace = vi.fn();
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace }) }));
+vi.mock('sonner', () => {
+  const toast = Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() });
+  return { toast, Toaster: () => null };
+});
 const apiMock = vi.mocked(api);
+const toastMock = vi.mocked(toast);
 
 const project = {
   id: 1, name: 'Alpha', description: 'd', ownerId: 1, status: 'active', startDate: '2026-11-01', endDate: null, archivedAt: null,
@@ -15,6 +21,9 @@ const project = {
 
 beforeEach(() => {
   replace.mockReset();
+  toastMock.mockReset();
+  toastMock.success.mockReset();
+  toastMock.error.mockReset();
   apiMock.mockReset();
   apiMock.mockImplementation((async (path: string) => {
     if (path === '/projects/1/board') return { project, myRole: 'pm', lists: [], cards: [], labels: [], members: [], users: [] };
@@ -57,5 +66,31 @@ describe('ProjectSettingsDialog', () => {
     fireEvent.click(within(confirm).getByRole('button', { name: 'Archive project' }));
     await waitFor(() => expect(replace).toHaveBeenCalledWith('/tracking'));
     expect(apiMock).toHaveBeenCalledWith('/projects/1/archive', { method: 'POST' });
+  });
+
+  async function archiveThenUndo() {
+    renderDialog();
+    fireEvent.click(await screen.findByRole('button', { name: 'Archive project' }));
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Archive project' }));
+    await waitFor(() => expect(toastMock).toHaveBeenCalled());
+    // The settings form is gone by now (dialog closed), as in the real app.
+    cleanup();
+    (toastMock.mock.calls[0][1] as unknown as { action: { onClick: () => void } }).action.onClick();
+  }
+
+  it('Undo restores the project and shows the restored toast', async () => {
+    await archiveThenUndo();
+    await waitFor(() => expect(apiMock).toHaveBeenCalledWith('/projects/1/restore', { method: 'POST' }));
+    await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith('Project restored'));
+  });
+
+  it('a failing restore shows the error toast', async () => {
+    const base = apiMock.getMockImplementation()!;
+    apiMock.mockImplementation((async (path: string, init?: unknown) => {
+      if (path.endsWith('/restore')) throw new ApiError('server_error', 500, 'boom');
+      return base(path, init as never);
+    }) as never);
+    await archiveThenUndo();
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith('Server error. Please try again'));
   });
 });

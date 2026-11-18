@@ -122,7 +122,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Clear archivedAt. Conflict when another live project already uses the name. PM or admin. */
+        /** Clear archivedAt. 409 "name_in_use" when another live project already uses the name. PM or admin. */
         post: operations["restoreProject"];
         delete?: never;
         options?: never;
@@ -141,7 +141,7 @@ export interface paths {
         };
         get: operations["listMembers"];
         put?: never;
-        /** Add a user-service user to the project. 404 when the user does not exist, 409 when already a member. PM or admin. */
+        /** Add a user-service user to the project. 404 when the user does not exist, 409 with error "already_member" when already a member. PM or admin. */
         post: operations["addMember"];
         delete?: never;
         options?: never;
@@ -162,11 +162,11 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Remove a member. Removing the only PM answers 409. PM or admin. */
+        /** Remove a member. Removing the only PM answers 409 with error "last_pm". PM or admin. */
         delete: operations["removeMember"];
         options?: never;
         head?: never;
-        /** Change a role. Demoting the only PM answers 409. PM or admin. */
+        /** Change a role. Demoting the only PM answers 409 with error "last_pm". PM or admin. */
         patch: operations["setMemberRole"];
         trace?: never;
     };
@@ -181,7 +181,7 @@ export interface paths {
         };
         get: operations["listLabels"];
         put?: never;
-        /** Create a label (names are unique per project, ignoring case). PM or admin; 409 on an archived project. */
+        /** Create a label (names are unique per project, ignoring case; a duplicate answers 409 "label_name_in_use"). PM or admin; 409 on an archived project. */
         post: operations["createLabel"];
         delete?: never;
         options?: never;

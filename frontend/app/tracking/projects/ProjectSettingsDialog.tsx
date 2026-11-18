@@ -140,22 +140,27 @@ function SettingsForm({ projectId, onOpenChange }: { projectId: number; onOpenCh
     setFormError(null);
     const ok = await confirm({ title: t.archiveTitle, description: t.archiveDesc, confirmLabel: t.archive, destructive: true });
     if (!ok) return;
-    archive.mutate(false, {
-      onSuccess: () => {
-        onOpenChange(false);
-        router.replace(routes.projects);
-        toast(t.archived, {
-          action: {
-            label: t.undo,
-            onClick: () =>
-              archive.mutate(true, {
-                onSuccess: () => toast.success(t.restored),
-                onError: (e) => toast.error(errorMessage(e, lang)),
-              }),
-          },
-        });
+    try {
+      await archive.mutateAsync(false);
+    } catch (e) {
+      setFormError(errorMessage(e, lang));
+      return;
+    }
+    onOpenChange(false);
+    router.replace(routes.projects);
+    // This form is unmounted when Undo is clicked, so per-call mutate callbacks would not run; await instead.
+    toast(t.archived, {
+      action: {
+        label: t.undo,
+        onClick: async () => {
+          try {
+            await archive.mutateAsync(true);
+            toast.success(t.restored);
+          } catch (e) {
+            toast.error(errorMessage(e, lang));
+          }
+        },
       },
-      onError: (e) => setFormError(errorMessage(e, lang)),
     });
   }
 
