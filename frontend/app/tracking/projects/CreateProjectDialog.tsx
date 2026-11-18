@@ -71,7 +71,8 @@ function CreateProjectForm({ onOpenChange }: { onOpenChange: (o: boolean) => voi
   const { lang } = useLang();
   const create = useCreateProject();
   const [errors, setErrors] = useState<Partial<Record<Field, string>>>({});
-  const [formError, setFormError] = useState<string | null>(null);
+  // The error itself, not its text: the message is resolved at render so it follows a language switch.
+  const [formError, setFormError] = useState<unknown>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
   // Focus after the error markup is committed so aria-invalid is already set.
@@ -104,7 +105,7 @@ function CreateProjectForm({ onOpenChange }: { onOpenChange: (o: boolean) => voi
           const next: Partial<Record<Field, string>> = {};
           for (const f of FIELDS) if (fields?.[f]) next[f] = fields[f];
           if (Object.keys(next).length) setErrors(next);
-          else setFormError(errorMessage(err, lang));
+          else setFormError(err);
         },
       },
     );
@@ -154,9 +155,9 @@ function CreateProjectForm({ onOpenChange }: { onOpenChange: (o: boolean) => voi
               {err('endDate')}
             </div>
           </div>
-          {formError && (
+          {formError != null && (
             <p role="alert" className="text-sm font-medium text-destructive">
-              {formError}
+              {errorMessage(formError, lang)}
             </p>
           )}
           <DialogFooter>

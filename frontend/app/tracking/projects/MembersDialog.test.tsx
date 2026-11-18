@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, api } from '../shared/api/client';
 import type { components } from '../shared/api/schema';
-import { useBoard } from '../shared/api/queries';
+import { useBoard, useProjects } from '../shared/api/queries';
 import { TrackingProvider } from '../shared/provider';
 import { MembersDialog } from './MembersDialog';
 
@@ -156,5 +156,39 @@ describe('MembersDialog self role change', () => {
     await waitFor(() => expect(screen.getByTestId('role').textContent).toBe('pm'));
     fireEvent.change(await screen.findByLabelText('Role of Ann'), { target: { value: 'member' } });
     await waitFor(() => expect(screen.getByTestId('role').textContent).toBe('member'));
+  });
+});
+
+function ProjectsProbe() {
+  return <p data-testid="projects">{useProjects().data?.map((p) => p.id).join(',')}</p>;
+}
+
+describe('MembersDialog edge cases', () => {
+  it('removing yourself drops the project from the projects list cache', async () => {
+    members[1].role = 'pm';
+    const base = apiMock.getMockImplementation()!;
+    apiMock.mockImplementation((async (path: string, init?: never) =>
+      path === '/projects' ? [{ id: 1, name: 'P' }, { id: 2, name: 'Q' }] : base(path, init)) as never);
+    render(
+      <TrackingProvider lang="en">
+        <ProjectsProbe />
+        <MembersDialog projectId={1} open onOpenChange={() => {}} />
+      </TrackingProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId('projects').textContent).toBe('1,2'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove Ann' }));
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Remove' }));
+    await waitFor(() => expect(screen.getByTestId('projects').textContent).toBe('2'));
+  });
+
+  it('an archived project lists members read-only', async () => {
+    const base = apiMock.getMockImplementation()!;
+    apiMock.mockImplementation((async (path: string, init?: never) =>
+      path === '/projects/1/board' ? { ...board, project: { ...board.project, archivedAt: 'x' } } : base(path, init)) as never);
+    renderDialog();
+    const select = (await screen.findByLabelText('Role of Bob')) as HTMLSelectElement;
+    await waitFor(() => expect(select.disabled).toBe(true));
+    expect(screen.queryByLabelText('Search people')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Remove Bob' })).toBeNull();
   });
 });

@@ -33,7 +33,8 @@ const TEXT = {
   },
 };
 
-export function ArchivedSheet({ projectId }: { projectId: number }) {
+/** Members restore cards; restoring a list needs admin/pm (canRestoreLists), as on the server. */
+export function ArchivedSheet({ projectId, canRestoreLists }: { projectId: number; canRestoreLists: boolean }) {
   const t = useT(TEXT);
   const { lang } = useLang();
   const [open, setOpen] = useState(false);
@@ -75,15 +76,17 @@ export function ArchivedSheet({ projectId }: { projectId: number }) {
                   {lists.map((l) => (
                     <li key={l.id} className="flex items-center gap-2 px-3 py-2">
                       <span className="min-w-0 flex-1 truncate text-sm">{l.name}</span>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={restoreList.isPending}
-                        aria-label={t.restoreItem(l.name)}
-                        onClick={() => restoreList.mutate(l.id)}
-                      >
-                        {t.restore}
-                      </Button>
+                      {canRestoreLists && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={restoreList.isPending}
+                          aria-label={t.restoreItem(l.name)}
+                          onClick={() => restoreList.mutate(l.id)}
+                        >
+                          {t.restore}
+                        </Button>
+                      )}
                     </li>
                   ))}
                 </ul>

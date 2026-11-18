@@ -24,6 +24,7 @@ const TEXT: Record<Lang, Record<string, string>> = {
     already_member: 'ผู้ใช้เป็นสมาชิกโปรเจกต์อยู่แล้ว',
     name_in_use: 'มีโปรเจกต์ชื่อนี้อยู่แล้ว',
     label_name_in_use: 'มีป้ายกำกับชื่อนี้อยู่แล้ว',
+    project_archived: 'โปรเจกต์นี้ถูกเก็บถาวรแล้ว จึงแก้ไขไม่ได้',
   },
   en: {
     bad_request: 'Invalid request',
@@ -45,6 +46,7 @@ const TEXT: Record<Lang, Record<string, string>> = {
     already_member: 'This person is already a member',
     name_in_use: 'A project with this name already exists',
     label_name_in_use: 'A label with this name already exists',
+    project_archived: 'This project is archived and cannot be changed',
   },
 };
 
@@ -60,6 +62,8 @@ const CONFLICTS: Record<string, string> = {
   already_member: 'already_member',
   name_in_use: 'name_in_use',
   label_name_in_use: 'label_name_in_use',
+  // any write to an archived project (backend apperr.ConflictProjectArchived)
+  project_archived: 'project_archived',
 };
 
 /** A conflict with a known message gets its own key (stale_order makes the client refetch); everything else keys on code. */

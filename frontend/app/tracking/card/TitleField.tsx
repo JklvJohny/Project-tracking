@@ -48,7 +48,7 @@ export function TitleField({
     settled.current = true;
     const next = raw.trim();
     if (!next) {
-      fail(t.required);
+      fail((l) => TEXT[l].required);
       return;
     }
     setDraft(next);

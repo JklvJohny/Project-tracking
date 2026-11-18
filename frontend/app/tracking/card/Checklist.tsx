@@ -1,12 +1,14 @@
 'use client';
 import { ArrowDown, ArrowUp, Trash2 } from 'lucide-react';
 import { useRef, useState, type KeyboardEvent } from 'react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { useCard } from '../shared/api/queries';
 import type { components } from '../shared/api/schema';
-import { useT } from '../shared/i18n';
+import { errorMessage } from '../shared/errors';
+import { useLang, useT } from '../shared/i18n';
 import { SaveStatus, useFlushOnUnmount, useInlineSave } from './inline';
 import { useChecklist } from './mutations';
 
@@ -27,6 +29,8 @@ const TEXT = {
     empty: 'ยังไม่มีรายการ',
     required: 'ต้องกรอกข้อความ',
     moved: (t: string, i: number, n: number) => `ย้าย ${t} ไปลำดับที่ ${i} จาก ${n}`,
+    deleted: 'ลบรายการแล้ว',
+    undo: 'เลิกทำ',
   },
   en: {
     title: 'Checklist',
@@ -42,6 +46,8 @@ const TEXT = {
     empty: 'No items yet',
     required: 'Text is required',
     moved: (t: string, i: number, n: number) => `Moved ${t} to position ${i} of ${n}`,
+    deleted: 'Item deleted',
+    undo: 'Undo',
   },
 };
 
@@ -150,6 +156,7 @@ function ItemRow({
 
 export function Checklist({ projectId, cardId, readOnly }: { projectId: number; cardId: number; readOnly: boolean }) {
   const t = useT(TEXT);
+  const { lang } = useLang();
   const items = useCard(cardId).data?.checklist ?? [];
   const cl = useChecklist(projectId, cardId);
   const { state, save, fail } = useInlineSave<() => Promise<unknown>>((fn) => fn());
@@ -175,9 +182,24 @@ export function Checklist({ projectId, cardId, readOnly }: { projectId: number; 
 
   async function add() {
     const text = newText.trim();
-    if (!text) return fail(t.required);
+    if (!text) return fail((l) => TEXT[l].required);
     setNewText('');
     if (!(await save(() => cl.add.mutateAsync(text)))) setNewText(text);
+  }
+
+  // A delete is one click, so it is undoable: the toast re-creates the item where it was.
+  async function remove(index: number) {
+    const item = items[index];
+    const aboveId = items[index - 1]?.id ?? null;
+    const belowId = items[index + 1]?.id ?? null;
+    if (!(await save(() => cl.remove.mutateAsync(item.id)))) return;
+    toast(t.deleted, {
+      action: {
+        label: t.undo,
+        // The panel may be closed by now: hook-level cache updates still run, so await rather than use callbacks.
+        onClick: () => void cl.restore(item, aboveId, belowId).catch((e) => toast.error(errorMessage(e, lang))),
+      },
+    });
   }
 
   return (
@@ -207,7 +229,7 @@ export function Checklist({ projectId, cardId, readOnly }: { projectId: number; 
             readOnly={readOnly}
             onToggle={(v) => void save(() => cl.update.mutateAsync({ id: item.id, isDone: v }))}
             onRename={(text) => save(() => cl.update.mutateAsync({ id: item.id, text }))}
-            onDelete={() => void save(() => cl.remove.mutateAsync(item.id))}
+            onDelete={() => void remove(i)}
             onMove={(dir) => move(i, dir)}
           />
         ))}

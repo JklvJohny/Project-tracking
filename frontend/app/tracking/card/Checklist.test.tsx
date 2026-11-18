@@ -88,4 +88,43 @@ describe('Checklist', () => {
     expect(screen.queryAllByRole('button').filter((b) => b.getAttribute('role') !== 'checkbox')).toHaveLength(0);
     for (const c of screen.getAllByRole('checkbox')) expect(c.hasAttribute('disabled')).toBe(true);
   });
+
+  it('delete offers Undo, which re-creates the item in its old place', async () => {
+    apiMock.mockImplementation(async (path: string, init?: ApiInit) => {
+      if (path === '/cards/5') return detail;
+      if (path === '/cards/5/checklist' && init?.method === 'POST') return { id: 9, text: 'Two', isDone: false, position: 'z' };
+      if (path === '/checklist/9/move') return { id: 9, text: 'Two', isDone: false, position: 'b' };
+      return {};
+    });
+    renderList();
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete item Two' }));
+    await waitFor(() => expect(apiMock).toHaveBeenCalledWith('/checklist/2', { method: 'DELETE' }));
+    await waitFor(() => expect(screen.getAllByRole('checkbox')).toHaveLength(2));
+    fireEvent.click(await screen.findByRole('button', { name: 'Undo' }));
+    await waitFor(() =>
+      expect(apiMock).toHaveBeenCalledWith('/cards/5/checklist', { method: 'POST', json: { text: 'Two' } }),
+    );
+    await waitFor(() =>
+      expect(apiMock).toHaveBeenCalledWith('/checklist/9/move', { method: 'POST', json: { beforeId: 1, afterId: 3 } }),
+    );
+    await waitFor(() =>
+      expect(screen.getAllByRole('checkbox').map((c) => c.getAttribute('aria-label'))).toEqual(['One', 'Two', 'Three']),
+    );
+  });
+
+  it('an inline error follows a language switch', async () => {
+    const { rerender } = render(
+      <TrackingProvider lang="en">
+        <Checklist projectId={1} cardId={5} readOnly={false} />
+      </TrackingProvider>,
+    );
+    fireEvent.keyDown(await screen.findByLabelText('Add item'), { key: 'Enter' });
+    expect(await screen.findByText('Text is required')).toBeTruthy();
+    rerender(
+      <TrackingProvider lang="th">
+        <Checklist projectId={1} cardId={5} readOnly={false} />
+      </TrackingProvider>,
+    );
+    expect(await screen.findByText('ต้องกรอกข้อความ')).toBeTruthy();
+  });
 });

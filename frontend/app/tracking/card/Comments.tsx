@@ -3,6 +3,7 @@ import { Pencil, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { boardAccess } from '../shared/access';
 import { useBoard, useComments, useMe } from '../shared/api/queries';
 import type { components } from '../shared/api/schema';
 import { useConfirm } from '../shared/confirm';
@@ -68,9 +69,9 @@ export function Comments({ projectId, cardId, readOnly = false }: { projectId: n
     () => (board?.members ?? []).map((m) => ({ id: m.userId, name: users.get(m.userId)?.name ?? m.name })),
     [board?.members, users],
   );
-  const role = board?.myRole;
-  const canWrite = !readOnly && role !== undefined && role !== 'viewer';
-  const canModerate = role === 'admin' || role === 'pm';
+  const access = boardAccess(board);
+  const canWrite = !readOnly && access.canEdit;
+  const canModerate = access.canManage;
   const list = comments.data ?? [];
 
   async function remove(c: Comment) {

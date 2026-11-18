@@ -149,7 +149,20 @@ export function useChecklist(projectId: number, cardId: number) {
       void qc.invalidateQueries({ queryKey: qk.card(cardId) });
     },
   });
-  return { add, update, remove, move };
+  /**
+   * Undo of a delete: re-creates the item (done state included), then puts it back between the neighbours it had,
+   * those still present. Neighbours read from the cache at undo time, since the list may have changed meanwhile.
+   */
+  const restore = async (item: Item, aboveId: number | null, belowId: number | null) => {
+    let created = await add.mutateAsync(item.text);
+    if (item.isDone) created = await update.mutateAsync({ id: created.id, isDone: true });
+    const ids = new Set((qc.getQueryData<Detail>(qk.card(cardId))?.checklist ?? []).map((i) => i.id));
+    const beforeId = aboveId !== null && ids.has(aboveId) ? aboveId : null;
+    const afterId = belowId !== null && ids.has(belowId) ? belowId : null;
+    // Created at the end: nothing to move when it was last (or its neighbours are gone).
+    if (afterId !== null) await move.mutateAsync({ id: created.id, beforeId, afterId });
+  };
+  return { add, update, remove, move, restore };
 }
 
 function bumpBoard(qc: QueryClient, projectId: number, cardId: number, delta: number) {

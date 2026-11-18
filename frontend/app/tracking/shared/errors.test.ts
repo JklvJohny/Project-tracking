@@ -5,7 +5,7 @@ import { errorKey, errorText } from './errors';
 const CODES = [
   'bad_request', 'unauthorized', 'forbidden', 'not_found', 'conflict', 'validation_failed', 'server_error',
   'network_error', 'stale_order', 'required', 'too_long', 'invalid', 'invalid_date', 'before_start', 'not_member',
-  'last_pm', 'already_member', 'name_in_use', 'label_name_in_use',
+  'last_pm', 'already_member', 'name_in_use', 'label_name_in_use', 'project_archived',
 ];
 
 describe('errorText', () => {
@@ -19,7 +19,7 @@ describe('errorText', () => {
     expect(errorText('???', 'en')).toBe(errorText('server_error', 'en'));
   });
   it('errorKey maps each conflict token to its own key', () => {
-    for (const k of ['last_pm', 'already_member', 'name_in_use', 'label_name_in_use'])
+    for (const k of ['last_pm', 'already_member', 'name_in_use', 'label_name_in_use', 'project_archived'])
       expect(errorKey(new ApiError('conflict', 409, k))).toBe(k);
     expect(errorKey(new ApiError('validation_failed', 422, 'last_pm'))).toBe('validation_failed');
   });

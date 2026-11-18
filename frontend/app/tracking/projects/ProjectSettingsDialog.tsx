@@ -40,6 +40,9 @@ const TEXT = {
     archived: 'เก็บโปรเจกต์ถาวรแล้ว',
     undo: 'เลิกทำ',
     restored: 'กู้คืนโปรเจกต์แล้ว',
+    restore: 'กู้คืนโปรเจกต์',
+    archivedDesc: 'โปรเจกต์นี้ถูกเก็บถาวร กู้คืนก่อนจึงจะแก้ไขได้',
+    close: 'ปิด',
   },
   en: {
     title: 'Project settings',
@@ -60,6 +63,9 @@ const TEXT = {
     archived: 'Project archived',
     undo: 'Undo',
     restored: 'Project restored',
+    restore: 'Restore project',
+    archivedDesc: 'This project is archived. Restore it to edit it.',
+    close: 'Close',
   },
 };
 
@@ -91,7 +97,8 @@ function SettingsForm({ projectId, onOpenChange }: { projectId: number; onOpenCh
   const update = useUpdateProject(projectId);
   const archive = useArchiveProject(projectId);
   const [errors, setErrors] = useState<Partial<Record<Field, string>>>({});
-  const [formError, setFormError] = useState<string | null>(null);
+  // The error itself, not its text: the message is resolved at render so it follows a language switch.
+  const [formError, setFormError] = useState<unknown>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
@@ -112,12 +119,12 @@ function SettingsForm({ projectId, onOpenChange }: { projectId: number; onOpenCh
     setErrors({});
     setFormError(null);
     update.mutate(
-      // An empty date string clears the date on the server.
+      // An empty date input clears the date: null, as for cards.
       {
         name: val('name'),
         description: val('description'),
-        startDate: val('startDate'),
-        endDate: val('endDate'),
+        startDate: val('startDate') || null,
+        endDate: val('endDate') || null,
         status: val('status') as Status,
       },
       {
@@ -130,7 +137,7 @@ function SettingsForm({ projectId, onOpenChange }: { projectId: number; onOpenCh
           const next: Partial<Record<Field, string>> = {};
           for (const f of FIELDS) if (fields?.[f]) next[f] = fields[f];
           if (Object.keys(next).length) setErrors(next);
-          else setFormError(errorMessage(err, lang));
+          else setFormError(err);
         },
       },
     );
@@ -143,7 +150,7 @@ function SettingsForm({ projectId, onOpenChange }: { projectId: number; onOpenCh
     try {
       await archive.mutateAsync(false);
     } catch (e) {
-      setFormError(errorMessage(e, lang));
+      setFormError(e);
       return;
     }
     onOpenChange(false);
@@ -164,9 +171,25 @@ function SettingsForm({ projectId, onOpenChange }: { projectId: number; onOpenCh
     });
   }
 
+  // An archived project is read-only (the server answers project_archived); Restore is the one action left.
+  const archived = !!project.archivedAt;
+
+  async function onRestore() {
+    setFormError(null);
+    try {
+      await archive.mutateAsync(true);
+    } catch (e) {
+      setFormError(e);
+      return;
+    }
+    toast.success(t.restored);
+    onOpenChange(false);
+  }
+
   const field = (f: Field) => ({
     id: `ps-${f}`,
     name: f,
+    disabled: archived,
     'aria-invalid': errors[f] ? (true as const) : undefined,
     'aria-describedby': errors[f] ? `ps-${f}-err` : undefined,
   });
@@ -182,7 +205,7 @@ function SettingsForm({ projectId, onOpenChange }: { projectId: number; onOpenCh
     <>
       <DialogHeader>
         <DialogTitle>{t.title}</DialogTitle>
-        <DialogDescription>{t.desc}</DialogDescription>
+        <DialogDescription>{archived ? t.archivedDesc : t.desc}</DialogDescription>
       </DialogHeader>
       <form ref={formRef} noValidate onSubmit={onSubmit} className="space-y-4">
         <div>
@@ -224,24 +247,35 @@ function SettingsForm({ projectId, onOpenChange }: { projectId: number; onOpenCh
           </select>
           {err('status')}
         </div>
-        {formError && (
+        {formError != null && (
           <p role="alert" className="text-sm font-medium text-destructive">
-            {formError}
+            {errorMessage(formError, lang)}
           </p>
         )}
-        <DialogFooter className="sm:justify-between">
-          <Button type="button" variant="outline" className="text-destructive" disabled={archive.isPending} onClick={onArchive}>
-            {t.archive}
-          </Button>
-          <div className="flex gap-2">
+        {archived ? (
+          <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              {t.cancel}
+              {t.close}
             </Button>
-            <Button type="submit" disabled={update.isPending}>
-              {update.isPending ? t.saving : t.save}
+            <Button type="button" disabled={archive.isPending} onClick={() => void onRestore()}>
+              {t.restore}
             </Button>
-          </div>
-        </DialogFooter>
+          </DialogFooter>
+        ) : (
+          <DialogFooter className="sm:justify-between">
+            <Button type="button" variant="outline" className="text-destructive" disabled={archive.isPending} onClick={onArchive}>
+              {t.archive}
+            </Button>
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                {t.cancel}
+              </Button>
+              <Button type="submit" disabled={update.isPending}>
+                {update.isPending ? t.saving : t.save}
+              </Button>
+            </div>
+          </DialogFooter>
+        )}
       </form>
     </>
   );

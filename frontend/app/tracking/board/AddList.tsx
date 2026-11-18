@@ -20,7 +20,8 @@ export function AddList({ projectId }: { projectId: number }) {
   const { lang } = useLang();
   const create = useCreateList(projectId);
   const [open, setOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // The error itself, not its text: the message is resolved at render so it follows a language switch.
+  const [error, setError] = useState<unknown>(null);
 
   if (!open)
     return (
@@ -42,7 +43,7 @@ export function AddList({ projectId }: { projectId: number }) {
     setError(null);
     create.mutate(name, {
       onSuccess: () => setOpen(false),
-      onError: (err) => setError(errorMessage(err, lang)),
+      onError: setError,
     });
   };
   const onKeyDown = (e: KeyboardEvent) => {
@@ -52,9 +53,9 @@ export function AddList({ projectId }: { projectId: number }) {
   return (
     <form onSubmit={onSubmit} className={`${COLUMN_W} rounded-xl border bg-muted/50 p-2`}>
       <Input name="name" autoFocus maxLength={100} placeholder={t.placeholder} aria-label={t.label} onKeyDown={onKeyDown} />
-      {error && (
+      {error != null && (
         <p role="alert" className="mt-1 text-xs text-destructive">
-          {error}
+          {errorMessage(error, lang)}
         </p>
       )}
       <div className="mt-2 flex gap-1.5">

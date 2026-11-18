@@ -281,6 +281,9 @@ export function BoardDnd({
   return (
     <Ctx.Provider value={ctx}>
       <DndContext
+        // dnd-kit keys an effect on the sensor list, whose length must not change: when drag rights change
+        // (role change, project archived or restored) the context remounts instead.
+        key={sensors === allSensors ? 'drag' : 'static'}
         sensors={sensors}
         collisionDetection={collision}
         accessibility={{ announcements: text }}

@@ -6,7 +6,10 @@ import { useLang, useT, type Lang } from '../shared/i18n';
 
 const TEXT = { th: { saved: 'บันทึกแล้ว' }, en: { saved: 'Saved' } };
 
-type State = { kind: 'idle' | 'saving' | 'saved' } | { kind: 'error'; message: string };
+/** Resolved at render, so a shown error follows a language switch instead of freezing in the old language. */
+export type Message = (lang: Lang) => string;
+
+type State = { kind: 'idle' | 'saving' | 'saved' } | { kind: 'error'; message: Message };
 
 /** A field error code (before_start, too_long, ...) beats the generic envelope text when the server sent one. */
 function saveError(e: unknown, lang: Lang): string {
@@ -19,7 +22,6 @@ function saveError(e: unknown, lang: Lang): string {
 
 /** Save state of one inline-edited field: quiet "Saved" for 2s, inline error text, never a toast. */
 export function useInlineSave<I>(mutateAsync: (input: I) => Promise<unknown>) {
-  const { lang } = useLang();
   const [state, setState] = useState<State>({ kind: 'idle' });
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => clearTimeout(timer.current), []);
@@ -33,13 +35,13 @@ export function useInlineSave<I>(mutateAsync: (input: I) => Promise<unknown>) {
         timer.current = setTimeout(() => setState({ kind: 'idle' }), 2000);
         return true;
       } catch (e) {
-        setState({ kind: 'error', message: saveError(e, lang) });
+        setState({ kind: 'error', message: (l) => saveError(e, l) });
         return false;
       }
     },
-    [mutateAsync, lang],
+    [mutateAsync],
   );
-  const fail = useCallback((message: string) => setState({ kind: 'error', message }), []);
+  const fail = useCallback((message: Message) => setState({ kind: 'error', message }), []);
   const clear = useCallback(() => setState((s) => (s.kind === 'error' ? { kind: 'idle' } : s)), []);
   return { state, save, fail, clear };
 }
@@ -47,7 +49,8 @@ export function useInlineSave<I>(mutateAsync: (input: I) => Promise<unknown>) {
 /** The live region is always mounted so assistive tech announces the change when text appears. */
 export function SaveStatus({ state, id }: { state: State; id?: string }) {
   const t = useT(TEXT);
-  const text = state.kind === 'saved' ? t.saved : state.kind === 'error' ? state.message : '';
+  const { lang } = useLang();
+  const text = state.kind === 'saved' ? t.saved : state.kind === 'error' ? state.message(lang) : '';
   return (
     <span
       id={id}

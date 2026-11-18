@@ -1,6 +1,7 @@
 'use client';
 import { useMemo } from 'react';
 import { Button } from '@/components/ui/button';
+import { boardAccess } from '../shared/access';
 import { useBoard } from '../shared/api/queries';
 import { errorMessage } from '../shared/errors';
 import { useLang, useT } from '../shared/i18n';
@@ -59,9 +60,8 @@ export function Board({ projectId }: { projectId: number }) {
       </div>
     );
 
-  // Viewers get no controls; admin/pm manage lists; admin/pm/member add cards.
-  const canManage = data.myRole === 'admin' || data.myRole === 'pm';
-  const canAddCards = canManage || data.myRole === 'member';
+  // Viewers get no controls; admin/pm manage lists; admin/pm/member add cards. An archived project is read-only.
+  const { canManage, canEdit: canAddCards } = boardAccess(data);
 
   return (
     <BoardDnd projectId={projectId} data={data} byList={byList} canDragCards={canAddCards} canDragLists={canManage}>

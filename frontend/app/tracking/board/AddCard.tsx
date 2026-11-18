@@ -31,7 +31,8 @@ export function AddCard({ projectId, listId, listName }: { projectId: number; li
   const { lang } = useLang();
   const create = useCreateCard(projectId);
   const [open, setOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // The error itself, not its text: the message is resolved at render so it follows a language switch.
+  const [error, setError] = useState<unknown>(null);
 
   if (!open)
     return (
@@ -59,7 +60,7 @@ export function AddCard({ projectId, listId, listName }: { projectId: number; li
           ta.value = '';
           ta.focus(); // stay open for the next card
         },
-        onError: (e) => setError(errorMessage(e, lang)),
+        onError: setError,
       },
     );
   }
@@ -87,9 +88,9 @@ export function AddCard({ projectId, listId, listName }: { projectId: number; li
         onKeyDown={onKeyDown}
         className="resize-none bg-card"
       />
-      {error && (
+      {error != null && (
         <p role="alert" className="mt-1 text-xs text-destructive">
-          {error}
+          {errorMessage(error, lang)}
         </p>
       )}
       <div className="mt-1.5 flex items-center gap-1.5">

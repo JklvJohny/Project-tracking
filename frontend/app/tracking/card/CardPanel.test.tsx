@@ -67,6 +67,23 @@ describe('CardPanel', () => {
     expect(screen.queryAllByRole('button').map((b) => b.textContent)).toEqual(['Close']);
   });
 
+  it('a PM on an archived project gets the viewer layout (read-only)', async () => {
+    apiMock.mockImplementation(async (path: string) => {
+      if (path === '/cards/5') return detail;
+      const b = elsewhere(path, 'pm');
+      return 'project' in b ? { ...b, project: { ...b.project, archivedAt: '2026-11-17T00:00:00Z' } } : b;
+    });
+    render(
+      <TrackingProvider lang="en">
+        <CardPanel projectId={1} cardId={5} onClose={() => {}} />
+      </TrackingProvider>,
+    );
+    await screen.findByText('Fix login');
+    await screen.findByText('Bug');
+    expect(screen.queryAllByRole('textbox')).toHaveLength(0);
+    expect(screen.queryAllByRole('button').map((b) => b.textContent)).toEqual(['Close']);
+  });
+
   it('member sees editable title', async () => {
     renderPanel('member');
     expect(await screen.findByLabelText('Title')).toBeTruthy();

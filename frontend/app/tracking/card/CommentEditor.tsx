@@ -16,6 +16,7 @@ export type Mentionable = { id: number; name: string };
 /**
  * Comment box with an @ member picker. Unsent text marks the field dirty (data-dirty) so the first Escape clears it
  * instead of closing the panel; it is never auto-sent on close (new content is only sent on purpose).
+ * With `onCancel` (editing an existing comment) the first Escape calls it instead.
  * `onSubmit` rejects on failure, which keeps the text and shows the error inline.
  */
 export function CommentEditor({
@@ -96,6 +97,9 @@ export function CommentEditor({
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       void send();
+    } else if (e.key === 'Escape' && onCancel) {
+      // Editing an existing comment: Escape leaves edit mode (the sheet ignores this Escape, see data-dirty).
+      onCancel();
     } else if (e.key === 'Escape' && text !== initial) {
       setText(initial);
       setCaret(initial.length);
@@ -120,7 +124,8 @@ export function CommentEditor({
           aria-controls={open ? listId : undefined}
           aria-activedescendant={open ? `${listId}-${current}` : undefined}
           data-inline-edit
-          data-dirty={text !== initial || open}
+          // Edit mode (onCancel) is always dirty: its first Escape cancels the edit instead of closing the panel.
+          data-dirty={!!onCancel || text !== initial || open}
           onChange={(e) => {
             setText(e.target.value);
             track(e.target);

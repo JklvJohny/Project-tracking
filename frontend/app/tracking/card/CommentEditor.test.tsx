@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TrackingProvider } from '../shared/provider';
 import { CommentEditor } from './CommentEditor';
+import { inlineEscape } from './inline';
 
 afterEach(cleanup);
 const members = [
@@ -84,5 +85,35 @@ describe('CommentEditor', () => {
     expect(box.getAttribute('data-dirty')).toBe('true');
     fireEvent.keyDown(box, { key: 'Escape' });
     expect(box.value).toBe('');
+  });
+
+  it('in edit mode Escape with changed text cancels the whole edit, not just the text', () => {
+    const onCancel = vi.fn();
+    render(
+      <TrackingProvider lang="en">
+        <CommentEditor members={members} onSubmit={async () => ({})} submitLabel="Save" initial="old" onCancel={onCancel} />
+      </TrackingProvider>,
+    );
+    const box = screen.getByRole('textbox') as HTMLTextAreaElement;
+    fireEvent.change(box, { target: { value: 'changed' } });
+    const esc = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    box.dispatchEvent(esc);
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it('in edit mode the field is always dirty: the sheet swallows that Escape, the edit is cancelled', () => {
+    const onCancel = vi.fn();
+    render(
+      <TrackingProvider lang="en">
+        <CommentEditor members={members} onSubmit={async () => ({})} submitLabel="Save" initial="old" onCancel={onCancel} />
+      </TrackingProvider>,
+    );
+    const box = screen.getByRole('textbox') as HTMLTextAreaElement;
+    expect(box.getAttribute('data-dirty')).toBe('true');
+    const ev = Object.defineProperty(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true }), 'target', { value: box });
+    inlineEscape(ev);
+    expect(ev.defaultPrevented).toBe(true);
+    fireEvent.keyDown(box, { key: 'Escape' });
+    expect(onCancel).toHaveBeenCalledTimes(1);
   });
 });

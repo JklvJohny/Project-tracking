@@ -11,13 +11,36 @@ around it is a local harness (dev shell, user switcher, boilerplate) and is not 
 | From `frontend/` | To the host | Notes |
 |---|---|---|
 | `app/tracking/` (all of it) | `app/tracking/` | Pages, board, card panel, projects, `shared/`, `tracking.css`. Tests (`*.test.ts(x)`) can come along. |
-| `components/ui/` (only the parts below) | `components/ui/` | Skip any file the host already has with the same name (see below). |
+| `components/ui/` (only the parts below) | `components/ui/` | Copy these versions; never keep the host's file just because the name matches (see below). |
 
 shadcn parts the tracking code imports: `alert-dialog`, `avatar`, `button`, `checkbox`, `command`, `dialog`,
-`dropdown-menu`, `input`, `popover`, `select`, `sheet`, `skeleton`, `sonner`, `textarea`, `tooltip`.
-They are the shadcn `radix-nova` style. If the host's versions differ in markup, check the board and card panel
-visually after the copy. `components/ui/sonner.tsx` imports `next-themes`; it only reads the theme, the host does not
-need a `ThemeProvider` for tracking (the tracking provider sets the `dark` class itself, see section 5).
+`dropdown-menu`, `input`, `input-group`, `popover`, `select`, `sheet`, `skeleton`, `sonner`, `textarea`, `tooltip`.
+`input-group` is not imported by tracking directly: `command.tsx` imports it (and it imports `button`, `input` and
+`textarea`), so it must come along. `components/ui/sonner.tsx` imports `next-themes`; it only reads the theme, the host
+does not need a `ThemeProvider` for tracking (the tracking provider sets the `dark` class itself, see section 5).
+
+They are the shadcn `radix-nova` style, and tracking uses APIs that only that style has. A host file with the same
+name but another style compiles or renders wrong, so **do not skip a file because the host already has one**. For
+each part, either diff the host's file against `frontend/components/ui/<part>.tsx` and confirm every API below is
+there, or vendor the tracking versions (for example as `components/ui/tracking/*` with the imports adjusted) so the
+host's own parts stay untouched.
+
+Required component APIs (check each one in the host's file before keeping it):
+
+| Part | API tracking relies on |
+|---|---|
+| `button` | `size` values `xs`, `sm`, `icon-xs`, `icon-sm` (plus `default`); `variant` values `outline`, `ghost`, `destructive`; `asChild`. |
+| `sheet` | `SheetContent` prop `showCloseButton` (tracking passes `false` and draws its own close button); `side` default `right` with `data-[side=right]` classes; `SheetClose asChild`. |
+| `dialog` | `DialogContent` draws its own close button (`showCloseButton` defaults to `true`); `DialogFooter`. |
+| `dropdown-menu` | `DropdownMenuItem` prop `variant="destructive"`. |
+| `alert-dialog` | `AlertDialogAction` / `AlertDialogCancel` render buttons; `AlertDialogContent` with the default `size`. |
+| `command` | `CommandInput`, `CommandList`, `CommandEmpty`, `CommandGroup`, `CommandItem` (cmdk 1.x) and its `input-group` import. |
+| `select` | `SelectTrigger`, `SelectValue`, `SelectContent`, `SelectItem` (Radix Select). |
+| `avatar` | `Avatar`, `AvatarImage`, `AvatarFallback`. |
+| `popover`, `tooltip`, `checkbox`, `skeleton`, `input`, `textarea` | The standard shadcn exports; animations use the `data-open:` / `data-closed:` variants from `shadcn/tailwind.css` (section 4). |
+
+After the copy, open a board and a card panel in both themes as a final visual check; it does not replace the API
+check above.
 
 `lib/utils.ts` (`cn`) is the shadcn helper and the host almost certainly has it.
 

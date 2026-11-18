@@ -44,7 +44,7 @@ function renderDialog() {
 }
 
 describe('ProjectSettingsDialog', () => {
-  it('saves edits; a cleared date is sent as an empty string', async () => {
+  it('saves edits; a cleared date is sent as null', async () => {
     renderDialog();
     fireEvent.change(await screen.findByLabelText(/Project name/), { target: { value: 'Beta' } });
     fireEvent.change(screen.getByLabelText('Start date'), { target: { value: '' } });
@@ -53,7 +53,7 @@ describe('ProjectSettingsDialog', () => {
     await waitFor(() =>
       expect(apiMock).toHaveBeenCalledWith('/projects/1', {
         method: 'PATCH',
-        json: { name: 'Beta', description: 'd', startDate: '', endDate: '', status: 'on_hold' },
+        json: { name: 'Beta', description: 'd', startDate: null, endDate: null, status: 'on_hold' },
       }),
     );
   });
@@ -92,5 +92,20 @@ describe('ProjectSettingsDialog', () => {
     }) as never);
     await archiveThenUndo();
     await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith('Server error. Please try again'));
+  });
+
+  it('an archived project offers Restore instead of Archive, with the fields read-only', async () => {
+    const base = apiMock.getMockImplementation()!;
+    apiMock.mockImplementation((async (path: string, init?: unknown) =>
+      path === '/projects/1/board'
+        ? { project: { ...project, archivedAt: 'x' }, myRole: 'pm', lists: [], cards: [], labels: [], members: [], users: [] }
+        : base(path, init as never)) as never);
+    renderDialog();
+    fireEvent.click(await screen.findByRole('button', { name: 'Restore project' }));
+    expect(screen.queryByRole('button', { name: 'Archive project' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
+    expect((screen.getByLabelText(/Project name/) as HTMLInputElement).disabled).toBe(true);
+    await waitFor(() => expect(apiMock).toHaveBeenCalledWith('/projects/1/restore', { method: 'POST' }));
+    await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith('Project restored'));
   });
 });

@@ -6,9 +6,11 @@ import dynamic from 'next/dynamic';
 import { Suspense, useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { boardAccess } from '../shared/access';
 import { useBoard } from '../shared/api/queries';
 import { useT } from '../shared/i18n';
 import { routes } from '../shared/routes';
+import { ArchivedBanner } from '../board/ArchivedBanner';
 import { ArchivedSheet } from '../board/ArchivedSheet';
 import { Board } from '../board/Board';
 
@@ -27,8 +29,8 @@ const TEXT = {
 function Header({ projectId }: { projectId: number }) {
   const t = useT(TEXT);
   const board = useBoard(projectId);
-  const role = board.data?.myRole;
-  const canManage = role === 'admin' || role === 'pm';
+  // Admin/PM keep Members (read-only) and Settings (Restore) on an archived project; everything else is gated off.
+  const { manager: canManage, canEdit, canManage: canRestoreLists } = boardAccess(board.data);
   const [dialog, setDialog] = useState<'settings' | 'members' | null>(null);
   return (
     <div className="flex min-h-14 flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-2">
@@ -60,7 +62,7 @@ function Header({ projectId }: { projectId: number }) {
             {dialog === 'members' && <MembersDialog projectId={projectId} open onOpenChange={(o) => !o && setDialog(null)} />}
           </>
         )}
-        {role && role !== 'viewer' && <ArchivedSheet projectId={projectId} />}
+        {canEdit && <ArchivedSheet projectId={projectId} canRestoreLists={canRestoreLists} />}
       </div>
     </div>
   );
@@ -86,6 +88,7 @@ function BoardPage() {
   return (
     <div className="flex flex-col">
       <Header projectId={projectId} />
+      <ArchivedBanner projectId={projectId} />
       <Board projectId={projectId} />
       {cardId !== undefined && <CardPanel key={cardId} projectId={projectId} cardId={cardId} onClose={closeCard} />}
     </div>

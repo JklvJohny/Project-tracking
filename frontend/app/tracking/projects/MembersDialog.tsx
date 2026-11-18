@@ -1,5 +1,6 @@
 'use client';
 import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -12,7 +13,7 @@ import { useConfirm } from '../shared/confirm';
 import { errorMessage } from '../shared/errors';
 import { useLang, useT } from '../shared/i18n';
 import { routes } from '../shared/routes';
-import { useAddMember, useMembers, useRemoveMember, useSetRole } from './project-mutations';
+import { dropProject, useAddMember, useMembers, useRemoveMember, useSetRole } from './project-mutations';
 
 type S = components['schemas'];
 type Role = S['ProjectRole'];
@@ -23,6 +24,7 @@ const TEXT = {
   th: {
     title: 'สมาชิกโปรเจกต์',
     desc: 'เพิ่ม เปลี่ยนบทบาท หรือนำสมาชิกออก',
+    archivedDesc: 'โปรเจกต์นี้ถูกเก็บถาวร รายชื่อสมาชิกดูได้อย่างเดียว',
     search: 'ค้นหาคน',
     searchPlaceholder: 'พิมพ์ชื่อเพื่อค้นหา',
     newRole: 'บทบาทของสมาชิกใหม่',
@@ -41,6 +43,7 @@ const TEXT = {
   en: {
     title: 'Project members',
     desc: 'Add people, change roles, or remove members.',
+    archivedDesc: 'This project is archived, so members are read-only.',
     search: 'Search people',
     searchPlaceholder: 'Type a name to search',
     newRole: 'Role for new member',
@@ -106,21 +109,25 @@ function MembersBody({ projectId, onOpenChange }: { projectId: number; onOpenCha
   const t = useT(TEXT);
   const { lang } = useLang();
   const router = useRouter();
+  const qc = useQueryClient();
   const confirm = useConfirm();
   const me = useMe();
   const board = useBoard(projectId);
+  // An archived project is read-only: the list stays visible, every control is off.
+  const readOnly = !!board.data?.project.archivedAt;
   const members = useMembers(projectId, true);
   const add = useAddMember(projectId);
   const setRole = useSetRole(projectId);
   const remove = useRemoveMember(projectId);
   const [q, setQ] = useState('');
   const [newRole, setNewRole] = useState<Role>('member');
-  const [error, setError] = useState<string | null>(null);
+  // The error itself, not its text: the message is resolved at render so it follows a language switch.
+  const [error, setError] = useState<unknown>(null);
   const found = useUserSearch(q);
 
   const list = members.data ?? [];
   const results = found?.filter((u) => !list.some((m) => m.userId === u.id));
-  const fail = (e: unknown) => setError(errorMessage(e, lang));
+  const fail = (e: unknown) => setError(e);
 
   function onAdd(u: S['User']) {
     setError(null);
@@ -147,6 +154,7 @@ function MembersBody({ projectId, onOpenChange }: { projectId: number; onOpenCha
         toast.success(t.removed);
         // Without admin rights the project is gone for you now.
         if (m.userId === me.data?.user.id && board.data?.myRole !== 'admin') {
+          dropProject(qc, projectId);
           onOpenChange(false);
           router.replace(routes.projects);
         }
@@ -159,31 +167,33 @@ function MembersBody({ projectId, onOpenChange }: { projectId: number; onOpenCha
     <>
       <DialogHeader>
         <DialogTitle>{t.title}</DialogTitle>
-        <DialogDescription>{t.desc}</DialogDescription>
+        <DialogDescription>{readOnly ? t.archivedDesc : t.desc}</DialogDescription>
       </DialogHeader>
       <div className="space-y-4">
-        <div className="flex gap-2">
-          <Input
-            type="search"
-            aria-label={t.search}
-            placeholder={t.searchPlaceholder}
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
-          <select
-            aria-label={t.newRole}
-            className={selectCls}
-            value={newRole}
-            onChange={(e) => setNewRole(e.target.value as Role)}
-          >
-            {ROLES.map((r) => (
-              <option key={r} value={r}>
-                {t.roles[r]}
-              </option>
-            ))}
-          </select>
-        </div>
-        {results && (
+        {!readOnly && (
+          <div className="flex gap-2">
+            <Input
+              type="search"
+              aria-label={t.search}
+              placeholder={t.searchPlaceholder}
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+            />
+            <select
+              aria-label={t.newRole}
+              className={selectCls}
+              value={newRole}
+              onChange={(e) => setNewRole(e.target.value as Role)}
+            >
+              {ROLES.map((r) => (
+                <option key={r} value={r}>
+                  {t.roles[r]}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        {!readOnly && results && (
           <ul className="max-h-40 divide-y overflow-y-auto rounded-md border">
             {results.length === 0 && <li className="px-3 py-2 text-sm text-muted-foreground">{t.noResults}</li>}
             {results.map((u) => (
@@ -196,9 +206,9 @@ function MembersBody({ projectId, onOpenChange }: { projectId: number; onOpenCha
             ))}
           </ul>
         )}
-        {error && (
+        {error != null && (
           <p role="alert" className="text-sm font-medium text-destructive">
-            {error}
+            {errorMessage(error, lang)}
           </p>
         )}
         <section aria-label={t.members}>
@@ -217,7 +227,7 @@ function MembersBody({ projectId, onOpenChange }: { projectId: number; onOpenCha
                     aria-label={t.roleOf(m.name)}
                     className={selectCls}
                     value={m.role}
-                    disabled={setRole.isPending}
+                    disabled={readOnly || setRole.isPending}
                     onChange={(e) => onRole(m, e.target.value as Role)}
                   >
                     {ROLES.map((r) => (
@@ -226,9 +236,11 @@ function MembersBody({ projectId, onOpenChange }: { projectId: number; onOpenCha
                       </option>
                     ))}
                   </select>
-                  <Button size="sm" variant="ghost" aria-label={t.remove(m.name)} disabled={remove.isPending} onClick={() => onRemove(m)}>
-                    {t.removeOk}
-                  </Button>
+                  {!readOnly && (
+                    <Button size="sm" variant="ghost" aria-label={t.remove(m.name)} disabled={remove.isPending} onClick={() => onRemove(m)}>
+                      {t.removeOk}
+                    </Button>
+                  )}
                 </span>
               </li>
             ))}

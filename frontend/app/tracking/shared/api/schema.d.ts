@@ -88,7 +88,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Partial update. Omitted or null fields stay; an empty string clears startDate or endDate. PM or admin. */
+        /** Partial update. Omitted fields stay; null clears startDate or endDate (an empty string also clears, kept for older clients). PM or admin. 409 "project_archived" on an archived project. */
         patch: operations["updateProject"];
         trace?: never;
     };
@@ -568,11 +568,11 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Soft-delete. Authors delete their own; PM or admin delete any. */
+        /** Soft-delete. Authors delete their own; PM or admin delete any. A viewer gets 403 even on their own comment. */
         delete: operations["deleteComment"];
         options?: never;
         head?: never;
-        /** Edit your own comment (sets editedAt). */
+        /** Edit your own comment (sets editedAt). Member, PM or admin; a viewer gets 403 even on their own comment. */
         patch: operations["editComment"];
         trace?: never;
     };
@@ -657,10 +657,10 @@ export interface components {
             name?: string;
             description?: string;
             status?: components["schemas"]["ProjectStatus"];
-            /** @description A YYYY-MM-DD date; an empty string clears it. */
-            startDate?: string;
-            /** @description A YYYY-MM-DD date; an empty string clears it. */
-            endDate?: string;
+            /** @description A YYYY-MM-DD date. Absent leaves it; null clears it; an empty string also clears it (older clients). */
+            startDate?: string | null;
+            /** @description A YYYY-MM-DD date. Absent leaves it; null clears it; an empty string also clears it (older clients). */
+            endDate?: string | null;
         };
         Member: {
             /** Format: int64 */
@@ -1143,7 +1143,7 @@ export interface components {
                 "application/json": components["schemas"]["Error"];
             };
         };
-        /** @description Duplicate name, archived parent, last PM, or stale_order on a move (code conflict). */
+        /** @description Duplicate name, archived parent, last PM, or stale_order on a move (code conflict). A write rejected because the project is archived carries error "project_archived". */
         Conflict: {
             headers: {
                 [name: string]: unknown;

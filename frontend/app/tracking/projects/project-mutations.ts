@@ -15,6 +15,11 @@ export function patchProjectCaches(qc: QueryClient, p: S['Project']) {
   qc.setQueryData<BoardData>(qk.board(p.id), (b) => (b ? patchBoardProject(b, p) : b));
 }
 
+/** A project the caller can no longer see (they removed themselves) leaves the projects list at once. */
+export function dropProject(qc: QueryClient, projectId: number) {
+  qc.setQueryData<S['Project'][]>(qk.projects, (old) => old?.filter((x) => x.id !== projectId));
+}
+
 function patchBoard(qc: QueryClient, projectId: number, fn: (b: BoardData) => BoardData) {
   qc.setQueryData<BoardData>(qk.board(projectId), (b) => (b ? fn(b) : b));
 }

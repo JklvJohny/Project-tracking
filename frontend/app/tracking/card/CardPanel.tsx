@@ -5,6 +5,7 @@ import { Sheet, SheetClose, SheetContent, SheetTitle } from '@/components/ui/she
 import { Skeleton } from '@/components/ui/skeleton';
 import { useArchiveCard } from '../board/mutations';
 import { detailToSummary } from '../board/board-cache';
+import { boardAccess } from '../shared/access';
 import { useBoard, useCard } from '../shared/api/queries';
 import { ApiError } from '../shared/api/client';
 import { errorMessage } from '../shared/errors';
@@ -52,8 +53,8 @@ export function CardPanel({ projectId, cardId, onClose }: { projectId: number; c
   const board = useBoard(projectId);
   const card = useCard(cardId);
   const archive = useArchiveCard(projectId);
-  const role = board.data?.myRole;
-  const canEdit = role === 'admin' || role === 'pm' || role === 'member';
+  // An archived project is read-only for everyone, like a viewer.
+  const { canEdit, canManage } = boardAccess(board.data);
   const d = card.data;
   // A deleted card or a stale ?card id answers not_found/forbidden for good: retrying cannot help.
   const gone = card.error instanceof ApiError && (card.error.code === 'not_found' || card.error.code === 'forbidden');
@@ -120,7 +121,7 @@ export function CardPanel({ projectId, cardId, onClose }: { projectId: number; c
               card={d}
               labels={board.data.labels}
               readOnly={readOnly}
-              canManage={role === 'admin' || role === 'pm'}
+              canManage={canManage}
             />
             <section aria-label={t.description} className="flex flex-col gap-2">
               <h3 className="text-sm font-semibold">{t.description}</h3>
