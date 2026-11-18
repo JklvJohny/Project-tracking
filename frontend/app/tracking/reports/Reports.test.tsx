@@ -1,0 +1,197 @@
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { toast } from 'sonner';
+import { ApiError, api, apiBlob } from '../shared/api/client';
+import { TrackingProvider } from '../shared/provider';
+import ReportsPage from './page';
+
+vi.mock('../shared/api/client', async (orig) => ({ ...(await orig<object>()), api: vi.fn(), apiBlob: vi.fn() }));
+vi.mock('sonner', async (orig) => ({ ...(await orig<object>()), toast: Object.assign(vi.fn(), { error: vi.fn() }) }));
+let search = '';
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ replace: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(search),
+}));
+const apiMock = vi.mocked(api);
+const blobMock = vi.mocked(apiBlob);
+
+const user = (id: number, name: string) => ({ id, name, avatarUrl: '' });
+const project = (id: number, name: string) => ({
+  id, name, description: '', ownerId: 7, status: 'active', startDate: null, endDate: null, createdAt: '', updatedAt: '',
+  archivedAt: null, owner: user(7, 'Somchai Dee'), members: [user(7, 'Somchai Dee'), user(8, 'Mali Rak')], cardsDone: 0, cardsTotal: 0,
+});
+const doc = (id: number, filename: string, uploadedBy = 7) => ({
+  id, projectId: 1, filename, mimeType: 'application/pdf', sizeBytes: 2048 * id, uploadedBy, createdAt: '2026-11-10T03:00:00Z',
+});
+let docs: ReturnType<typeof doc>[];
+let role = 'pm';
+let archived: string | null = null;
+
+type Init = { method?: string };
+function impl() {
+  return (async (path: string, init?: Init) => {
+    if (path === '/me') return { user: user(8, 'Mali Rak'), isAdmin: false, canCreateProject: false };
+    if (path === '/projects') return [project(1, 'Website redesign'), project(2, 'Mobile app')];
+    if (path === '/projects/1/board') return { myRole: role, project: { id: 1, archivedAt: archived } };
+    if (path === '/projects/1/documents' && init?.method === 'POST') return doc(9, 'new.pdf', 8);
+    if (path === '/projects/1/documents') return docs;
+    if (path === '/projects/2/documents') return [];
+    if (init?.method === 'DELETE' || init?.method === 'POST') return {};
+    throw new Error('unexpected ' + path);
+  }) as never;
+}
+function setup() {
+  apiMock.mockImplementation(impl());
+  return render(
+    <TrackingProvider lang="en">
+      <ReportsPage />
+    </TrackingProvider>,
+  );
+}
+const posted = () => apiMock.mock.calls.filter(([p, i]) => p === '/projects/1/documents' && (i as Init)?.method === 'POST');
+
+let n = 0;
+beforeEach(() => {
+  apiMock.mockReset();
+  blobMock.mockReset();
+  vi.mocked(toast).mockReset();
+  search = 'project=1';
+  role = 'pm';
+  archived = null;
+  docs = [doc(1, 'Kickoff.pdf'), doc(2, 'Weekly.pdf', 8), doc(3, 'Scope.pdf')];
+  blobMock.mockResolvedValue(new Blob(['%PDF-']));
+  n = 0;
+  URL.createObjectURL = vi.fn(() => `blob:doc-${++n}`);
+  URL.revokeObjectURL = vi.fn();
+});
+afterEach(() => {
+  cleanup();
+  localStorage.clear();
+});
+
+const pdf = (name = 'a.pdf', size = 10) => {
+  const f = new File(['%PDF-'], name, { type: 'application/pdf' });
+  Object.defineProperty(f, 'size', { value: size });
+  return f;
+};
+
+describe('Reports page', () => {
+  it('lists project folders without a folder open', async () => {
+    search = '';
+    setup();
+    expect(await screen.findByRole('link', { name: /Website redesign/ })).toBeTruthy();
+    expect(screen.getByRole('link', { name: /Mobile app/ })).toBeTruthy();
+    expect(screen.getByText('Select a project')).toBeTruthy();
+  });
+
+  it('opening a folder lists its documents with a count on that folder only', async () => {
+    setup();
+    const table = await screen.findByRole('table');
+    for (const h of ['Name', 'Size', 'Uploaded by', 'Date']) expect(within(table).getByRole('columnheader', { name: h })).toBeTruthy();
+    expect(within(table).getByText('Kickoff.pdf')).toBeTruthy();
+    expect(within(table).getByText('2 KB')).toBeTruthy();
+    // uploader names come from project members; user 8 is both a member and the signed-in user
+    expect(within(table).getAllByText('Mali Rak').length).toBeGreaterThan(0);
+    expect(within(screen.getByRole('link', { name: /Website redesign/ })).getByText('3')).toBeTruthy();
+    expect(within(screen.getByRole('link', { name: /Mobile app/ })).queryByText('0')).toBeNull();
+  });
+
+  it('double-click opens the viewer with the authorised blob; arrows move; Escape closes', async () => {
+    setup();
+    fireEvent.doubleClick(await screen.findByRole('row', { name: /Kickoff/ }));
+    const dialog = await screen.findByRole('dialog');
+    await waitFor(() => expect(dialog.querySelector('iframe')?.getAttribute('src')).toBe('blob:doc-1'));
+    expect(blobMock).toHaveBeenCalledWith('/documents/1/file', expect.anything());
+    fireEvent.keyDown(dialog, { key: 'ArrowRight' });
+    await waitFor(() => expect(dialog.querySelector('iframe')?.getAttribute('src')).toBe('blob:doc-2'));
+    expect(blobMock).toHaveBeenLastCalledWith('/documents/2/file', expect.anything());
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:doc-1');
+    fireEvent.keyDown(dialog, { key: 'ArrowLeft' });
+    await waitFor(() => expect(blobMock).toHaveBeenCalledTimes(3));
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() => expect(URL.revokeObjectURL).toHaveBeenCalledTimes(3));
+  });
+
+  it('Enter opens the focused row and arrow keys move the selection', async () => {
+    setup();
+    const first = await screen.findByRole('row', { name: /Kickoff/ });
+    first.focus();
+    fireEvent.keyDown(first, { key: 'ArrowDown' });
+    const second = screen.getByRole('row', { name: /Weekly/ });
+    expect(document.activeElement).toBe(second);
+    expect(second.getAttribute('aria-selected')).toBe('true');
+    fireEvent.keyDown(second, { key: 'Enter' });
+    const dialog = await screen.findByRole('dialog');
+    await waitFor(() => expect(blobMock).toHaveBeenCalledWith('/documents/2/file', expect.anything()));
+    expect(within(dialog).getByText('Weekly.pdf')).toBeTruthy();
+  });
+
+  it('rejects a non-PDF and an oversize file on the client with translated text', async () => {
+    setup();
+    const input = await screen.findByTestId('upload-input');
+    fireEvent.change(input, { target: { files: [new File(['x'], 'a.txt', { type: 'text/plain' })] } });
+    expect((await screen.findByRole('alert')).textContent).toBe('Only PDF files are supported');
+    fireEvent.change(input, { target: { files: [pdf('big.pdf', 20 * 1024 * 1024 + 1)] } });
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('The file is larger than 20 MB'));
+    expect(posted()).toHaveLength(0);
+  });
+
+  it('upload posts FormData and adds the row', async () => {
+    setup();
+    fireEvent.change(await screen.findByTestId('upload-input'), { target: { files: [pdf('new.pdf')] } });
+    expect(await screen.findByRole('row', { name: /new\.pdf/ })).toBeTruthy();
+    const body = (posted()[0][1] as { body: FormData }).body;
+    expect(body).toBeInstanceOf(FormData);
+    expect((body.get('file') as File).name).toBe('new.pdf');
+  });
+
+  it('maps a server too_large field code to translated text', async () => {
+    setup();
+    const base = impl() as (p: string, i?: Init) => Promise<unknown>;
+    apiMock.mockImplementation(((p: string, i?: Init) =>
+      p === '/projects/1/documents' && i?.method === 'POST'
+        ? Promise.reject(new ApiError('validation_failed', 422, 'x', { file: 'too_large' }))
+        : base(p, i)) as never);
+    fireEvent.change(await screen.findByTestId('upload-input'), { target: { files: [pdf()] } });
+    expect((await screen.findByRole('alert')).textContent).toBe('The file is larger than 20 MB');
+  });
+
+  it('delete asks to confirm, removes the row, and Undo restores it', async () => {
+    setup();
+    const row = await screen.findByRole('row', { name: /Kickoff/ });
+    fireEvent.click(within(row).getByRole('button', { name: 'Delete' }));
+    const confirm = await screen.findByRole('alertdialog');
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Delete' }));
+    await waitFor(() => expect(screen.queryByRole('row', { name: /Kickoff/ })).toBeNull());
+    expect(apiMock).toHaveBeenCalledWith('/documents/1', { method: 'DELETE' });
+    const opts = vi.mocked(toast).mock.calls[0][1] as { action: { label: string; onClick: () => void } };
+    expect(opts.action.label).toBe('Undo');
+    opts.action.onClick();
+    await waitFor(() => expect(apiMock).toHaveBeenCalledWith('/documents/1/restore', { method: 'POST' }));
+  });
+
+  it('a viewer sees no upload or delete', async () => {
+    role = 'viewer';
+    setup();
+    await screen.findByRole('table');
+    expect(screen.queryByTestId('upload-input')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Upload PDF' })).toBeNull();
+  });
+
+  it('a member deletes only their own upload; an archived project has no controls', async () => {
+    role = 'member';
+    setup();
+    await screen.findByRole('table');
+    expect(within(screen.getByRole('row', { name: /Weekly/ })).getByRole('button', { name: 'Delete' })).toBeTruthy();
+    expect(within(screen.getByRole('row', { name: /Kickoff/ })).queryByRole('button', { name: 'Delete' })).toBeNull();
+    cleanup();
+    role = 'pm';
+    archived = '2026-11-01T00:00:00Z';
+    setup();
+    await screen.findByRole('table');
+    expect(screen.queryByTestId('upload-input')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
+  });
+});

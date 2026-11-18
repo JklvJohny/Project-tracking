@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, api, configureApi } from './client';
+import { ApiError, api, apiBlob, configureApi } from './client';
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -60,5 +60,32 @@ describe('api', () => {
     configureApi({ getAuthHeaders: () => ({ 'X-User-ID': '3' }) });
     await api('/me');
     expect(new Headers(fetchMock.mock.calls[0][1].headers).get('X-User-ID')).toBe('3');
+  });
+});
+
+describe('multipart and blobs', () => {
+  it('passes a FormData body through without a Content-Type', async () => {
+    fetchMock.mockResolvedValue(json({ success: true, data: { id: 1 } }));
+    const fd = new FormData();
+    fd.append('file', new File(['%PDF-'], 'a.pdf'));
+    await api('/projects/1/documents', { method: 'POST', body: fd });
+    const init = fetchMock.mock.calls[0][1];
+    expect(init.body).toBe(fd);
+    expect(new Headers(init.headers).has('Content-Type')).toBe(false);
+  });
+
+  it('apiBlob sends auth headers and returns the blob', async () => {
+    configureApi({ getAuthHeaders: () => ({ 'X-User-ID': '7' }) });
+    fetchMock.mockResolvedValue(new Response('%PDF-1', { status: 200 }));
+    const blob = await apiBlob('/documents/3/file');
+    expect(await blob.text()).toBe('%PDF-1');
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('/api/tracking/v1/documents/3/file');
+    expect(new Headers(init.headers).get('X-User-ID')).toBe('7');
+  });
+
+  it('apiBlob throws ApiError from the JSON envelope', async () => {
+    fetchMock.mockResolvedValue(json({ success: false, error: 'nope', code: 'not_found' }, 404));
+    await expect(apiBlob('/documents/9/file')).rejects.toMatchObject({ code: 'not_found', status: 404 });
   });
 });

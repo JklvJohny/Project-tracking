@@ -25,6 +25,8 @@ const TEXT: Record<Lang, Record<string, string>> = {
     name_in_use: 'มีโปรเจกต์ชื่อนี้อยู่แล้ว',
     label_name_in_use: 'มีป้ายกำกับชื่อนี้อยู่แล้ว',
     project_archived: 'โปรเจกต์นี้ถูกเก็บถาวรแล้ว จึงแก้ไขไม่ได้',
+    too_large: 'ไฟล์ใหญ่เกิน 20 MB',
+    not_pdf: 'รองรับเฉพาะไฟล์ PDF',
   },
   en: {
     bad_request: 'Invalid request',
@@ -47,6 +49,8 @@ const TEXT: Record<Lang, Record<string, string>> = {
     name_in_use: 'A project with this name already exists',
     label_name_in_use: 'A label with this name already exists',
     project_archived: 'This project is archived and cannot be changed',
+    too_large: 'The file is larger than 20 MB',
+    not_pdf: 'Only PDF files are supported',
   },
 };
 
