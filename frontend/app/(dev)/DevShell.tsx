@@ -1,9 +1,12 @@
 'use client';
 // Local-only stand-in for the host app's sidebar, header and login. Never copied to the host.
 import { useQueryClient } from '@tanstack/react-query';
+import { BarChart3, FileText, FolderOpen, Moon, Settings, Sun, Upload, type LucideIcon } from 'lucide-react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
-import { useLang, useT, useTheme, type Theme } from '../tracking/shared/i18n';
+import { Avatar } from '../tracking/shared/Avatar';
+import { useLang, useT, useTheme } from '../tracking/shared/i18n';
 import { TrackingProvider } from '../tracking/shared/provider';
 import { routes } from '../tracking/shared/routes';
 
@@ -47,9 +50,26 @@ const DEV_USERS = [
 ];
 
 const TEXT = {
-  th: { nav: 'เมนูหลัก', projects: 'โปรเจกต์', lang: 'ภาษา', theme: 'ธีม', user: 'ผู้ใช้ (dev)', light: 'สว่าง', dark: 'มืด', system: 'ตามระบบ' },
-  en: { nav: 'Main menu', projects: 'Projects', lang: 'Language', theme: 'Theme', user: 'User (dev)', light: 'Light', dark: 'Dark', system: 'System' },
+  th: {
+    nav: 'เมนูหลัก', app: 'แอปหลัก', section: 'ติดตามงาน', other: 'อื่นๆ', dashboard: 'แดชบอร์ด', projects: 'โปรเจกต์',
+    import: 'นำเข้า', reports: 'รายงาน', settings: 'ตั้งค่า', soon: 'เร็วๆ นี้', lang: 'ภาษา', theme: 'สลับธีม',
+    user: 'ผู้ใช้ (dev)', mobileNav: 'ไปที่',
+  },
+  en: {
+    nav: 'Main menu', app: 'Host App', section: 'Tracking', other: 'Other', dashboard: 'Dashboard', projects: 'Projects',
+    import: 'Import', reports: 'Reports', settings: 'Settings', soon: 'Soon', lang: 'Language', theme: 'Toggle theme',
+    user: 'User (dev)', mobileNav: 'Go to',
+  },
 };
+
+type NavItem = { key: 'dashboard' | 'projects' | 'import' | 'reports' | 'settings'; icon: LucideIcon; href?: string };
+const TRACKING_NAV: NavItem[] = [
+  { key: 'dashboard', icon: BarChart3 },
+  { key: 'projects', icon: FolderOpen, href: routes.projects },
+  { key: 'import', icon: Upload },
+  { key: 'reports', icon: FileText, href: routes.reports },
+];
+const OTHER_NAV: NavItem[] = [{ key: 'settings', icon: Settings }];
 
 function readDevUser(): string {
   try {
@@ -73,7 +93,7 @@ export function DevShell({ children }: { children: ReactNode }) {
 function Chrome({ children }: { children: ReactNode }) {
   const t = useT(TEXT);
   const { lang, setLang } = useLang();
-  const { theme, setTheme } = useTheme();
+  const { setTheme, resolvedTheme } = useTheme();
   const qc = useQueryClient();
   const [userId, setUserId] = useState('2');
   const [devMode, setDevMode] = useState(false);
@@ -111,20 +131,47 @@ function Chrome({ children }: { children: ReactNode }) {
     qc.clear();
   };
 
+  const path = usePathname() ?? '';
+  const onReports = path === routes.reports || path.startsWith(`${routes.reports}/`);
+  const me = DEV_USERS.find((u) => String(u.id) === userId) ?? DEV_USERS[1];
+  const dark = resolvedTheme === 'dark';
+
+  const navItem = ({ key, icon: Icon, href }: NavItem) => {
+    const base = 'flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm';
+    if (!href)
+      return (
+        <span key={key} aria-disabled="true" className={`${base} cursor-not-allowed text-muted-foreground opacity-60`}>
+          <Icon className="h-4 w-4" aria-hidden="true" />
+          {t[key]}
+          {key !== 'settings' && <span className="ml-auto rounded-full bg-muted px-1.5 py-0.5 text-[10px]">{t.soon}</span>}
+        </span>
+      );
+    const current = key === 'reports' ? onReports : path.startsWith(routes.projects) && !onReports;
+    return (
+      <Link
+        key={key}
+        href={href}
+        aria-current={current ? 'page' : undefined}
+        className={`${base} ${current ? 'bg-accent font-medium text-foreground' : 'text-muted-foreground hover:bg-accent'}`}
+      >
+        <Icon className="h-4 w-4" aria-hidden="true" />
+        {t[key]}
+      </Link>
+    );
+  };
+  const heading = 'px-2.5 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground';
+
   return (
-    <div className="flex min-h-screen">
-      <aside className="w-48 shrink-0 border-r bg-muted/40 p-3 text-sm max-sm:hidden" aria-label={t.nav}>
-        <nav className="flex flex-col gap-1">
-          <Link href={routes.projects} className="rounded px-2 py-1.5 font-medium hover:bg-accent">
-            {t.projects}
-          </Link>
-        </nav>
-      </aside>
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex flex-wrap items-center justify-end gap-3 border-b px-4 py-2 text-xs">
-          <Link href={routes.projects} className="mr-auto rounded px-2 py-1 font-medium hover:bg-accent sm:hidden">
-            {t.projects}
-          </Link>
+    <div className="flex min-h-screen flex-col">
+      <header className="flex flex-wrap items-center gap-3 border-b bg-card px-4 py-2 text-xs">
+        <span className="flex items-center gap-2 text-sm font-semibold">
+          <span aria-hidden="true" className="h-6 w-6 rounded-md bg-primary" />
+          {t.app}
+        </span>
+        <Link href={routes.projects} className="rounded px-2 py-1 font-medium hover:bg-accent sm:hidden">
+          {t.projects}
+        </Link>
+        <div className="ml-auto flex items-center gap-3">
           {SHOW_USERS && devMode && (
             <label className="flex items-center gap-1.5">
               {t.user}
@@ -141,30 +188,39 @@ function Chrome({ children }: { children: ReactNode }) {
               </select>
             </label>
           )}
-          <label className="flex items-center gap-1.5">
-            {t.lang}
-            <select
-              value={lang}
-              onChange={(e) => setLang(e.target.value as 'th' | 'en')}
-              className="rounded border bg-background px-1.5 py-1"
-            >
-              <option value="th">TH</option>
-              <option value="en">EN</option>
-            </select>
-          </label>
-          <label className="flex items-center gap-1.5">
-            {t.theme}
-            <select
-              value={theme}
-              onChange={(e) => setTheme(e.target.value as Theme)}
-              className="rounded border bg-background px-1.5 py-1"
-            >
-              <option value="light">{t.light}</option>
-              <option value="dark">{t.dark}</option>
-              <option value="system">{t.system}</option>
-            </select>
-          </label>
-        </header>
+          <div role="group" aria-label={t.lang} className="flex rounded-full border bg-muted p-0.5">
+            {(['en', 'th'] as const).map((l) => (
+              <button
+                key={l}
+                type="button"
+                aria-pressed={lang === l}
+                onClick={() => setLang(l)}
+                className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${lang === l ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'}`}
+              >
+                {l.toUpperCase()}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            aria-label={t.theme}
+            onClick={() => setTheme(dark ? 'light' : 'dark')}
+            className="rounded-full p-1.5 text-muted-foreground hover:bg-accent"
+          >
+            {dark ? <Sun className="h-4 w-4" aria-hidden="true" /> : <Moon className="h-4 w-4" aria-hidden="true" />}
+          </button>
+          <Avatar user={me} size="md" />
+        </div>
+      </header>
+      <div className="flex min-h-0 flex-1">
+        <aside className="w-52 shrink-0 border-r bg-card p-3 text-sm max-sm:hidden" aria-label={t.nav}>
+          <nav className="flex flex-col gap-0.5">
+            <p className={heading}>{t.section}</p>
+            {TRACKING_NAV.map(navItem)}
+            <p className={heading}>{t.other}</p>
+            {OTHER_NAV.map(navItem)}
+          </nav>
+        </aside>
         <main className="min-w-0 flex-1">{children}</main>
       </div>
     </div>

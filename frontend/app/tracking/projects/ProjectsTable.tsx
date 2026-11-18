@@ -5,7 +5,7 @@ import type { components } from '../shared/api/schema';
 import { fmtDate } from '../shared/format';
 import { useLang, useT } from '../shared/i18n';
 import { routes } from '../shared/routes';
-import { StatusBadge } from './StatusBadge';
+import { StatusPill } from '../shared/StatusPill';
 
 type Project = components['schemas']['Project'];
 
@@ -40,7 +40,7 @@ export function ProjectsTable({ projects }: { projects: Project[] }) {
                 </Link>
               </td>
               <td className="px-4 py-3">
-                <StatusBadge status={p.archivedAt ? 'archived' : p.status} />
+                <StatusPill status={p.archivedAt ? 'archived' : p.status} />
               </td>
               <td className="px-4 py-3 text-muted-foreground tabular-nums">{range(p)}</td>
             </tr>
