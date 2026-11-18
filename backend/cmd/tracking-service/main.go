@@ -16,6 +16,7 @@ import (
 	"tracking-service/internal/auth"
 	"tracking-service/internal/board"
 	"tracking-service/internal/card"
+	"tracking-service/internal/clock"
 	"tracking-service/internal/config"
 	"tracking-service/internal/events"
 	"tracking-service/internal/httpx"
@@ -44,7 +45,7 @@ func run() error {
 	} else {
 		log.Fatal("no production authenticator wired")
 	}
-	st := memory.New(time.Now)
+	st := memory.New(clock.UTC)
 	userProvider := users.NewStub()
 	if cfg.Env == "local" {
 		if err := memory.Seed(st, userProvider, cfg.SeedLarge); err != nil {
@@ -52,9 +53,9 @@ func run() error {
 		}
 	}
 	publisher := events.NewLog(slog.Default())
-	projects := project.New(st, userProvider, publisher, time.Now)
-	boards := board.New(st, publisher, time.Now)
-	cards := card.New(st, userProvider, publisher, time.Now)
+	projects := project.New(st, userProvider, publisher, clock.UTC)
+	boards := board.New(st, publisher, clock.UTC)
+	cards := card.New(st, userProvider, publisher, clock.UTC)
 	// Later modules mount in the same group.
 
 	srv := &http.Server{

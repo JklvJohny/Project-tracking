@@ -121,3 +121,28 @@ func TestHandlers_MeUsersAndAuth(t *testing.T) {
 		t.Fatalf("no auth = %d", w.Code)
 	}
 }
+
+// R15: null clears a date (as for cards); "" still clears; an absent key
+// leaves it alone.
+func TestHandlers_PatchDateNullClears(t *testing.T) {
+	e := newEnv(t)
+	h := e.handler()
+	_, body := call(h, manager, "POST", "/projects", `{"name":"W","lang":"en","startDate":"2026-12-01","endDate":"2026-12-20"}`)
+	base := "/projects/" + strconv.FormatInt(int64(body["data"].(map[string]any)["id"].(float64)), 10)
+
+	rec, body := call(h, manager, "PATCH", base, `{"startDate":null}`)
+	d, _ := body["data"].(map[string]any)
+	if rec.Code != 200 || d["startDate"] != nil || d["endDate"] != "2026-12-20" {
+		t.Fatalf("null = %d %s", rec.Code, rec.Body)
+	}
+	rec, body = call(h, manager, "PATCH", base, `{"endDate":""}`)
+	d, _ = body["data"].(map[string]any)
+	if rec.Code != 200 || d["endDate"] != nil {
+		t.Fatalf("empty = %d %s", rec.Code, rec.Body)
+	}
+	rec, body = call(h, manager, "PATCH", base, `{"startDate":"2026-12-02"}`)
+	d, _ = body["data"].(map[string]any)
+	if rec.Code != 200 || d["startDate"] != "2026-12-02" {
+		t.Fatalf("set = %d %s", rec.Code, rec.Body)
+	}
+}

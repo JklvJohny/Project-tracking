@@ -80,7 +80,7 @@ func resolveComment(ctx context.Context, r store.Repos, userID, commentID int64)
 	}
 	sc, err := relock(ctx, r, func() (scope, error) { return resolveCard(ctx, r, userID, cm.CardID) })
 	if err != nil {
-		return cm, sc, err
+		return cm, sc, apperr.NotFoundAs(err, "comment")
 	}
 	if cm, err = r.Comments.Get(ctx, commentID); err != nil { // fresh, under the lock
 		return cm, sc, err
@@ -94,7 +94,7 @@ func resolveComment(ctx context.Context, r store.Repos, userID, commentID int64)
 // liveForWrite is the check every comment write shares once the role passed.
 func liveForWrite(sc scope) error {
 	if sc.project.ArchivedAt != nil {
-		return apperr.Conflict("project is archived")
+		return apperr.ProjectArchived()
 	}
 	if sc.card.ArchivedAt != nil {
 		return apperr.Conflict("card is archived")
@@ -234,7 +234,8 @@ func (s *Service) AddComment(ctx context.Context, userID, cardID int64, body str
 	return out, nil
 }
 
-// EditComment is for the author only, whatever the caller's role.
+// EditComment is for the author only, and only while the author may still
+// comment: a member demoted to viewer cannot change what they wrote.
 func (s *Service) EditComment(ctx context.Context, userID, commentID int64, body string) (Comment, error) {
 	var out Comment
 	var fresh []int64
@@ -242,6 +243,9 @@ func (s *Service) EditComment(ctx context.Context, userID, commentID int64, body
 	err := s.st.Update(ctx, func(r store.Repos) error {
 		cm, sc, err := resolveComment(ctx, r, userID, commentID)
 		if err != nil {
+			return err
+		}
+		if err := authz.Require(sc.role, authz.Comment); err != nil {
 			return err
 		}
 		if cm.AuthorID != userID {
@@ -290,10 +294,14 @@ func (s *Service) EditComment(ctx context.Context, userID, commentID int64, body
 }
 
 // DeleteComment soft-deletes: the author, or a role with DeleteAnyComment.
+// Either way the caller must still be allowed to comment.
 func (s *Service) DeleteComment(ctx context.Context, userID, commentID int64) error {
 	return s.st.Update(ctx, func(r store.Repos) error {
 		cm, sc, err := resolveComment(ctx, r, userID, commentID)
 		if err != nil {
+			return err
+		}
+		if err := authz.Require(sc.role, authz.Comment); err != nil {
 			return err
 		}
 		if cm.AuthorID != userID {

@@ -16,6 +16,7 @@ import (
 	"tracking-service/internal/store"
 	"tracking-service/internal/store/memory"
 	"tracking-service/internal/users"
+	"tracking-service/internal/validate"
 )
 
 var t0 = time.Date(2026, 11, 17, 9, 0, 0, 0, time.UTC)
@@ -229,16 +230,16 @@ func TestUpdate_MemberForbidden_PMAllowed(t *testing.T) {
 func TestUpdate_EndBeforeStartIsValidation(t *testing.T) {
 	e := newEnv(t)
 	p := e.mustCreate(t, manager, "A")
-	_, err := e.svc.Update(e.ctx, manager, p.ID, project.UpdateProjectInput{StartDate: ptr("2026-12-10"), EndDate: ptr("2026-12-01")})
+	_, err := e.svc.Update(e.ctx, manager, p.ID, project.UpdateProjectInput{StartDate: validate.SetDate(ptr("2026-12-10")), EndDate: validate.SetDate(ptr("2026-12-01"))})
 	var ae *apperr.Error
 	if !errors.As(err, &ae) || ae.Code != "validation_failed" || ae.Fields["endDate"] != "before_start" {
 		t.Fatalf("err = %v", err)
 	}
 	// Only the end given: still checked against the stored start.
-	if _, err := e.svc.Update(e.ctx, manager, p.ID, project.UpdateProjectInput{StartDate: ptr("2026-12-10")}); err != nil {
+	if _, err := e.svc.Update(e.ctx, manager, p.ID, project.UpdateProjectInput{StartDate: validate.SetDate(ptr("2026-12-10"))}); err != nil {
 		t.Fatal(err)
 	}
-	_, err = e.svc.Update(e.ctx, manager, p.ID, project.UpdateProjectInput{EndDate: ptr("2026-12-01")})
+	_, err = e.svc.Update(e.ctx, manager, p.ID, project.UpdateProjectInput{EndDate: validate.SetDate(ptr("2026-12-01"))})
 	if !errors.As(err, &ae) || ae.Fields["endDate"] != "before_start" {
 		t.Fatalf("stored-start err = %v", err)
 	}

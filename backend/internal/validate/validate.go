@@ -3,6 +3,7 @@
 package validate
 
 import (
+	"encoding/json"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -44,4 +45,28 @@ func DateOrder(endField string, start, end *store.Date, fields map[string]string
 	if start != nil && end != nil && *end < *start { // YYYY-MM-DD sorts lexically
 		fields[endField] = "before_start"
 	}
+}
+
+// OptDate tells an absent JSON key (Set false: leave the date alone) from
+// null (Set, nil Value: clear it) and from a string (Set, non-nil: replace).
+type OptDate struct {
+	Set   bool
+	Value *string
+}
+
+// SetDate builds an OptDate that is present; nil clears.
+func SetDate(v *string) OptDate { return OptDate{Set: true, Value: v} }
+
+func (o *OptDate) UnmarshalJSON(b []byte) error {
+	o.Set = true
+	if string(b) == "null" {
+		o.Value = nil
+		return nil
+	}
+	var s string
+	if err := json.Unmarshal(b, &s); err != nil {
+		return err
+	}
+	o.Value = &s
+	return nil
 }

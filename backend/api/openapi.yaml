@@ -9,7 +9,9 @@ info:
     on failure. `error` is for logs; clients show their own Thai/English text chosen by `code`.
     The server never sends 405: a wrong method answers 400 `bad_request`.
     Writes are all-or-nothing and return the updated entity. Ids are int64 (JSON numbers).
-    Dates are `YYYY-MM-DD`, timestamps are RFC 3339.
+    Dates are `YYYY-MM-DD`, timestamps are RFC 3339 in UTC (`...Z`).
+    An archived project is read-only: every write to it or to anything in it answers 409 with
+    error `project_archived`, except `POST /projects/{projectID}/restore`.
 servers:
   - url: /api/tracking/v1
 security:
@@ -94,7 +96,7 @@ paths:
     patch:
       tags: [projects]
       operationId: updateProject
-      summary: Partial update. Omitted or null fields stay; an empty string clears startDate or endDate. PM or admin.
+      summary: Partial update. Omitted fields stay; null clears startDate or endDate (an empty string also clears, kept for older clients). PM or admin. 409 "project_archived" on an archived project.
       requestBody:
         required: true
         content:
@@ -642,7 +644,7 @@ paths:
     patch:
       tags: [comments]
       operationId: editComment
-      summary: Edit your own comment (sets editedAt).
+      summary: Edit your own comment (sets editedAt). Member, PM or admin; a viewer gets 403 even on their own comment.
       requestBody:
         required: true
         content:
@@ -659,7 +661,7 @@ paths:
     delete:
       tags: [comments]
       operationId: deleteComment
-      summary: Soft-delete. Authors delete their own; PM or admin delete any.
+      summary: Soft-delete. Authors delete their own; PM or admin delete any. A viewer gets 403 even on their own comment.
       responses:
         '200': { $ref: '#/components/responses/Empty' }
         '400': { $ref: '#/components/responses/BadRequest' }
@@ -864,7 +866,7 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
     Conflict:
-      description: Duplicate name, archived parent, last PM, or stale_order on a move (code conflict).
+      description: Duplicate name, archived parent, last PM, or stale_order on a move (code conflict). A write rejected because the project is archived carries error "project_archived".
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
@@ -954,8 +956,8 @@ components:
         name: { type: string, minLength: 1, maxLength: 200 }
         description: { type: string, maxLength: 20000 }
         status: { $ref: '#/components/schemas/ProjectStatus' }
-        startDate: { type: string, description: 'A YYYY-MM-DD date; an empty string clears it.' }
-        endDate: { type: string, description: 'A YYYY-MM-DD date; an empty string clears it.' }
+        startDate: { type: [string, 'null'], description: 'A YYYY-MM-DD date. Absent leaves it; null clears it; an empty string also clears it (older clients).' }
+        endDate: { type: [string, 'null'], description: 'A YYYY-MM-DD date. Absent leaves it; null clears it; an empty string also clears it (older clients).' }
     Member:
       type: object
       required: [userId, name, avatarUrl, role, addedAt]

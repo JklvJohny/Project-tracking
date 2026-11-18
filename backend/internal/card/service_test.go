@@ -2,6 +2,7 @@ package card_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
@@ -519,5 +520,99 @@ func TestGet_NonMemberNotFound_ViewerReads(t *testing.T) {
 	}
 	if _, err := e.svc.Get(e.ctx, outside, 9999); code(err) != "not_found" {
 		t.Fatalf("missing: %v", err)
+	}
+}
+
+// projectArchived is the conflict token the UI keys on for an archived project.
+func projectArchived(err error) bool {
+	return code(err) == "conflict" && err.Error() == "project_archived"
+}
+
+func TestWrites_ArchivedProjectToken(t *testing.T) {
+	e := newEnv(t)
+	l := e.lists(t)[0].ID
+	c := e.mk(t, l, "c")
+	if _, err := e.proj.Archive(e.ctx, manager, e.pid); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.svc.Create(e.ctx, member, l, card.CreateCardInput{Title: "x"}); !projectArchived(err) {
+		t.Fatalf("create: %v", err)
+	}
+	if _, err := e.svc.Update(e.ctx, member, c.ID, card.UpdateCardInput{Title: ptr("x")}); !projectArchived(err) {
+		t.Fatalf("update: %v", err)
+	}
+	if _, err := e.svc.AddComment(e.ctx, member, c.ID, "hi"); !projectArchived(err) {
+		t.Fatalf("comment: %v", err)
+	}
+	if _, err := e.svc.AddItem(e.ctx, member, c.ID, "x"); !projectArchived(err) {
+		t.Fatalf("checklist: %v", err)
+	}
+}
+
+// sameNotFound fails unless both errors are not_found with the same message,
+// so an outsider cannot tell an existing child from a missing one.
+func sameNotFound(t *testing.T, what string, outsider, missing error) {
+	t.Helper()
+	if code(outsider) != "not_found" || code(missing) != "not_found" || outsider.Error() != missing.Error() {
+		t.Errorf("%s: outsider %v, missing %v", what, outsider, missing)
+	}
+}
+
+func TestChildRoutes_NonMemberLooksLikeMissing(t *testing.T) {
+	e := newEnv(t)
+	l := e.lists(t)[0].ID
+	c := e.mk(t, l, "c")
+	cm, err := e.svc.AddComment(e.ctx, member, c.ID, "hi")
+	if err != nil {
+		t.Fatal(err)
+	}
+	it, err := e.svc.AddItem(e.ctx, member, c.ID, "x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, a := e.svc.Get(e.ctx, outside, c.ID)
+	_, b := e.svc.Get(e.ctx, member, 999)
+	sameNotFound(t, "card", a, b)
+	_, a = e.svc.Create(e.ctx, outside, l, card.CreateCardInput{Title: "x"})
+	_, b = e.svc.Create(e.ctx, member, 999, card.CreateCardInput{Title: "x"})
+	sameNotFound(t, "list", a, b)
+	_, a = e.svc.EditComment(e.ctx, outside, cm.ID, "x")
+	_, b = e.svc.EditComment(e.ctx, member, 999, "x")
+	sameNotFound(t, "comment", a, b)
+	_, a = e.svc.UpdateItem(e.ctx, outside, it.ID, card.ItemPatch{Text: ptr("y")})
+	_, b = e.svc.UpdateItem(e.ctx, member, 999, card.ItemPatch{Text: ptr("y")})
+	sameNotFound(t, "checklist item", a, b)
+}
+
+// nilChildrenStore stands in for a PostgreSQL store whose Children leaves the
+// slices nil when a card has no rows.
+type nilChildrenStore struct{ store.Store }
+
+type nilChildren struct{ store.CardRepo }
+
+func (nilChildren) Children(context.Context, int64) (store.CardChildren, error) {
+	return store.CardChildren{}, nil
+}
+
+func (s nilChildrenStore) View(ctx context.Context, fn func(store.Repos) error) error {
+	return s.Store.View(ctx, func(r store.Repos) error { r.Cards = nilChildren{r.Cards}; return fn(r) })
+}
+
+func TestGet_EmptyChildrenAreArraysNotNull(t *testing.T) {
+	e := newEnv(t)
+	c := e.mk(t, e.lists(t)[0].ID, "c")
+	svc := card.New(nilChildrenStore{e.st}, users.NewStub(), events.NewLog(slog.New(slog.NewTextHandler(io.Discard, nil))), clock.Fixed(t0))
+	got, err := svc.Get(e.ctx, member, c.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := json.Marshal(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range []string{`"assigneeIds":[]`, `"labelIds":[]`, `"checklist":[]`} {
+		if !strings.Contains(string(b), k) {
+			t.Errorf("missing %s in %s", k, b)
+		}
 	}
 }

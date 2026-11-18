@@ -35,17 +35,10 @@ func labelView(l store.Label) LabelView {
 	return LabelView{ID: l.ID, ProjectID: l.ProjectID, Name: l.Name, Color: l.Color}
 }
 
-// writableProject is loadManaged plus the live-project check every label
-// write shares.
+// writableProject is loadWritable for label writes, which need no role.
 func writableProject(ctx context.Context, r store.Repos, userID, projectID int64) (store.Project, error) {
-	p, _, err := loadManaged(ctx, r, userID, projectID)
-	if err != nil {
-		return p, err
-	}
-	if p.ArchivedAt != nil {
-		return p, apperr.Conflict("project is archived")
-	}
-	return p, nil
+	p, _, err := loadWritable(ctx, r, userID, projectID)
+	return p, err
 }
 
 // loadLabel resolves label -> project -> role. Membership is checked before
@@ -60,7 +53,7 @@ func loadLabel(ctx context.Context, r store.Repos, userID, labelID int64) (store
 	}
 	p, err := writableProject(ctx, r, userID, l.ProjectID) // takes the board lock
 	if err != nil {
-		return l, p, err
+		return l, p, apperr.NotFoundAs(err, "label")
 	}
 	l, err = r.Labels.Get(ctx, labelID) // fresh, now that the lock is held
 	if errors.Is(err, store.ErrNotFound) {

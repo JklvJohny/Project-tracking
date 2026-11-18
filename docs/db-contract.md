@@ -10,7 +10,8 @@ Ground rules:
 - Services never see SQL. They call the repo interfaces in `internal/store/repos.go` inside `Store.View` or `Store.Update`.
 - Every id is `int64` (`bigint`), user ids included. User ids have no foreign key (they come from user-service).
 - A missing row is `store.ErrNotFound`, never `sql.ErrNoRows` and never a nil value. Services map it to `not_found`.
-- Dates are `DATE` and travel as `store.Date` (`"YYYY-MM-DD"`). Timestamps are `timestamptz`, handled in UTC.
+- Dates are `DATE` and travel as `store.Date` (`"YYYY-MM-DD"`). Timestamps are `timestamptz`, handled in UTC: the services stamp every write with `clock.UTC` (wired in `main.go`), and the API emits them as `...Z`. Timestamps read back must be UTC too (run the session with `SET TIME ZONE 'UTC'`, or convert with `.UTC()` when scanning), or the JSON would carry the server's local offset.
+- Slices a repo returns (`CardChildren.AssigneeIDs`, `LabelIDs`, `Checklist`, mention ids, list results) are empty, never nil, when there are no rows. The services guard the ones the API emits, but the contract is "never nil".
 - Priority is `smallint` 0-3. The API never sees the number (`store.PriorityName`).
 - Position keys (`lists`, `cards`, `checklist_items`) are LexoRank text from `internal/rank`: base-36 digits `0-9a-z`.
   Always compare them bytewise, so every `ORDER BY position` uses `COLLATE "C"`. A locale collation orders differently and breaks drag and drop.
@@ -126,7 +127,7 @@ A workable plan (the `// SQL:` line on the method is the binding version):
 
 These were found in review and deliberately left for the PostgreSQL work.
 
-1. **Last-PM guard under concurrency.** `MemberRepo.CountPM` must lock the project's member rows (`SELECT ... FROM project_members WHERE project_id = $1 FOR UPDATE`, then count) so two concurrent demotions or removals cannot both see two PMs and leave none. `SELECT count(*)` alone is not safe at `READ COMMITTED`. Sort the locked rows by `user_id` to keep the lock order stable.
+1. **Last-PM guard under concurrency.** Handled by the board lock: every member write (add, role change, remove) takes `BoardRepo.Lock` on the project's board first (see Locks), so two concurrent demotions or removals of the same project run one after the other, and the second sees the first one's result. `MemberRepo.CountPM` is therefore the plain `SELECT count(*)` of its `// SQL:` line; it needs no row lock of its own. Keep every member write behind the board lock when wiring PostgreSQL, or this guard breaks.
 2. **Name comparison: pick one rule.** `ProjectRepo.NameTaken` and `LabelRepo.NameTaken` use `lower(name)` in SQL; the memory store uses `strings.EqualFold`. They differ for some Unicode characters (for example `İ`, `ß`, final sigma). Choose one rule and make the unique indexes (`lower(name)`) and the memory store agree. Thai has no case, so the common data is unaffected.
 3. **User-service calls inside `Update`.** In `project.Service`, `Create`, `AddMember`, `SetRole` and `Me` call user-service (`up.Get`) from inside the `Update` callback. With the memory store that is free; with PostgreSQL it holds a transaction (and, for `SetRole`, member-row locks) open across a network call. When wiring PostgreSQL, move the `up.Get` call before `Update` and pass the result in.
 4. **Card `Move` and `Restore` and the pre-lock read.** Fixed in the services: every write re-reads its rows after taking the board lock (see Locks). `Move` and `Restore` still read the destination list before `LockList`; the list is re-checked live under `LockList` (`listLive`). Keep that order in the PostgreSQL wiring.
@@ -487,7 +488,7 @@ RemoveLabel(ctx context.Context, cardID, labelID int64) (bool, error)
 Children(ctx context.Context, cardID int64) (CardChildren, error)
 ```
 
-- Does: Children returns what the card detail shows besides the card row: assignee ids and label ids ascending, checklist items by position.
+- Does: Children returns what the card detail shows besides the card row: assignee ids and label ids ascending, checklist items by position. Return empty slices, never nil, for a card without rows (the service also guards, but the contract is "never nil").
 - SQL obligation: three queries by card_id (card_assignees, card_labels, checklist_items ORDER BY position COLLATE "C").
 
 ### LabelRepo

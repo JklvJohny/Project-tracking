@@ -108,13 +108,13 @@ func TestLabelWrites_ArchivedProjectConflict(t *testing.T) {
 	if _, err := e.svc.Archive(e.ctx, manager, p.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.svc.CreateLabel(e.ctx, manager, p.ID, project.LabelInput{Name: "x", Color: "red"}); code(err) != "conflict" {
+	if _, err := e.svc.CreateLabel(e.ctx, manager, p.ID, project.LabelInput{Name: "x", Color: "red"}); !projectArchived(err) {
 		t.Fatalf("create: %v", err)
 	}
-	if _, err := e.svc.UpdateLabel(e.ctx, manager, l.ID, project.LabelPatch{Color: ptr("blue")}); code(err) != "conflict" {
+	if _, err := e.svc.UpdateLabel(e.ctx, manager, l.ID, project.LabelPatch{Color: ptr("blue")}); !projectArchived(err) {
 		t.Fatalf("update: %v", err)
 	}
-	if err := e.svc.DeleteLabel(e.ctx, manager, l.ID); code(err) != "conflict" {
+	if err := e.svc.DeleteLabel(e.ctx, manager, l.ID); !projectArchived(err) {
 		t.Fatalf("delete: %v", err)
 	}
 }
@@ -168,5 +168,16 @@ func TestLabelRoute_NonMemberNotFound(t *testing.T) {
 	}
 	if rec, _ = call(h, manager, "DELETE", "/labels/"+lid, ""); rec.Code != 200 {
 		t.Fatalf("delete = %d %s", rec.Code, rec.Body)
+	}
+}
+
+func TestUpdateLabel_NonMemberLooksLikeMissing(t *testing.T) {
+	e := newEnv(t)
+	p := e.mustCreate(t, manager, "P")
+	l := e.mustLabel(t, p.ID, "Bug", "red")
+	_, a := e.svc.UpdateLabel(e.ctx, regular, l.ID, project.LabelPatch{Color: ptr("blue")})
+	_, b := e.svc.UpdateLabel(e.ctx, manager, 999, project.LabelPatch{Color: ptr("blue")})
+	if code(a) != "not_found" || a.Error() != b.Error() {
+		t.Fatalf("outsider %v, missing %v", a, b)
 	}
 }

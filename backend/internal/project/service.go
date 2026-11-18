@@ -36,6 +36,9 @@ const (
 	ConflictLabelNameInUse = "label_name_in_use"
 )
 
+// apperr.ConflictProjectArchived (project_archived) is the token for writes to
+// an archived project; it lives in apperr because every module raises it.
+
 var listNames = map[string][4]string{
 	"th": {"สิ่งที่ต้องทำ", "กำลังทำ", "รอตรวจ", "เสร็จแล้ว"},
 	"en": {"To Do", "In Progress", "Review", "Done"},
@@ -94,14 +97,15 @@ type CreateProjectInput struct {
 	EndDate     *string `json:"endDate"`
 }
 
-// UpdateProjectInput is a partial update: nil leaves a field alone. An empty
-// string clears startDate or endDate.
+// UpdateProjectInput is a partial update: nil or an absent date leaves a field
+// alone. null clears startDate or endDate, as for cards; an empty string also
+// clears, kept for older clients.
 type UpdateProjectInput struct {
-	Name        *string `json:"name"`
-	Description *string `json:"description"`
-	Status      *string `json:"status"`
-	StartDate   *string `json:"startDate"`
-	EndDate     *string `json:"endDate"`
+	Name        *string          `json:"name"`
+	Description *string          `json:"description"`
+	Status      *string          `json:"status"`
+	StartDate   validate.OptDate `json:"startDate"`
+	EndDate     validate.OptDate `json:"endDate"`
 }
 
 func view(p store.Project, role authz.Role) ProjectView {
@@ -160,6 +164,19 @@ func loadManaged(ctx context.Context, r store.Repos, userID, id int64) (store.Pr
 		return p, role, err
 	}
 	return p, role, authz.Require(role, authz.ManageProject)
+}
+
+// loadWritable is loadManaged plus the live-project check: an archived
+// project is read-only for everyone, and Restore is the only write it takes.
+func loadWritable(ctx context.Context, r store.Repos, userID, id int64) (store.Project, authz.Role, error) {
+	p, role, err := loadManaged(ctx, r, userID, id)
+	if err != nil {
+		return p, role, err
+	}
+	if p.ArchivedAt != nil {
+		return p, role, apperr.ProjectArchived()
+	}
+	return p, role, nil
 }
 
 func (s *Service) record(ctx context.Context, r store.Repos, projectID, actor int64, typ string, payload map[string]any) error {
@@ -306,7 +323,7 @@ func (s *Service) Get(ctx context.Context, userID, id int64) (ProjectView, error
 func (s *Service) Update(ctx context.Context, userID, id int64, in UpdateProjectInput) (ProjectView, error) {
 	var out ProjectView
 	err := s.st.Update(ctx, func(r store.Repos) error {
-		p, role, err := loadManaged(ctx, r, userID, id)
+		p, role, err := loadWritable(ctx, r, userID, id)
 		if err != nil {
 			return err
 		}
@@ -330,12 +347,12 @@ func (s *Service) Update(ctx context.Context, userID, id int64, in UpdateProject
 			}
 			changed = append(changed, "status")
 		}
-		if in.StartDate != nil {
-			p.StartDate = dateOrClear("startDate", *in.StartDate, fields)
+		if in.StartDate.Set {
+			p.StartDate = dateOrClear("startDate", in.StartDate.Value, fields)
 			changed = append(changed, "startDate")
 		}
-		if in.EndDate != nil {
-			p.EndDate = dateOrClear("endDate", *in.EndDate, fields)
+		if in.EndDate.Set {
+			p.EndDate = dateOrClear("endDate", in.EndDate.Value, fields)
 			changed = append(changed, "endDate")
 		}
 		if len(fields) == 0 {
@@ -344,7 +361,7 @@ func (s *Service) Update(ctx context.Context, userID, id int64, in UpdateProject
 		if len(fields) > 0 {
 			return apperr.Validation(fields)
 		}
-		if in.Name != nil && p.ArchivedAt == nil {
+		if in.Name != nil {
 			if taken, err := r.Projects.NameTaken(ctx, p.Name, p.ID); err != nil {
 				return err
 			} else if taken {
@@ -368,11 +385,12 @@ func (s *Service) Update(ctx context.Context, userID, id int64, in UpdateProject
 	return out, err
 }
 
-func dateOrClear(field, v string, fields map[string]string) *store.Date {
-	if v == "" {
+// dateOrClear: null or "" clears, anything else must be a date.
+func dateOrClear(field string, v *string, fields map[string]string) *store.Date {
+	if v == nil || *v == "" {
 		return nil
 	}
-	return validate.Date(field, &v, fields)
+	return validate.Date(field, v, fields)
 }
 
 // Archive and Restore are no-ops on a project already in the target state.
@@ -484,7 +502,7 @@ func (s *Service) cacheUsers(ctx context.Context, r store.Repos, ids ...int64) e
 func (s *Service) AddMember(ctx context.Context, userID, projectID, memberID int64, role string) (MemberView, error) {
 	var out MemberView
 	err := s.st.Update(ctx, func(r store.Repos) error {
-		if _, _, err := loadManaged(ctx, r, userID, projectID); err != nil {
+		if _, _, err := loadWritable(ctx, r, userID, projectID); err != nil {
 			return err
 		}
 		fields := map[string]string{}
@@ -526,7 +544,7 @@ func (s *Service) AddMember(ctx context.Context, userID, projectID, memberID int
 func (s *Service) SetRole(ctx context.Context, userID, projectID, memberID int64, role string) (MemberView, error) {
 	var out MemberView
 	err := s.st.Update(ctx, func(r store.Repos) error {
-		if _, _, err := loadManaged(ctx, r, userID, projectID); err != nil {
+		if _, _, err := loadWritable(ctx, r, userID, projectID); err != nil {
 			return err
 		}
 		fields := map[string]string{}
@@ -575,7 +593,7 @@ func (s *Service) SetRole(ctx context.Context, userID, projectID, memberID int64
 
 func (s *Service) RemoveMember(ctx context.Context, userID, projectID, memberID int64) error {
 	return s.st.Update(ctx, func(r store.Repos) error {
-		if _, _, err := loadManaged(ctx, r, userID, projectID); err != nil {
+		if _, _, err := loadWritable(ctx, r, userID, projectID); err != nil {
 			return err
 		}
 		m, err := r.Members.Get(ctx, projectID, memberID)

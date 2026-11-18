@@ -169,7 +169,7 @@ func loadManaged(ctx context.Context, r store.Repos, userID, projectID int64) (s
 		return p, err
 	}
 	if p.ArchivedAt != nil {
-		return p, apperr.Conflict("project is archived")
+		return p, apperr.ProjectArchived()
 	}
 	// Lock order: the board row is the first lock of every write. The checks
 	// above ran unlocked, so they are repeated on fresh rows once it is held.
@@ -195,7 +195,7 @@ func recheckManaged(ctx context.Context, r store.Repos, userID, projectID int64)
 		return p, err
 	}
 	if p.ArchivedAt != nil {
-		return p, apperr.Conflict("project is archived")
+		return p, apperr.ProjectArchived()
 	}
 	return p, nil
 }
@@ -216,7 +216,7 @@ func loadList(ctx context.Context, r store.Repos, userID, listID int64) (store.L
 	}
 	p, err := loadManaged(ctx, r, userID, b.ProjectID) // takes the board lock
 	if err != nil {
-		return l, p, err
+		return l, p, apperr.NotFoundAs(err, "list")
 	}
 	l, err = r.Lists.Get(ctx, listID) // fresh, now that the lock is held
 	if errors.Is(err, store.ErrNotFound) {

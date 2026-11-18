@@ -66,29 +66,11 @@ type CreateCardInput struct {
 	Title string `json:"title"`
 }
 
-// OptDate tells an absent JSON key (Set false: leave the date alone) from
-// null (Set, nil Value: clear it) and from a string (Set, non-nil: replace).
-type OptDate struct {
-	Set   bool
-	Value *string
-}
+// OptDate is validate.OptDate: absent leaves a date alone, null clears it.
+type OptDate = validate.OptDate
 
 // SetDate builds an OptDate that is present; nil clears.
-func SetDate(v *string) OptDate { return OptDate{Set: true, Value: v} }
-
-func (o *OptDate) UnmarshalJSON(b []byte) error {
-	o.Set = true
-	if string(b) == "null" {
-		o.Value = nil
-		return nil
-	}
-	var s string
-	if err := json.Unmarshal(b, &s); err != nil {
-		return err
-	}
-	o.Value = &s
-	return nil
-}
+func SetDate(v *string) OptDate { return validate.SetDate(v) }
 
 // UpdateCardInput is a partial update: a nil pointer or unset OptDate leaves
 // the field alone.
@@ -123,13 +105,22 @@ func (s *Service) detail(ctx context.Context, r store.Repos, c store.Card) (Card
 		ID: c.ID, ListID: c.ListID, Title: c.Title, DescriptionMD: c.Description,
 		Priority: store.PriorityName(c.Priority), StartDate: dateStr(c.StartDate), DueDate: dateStr(c.DueDate),
 		Position: c.Position, CompletedAt: c.CompletedAt, CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt,
-		ArchivedAt: c.ArchivedAt, AssigneeIDs: ch.AssigneeIDs, LabelIDs: ch.LabelIDs,
+		ArchivedAt: c.ArchivedAt, AssigneeIDs: nonNil(ch.AssigneeIDs), LabelIDs: nonNil(ch.LabelIDs),
 		Checklist: make([]ChecklistItemView, len(ch.Checklist)),
 	}
 	for i, it := range ch.Checklist {
 		d.Checklist[i] = ChecklistItemView{ID: it.ID, Text: it.Text, IsDone: it.IsDone, Position: it.Position}
 	}
 	return d, nil
+}
+
+// nonNil keeps an empty id list a JSON array, never null: the client maps
+// over it, and a store is free to return nil for no rows.
+func nonNil(ids []int64) []int64 {
+	if ids == nil {
+		return []int64{}
+	}
+	return ids
 }
 
 // scope is everything a card route resolves before looking at the request.
@@ -156,7 +147,7 @@ func resolveList(ctx context.Context, r store.Repos, userID, listID int64) (stor
 	}
 	role, err := authz.ProjectRole(ctx, r, userID, b.ProjectID)
 	if err != nil {
-		return l, store.Project{}, "", err
+		return l, store.Project{}, "", apperr.NotFoundAs(err, "list")
 	}
 	p, err := r.Projects.Get(ctx, b.ProjectID)
 	return l, p, role, err
@@ -171,7 +162,7 @@ func resolveCard(ctx context.Context, r store.Repos, userID, cardID int64) (scop
 		return scope{}, err
 	}
 	l, p, role, err := resolveList(ctx, r, userID, c.ListID)
-	return scope{card: c, list: l, project: p, role: role}, err
+	return scope{card: c, list: l, project: p, role: role}, apperr.NotFoundAs(err, "card")
 }
 
 // writable checks the rules every write shares: EditCards and a live project.
@@ -180,7 +171,7 @@ func writable(role authz.Role, p store.Project) error {
 		return err
 	}
 	if p.ArchivedAt != nil {
-		return apperr.Conflict("project is archived")
+		return apperr.ProjectArchived()
 	}
 	return nil
 }

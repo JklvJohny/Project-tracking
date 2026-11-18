@@ -362,6 +362,8 @@ type CardRepo interface {
 
 	// Children returns what the card detail shows besides the card row:
 	// assignee ids and label ids ascending, checklist items by position.
+	// Return empty slices, never nil, for a card without rows (the service
+	// also guards, but the contract is "never nil").
 	// SQL: three queries by card_id (card_assignees, card_labels,
 	// checklist_items ORDER BY position COLLATE "C").
 	Children(ctx context.Context, cardID int64) (CardChildren, error)

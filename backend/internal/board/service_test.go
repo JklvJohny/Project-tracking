@@ -449,16 +449,16 @@ func TestUpdateList_ArchivedProjectConflict(t *testing.T) {
 	if _, err := e.proj.Archive(e.ctx, manager, e.pid); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.svc.UpdateList(e.ctx, manager, ls[0].ID, board.UpdateListInput{Name: ptr("N")}); code(err) != "conflict" {
+	if _, err := e.svc.UpdateList(e.ctx, manager, ls[0].ID, board.UpdateListInput{Name: ptr("N")}); !projectArchived(err) {
 		t.Fatalf("update err = %v", err)
 	}
-	if _, err := e.svc.CreateList(e.ctx, manager, e.pid, "N"); code(err) != "conflict" {
+	if _, err := e.svc.CreateList(e.ctx, manager, e.pid, "N"); !projectArchived(err) {
 		t.Fatalf("create err = %v", err)
 	}
-	if _, err := e.svc.MoveList(e.ctx, manager, ls[3].ID, board.MoveInput{BeforeID: &ls[0].ID}); code(err) != "conflict" {
+	if _, err := e.svc.MoveList(e.ctx, manager, ls[3].ID, board.MoveInput{BeforeID: &ls[0].ID}); !projectArchived(err) {
 		t.Fatalf("move err = %v", err)
 	}
-	if _, err := e.svc.ArchiveList(e.ctx, manager, ls[0].ID); code(err) != "conflict" {
+	if _, err := e.svc.ArchiveList(e.ctx, manager, ls[0].ID); !projectArchived(err) {
 		t.Fatalf("archive err = %v", err)
 	}
 	if v, _, err := e.svc.Board(e.ctx, manager, e.pid); err != nil || len(v.Lists) != 4 {
@@ -553,5 +553,20 @@ func TestPlaceLocked_LockFirstAndArchivedNeighbourStale(t *testing.T) {
 	pos, err := board.PlaceLocked(context.Background(), lock, read, write, 9, board.MoveInput{BeforeID: &one})
 	if err != nil || pos <= "d" {
 		t.Fatalf("pos = %q err = %v", pos, err)
+	}
+}
+
+// projectArchived is the conflict token the UI keys on for an archived project.
+func projectArchived(err error) bool {
+	return code(err) == "conflict" && err.Error() == "project_archived"
+}
+
+func TestUpdateList_NonMemberLooksLikeMissing(t *testing.T) {
+	e := newEnv(t)
+	l := e.lists(t)[0].ID
+	_, a := e.svc.UpdateList(e.ctx, outside, l, board.UpdateListInput{Name: ptr("N")})
+	_, b := e.svc.UpdateList(e.ctx, manager, 999, board.UpdateListInput{Name: ptr("N")})
+	if code(a) != "not_found" || a.Error() != b.Error() {
+		t.Fatalf("outsider %v, missing %v", a, b)
 	}
 }

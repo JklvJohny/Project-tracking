@@ -282,3 +282,34 @@ func TestCommentRoutes_HappyPath(t *testing.T) {
 		t.Fatalf("delete = %d %s", rec.Code, rec.Body)
 	}
 }
+
+// A member demoted to viewer loses Comment, so their own comments are frozen.
+func TestEditComment_ViewerForbidden(t *testing.T) {
+	e := newEnv(t)
+	c := e.mk(t, e.lists(t)[0].ID, "c")
+	cm, err := e.svc.AddComment(e.ctx, member, c.ID, "hi")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.proj.SetRole(e.ctx, manager, e.pid, member, "viewer"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.svc.EditComment(e.ctx, member, cm.ID, "edited"); code(err) != "forbidden" {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestDeleteComment_ViewerForbidden(t *testing.T) {
+	e := newEnv(t)
+	c := e.mk(t, e.lists(t)[0].ID, "c")
+	cm, err := e.svc.AddComment(e.ctx, member, c.ID, "hi")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.proj.SetRole(e.ctx, manager, e.pid, member, "viewer"); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.svc.DeleteComment(e.ctx, member, cm.ID); code(err) != "forbidden" {
+		t.Fatalf("err = %v", err)
+	}
+}
