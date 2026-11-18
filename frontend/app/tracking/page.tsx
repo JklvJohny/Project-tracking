@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { LayoutGrid, Rows3 } from 'lucide-react';
+import { LayoutGrid, Plus, Rows3 } from 'lucide-react';
 import { Suspense, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useMe, useProjects } from './shared/api/queries';
@@ -97,7 +97,10 @@ function ProjectsView() {
       <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed p-10 text-center">
         <p className="font-medium">{all.length === 0 ? t.empty : t.emptyFiltered}</p>
         {all.length === 0 && <p className="text-sm text-muted-foreground">{t.emptyHint}</p>}
-        {all.length === 0 && canCreate && <Button onClick={() => setCreating(true)}>{t.create}</Button>}
+        {all.length === 0 && canCreate && <Button onClick={() => setCreating(true)}>
+            <Plus aria-hidden />
+            {t.create}
+          </Button>}
       </div>
     );
   else body = view === 'grid' ? <ProjectsGrid projects={shown} /> : <ProjectsTable projects={shown} />;
@@ -109,7 +112,10 @@ function ProjectsView() {
           <h1 className="text-2xl font-semibold tracking-tight">{t.title}</h1>
           {projects.data && <p className="text-sm text-muted-foreground">{t.count(live.length)}</p>}
         </div>
-        {canCreate && <Button onClick={() => setCreating(true)}>{t.create}</Button>}
+        {canCreate && <Button onClick={() => setCreating(true)}>
+            <Plus aria-hidden />
+            {t.create}
+          </Button>}
       </div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div role="group" aria-label={t.filter} className="flex max-w-full gap-1 overflow-x-auto rounded-lg bg-muted p-1">

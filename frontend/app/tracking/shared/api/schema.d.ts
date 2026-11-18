@@ -722,6 +722,8 @@ export interface components {
             cardsDone: number;
             /** @description Cards not archived and not in an archived list. */
             cardsTotal: number;
+            /** @description Reports that are not deleted. */
+            documentCount: number;
         };
         CreateProjectInput: {
             name: string;
@@ -912,6 +914,11 @@ export interface components {
         CardDetail: {
             /** Format: int64 */
             id: number;
+            /**
+             * Format: int64
+             * @description User id of the creator.
+             */
+            createdBy: number;
             /** Format: int64 */
             listId: number;
             title: string;
@@ -983,6 +990,8 @@ export interface components {
             sizeBytes: number;
             /** Format: int64 */
             uploadedBy: number;
+            /** @description Display name from the user cache; empty when the uploader is not cached. */
+            uploadedByName: string;
             /** Format: date-time */
             createdAt: string;
         };

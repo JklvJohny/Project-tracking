@@ -105,7 +105,7 @@ func newEnv(t *testing.T) env {
 	}
 	fail := new(bool)
 	var st store.Store = failUpdate{Store: mem, fail: fail}
-	svc := document.New(st, bs, now)
+	svc := document.New(st, bs, up, now)
 	h := httpx.NewRouter(func(r chi.Router) {
 		r.Use(auth.Middleware(headerAuth{}))
 		project.Mount(r, proj)
@@ -189,6 +189,19 @@ func TestUpload_OK(t *testing.T) {
 	}
 	if got := e.docEvents(); got != "document.uploaded" {
 		t.Errorf("events = %q", got)
+	}
+}
+
+func TestUploaderName_FromCacheOnUploadAndList(t *testing.T) {
+	e := newEnv(t)
+	_, body := e.upload(member, "a.pdf", pdf("1"))
+	if got := data(body)["uploadedByName"]; got != "วิภา รักงาน" {
+		t.Errorf("upload name = %v", got)
+	}
+	_, body = e.call(viewer, "GET", e.listPath(), nil, "")
+	list, _ := body["data"].([]any)
+	if len(list) != 1 || list[0].(map[string]any)["uploadedByName"] != "วิภา รักงาน" {
+		t.Errorf("list = %v", list)
 	}
 }
 
@@ -381,7 +394,7 @@ func TestUpload_BlobRemovedWhenRowFails(t *testing.T) {
 	e := newEnv(t)
 	bs, _ := blob.NewLocal(t.TempDir())
 	counting := &countingBlob{Store: bs}
-	svc := document.New(e.st, counting, time.Now)
+	svc := document.New(e.st, counting, users.NewStub(), time.Now)
 	*e.fail = true
 	if _, err := svc.Upload(context.Background(), member, e.pid, "x.pdf", bytes.NewReader(pdf(""))); err == nil {
 		t.Fatal("want error")

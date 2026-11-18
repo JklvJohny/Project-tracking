@@ -77,6 +77,8 @@ type ProjectListItem struct {
 	Members    []UserView `json:"members"` // pm first, then by name
 	CardsDone  int        `json:"cardsDone"`
 	CardsTotal int        `json:"cardsTotal"`
+	// DocumentCount is the project's reports that are not deleted.
+	DocumentCount int `json:"documentCount"`
 }
 
 type MemberView struct {
@@ -253,7 +255,7 @@ func (s *Service) List(ctx context.Context, userID int64) ([]ProjectListItem, er
 			sum := sums[p.ID]
 			out = append(out, ProjectListItem{
 				ProjectView: view(p, role), Owner: profiles.view(p.OwnerID),
-				Members: profiles.members(sum.Members), CardsDone: sum.CardsDone, CardsTotal: sum.CardsTotal,
+				Members: profiles.members(sum.Members), CardsDone: sum.CardsDone, CardsTotal: sum.CardsTotal, DocumentCount: sum.Documents,
 			})
 		}
 		// Active projects first, then the most recently changed.

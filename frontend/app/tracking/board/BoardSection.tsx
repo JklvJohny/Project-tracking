@@ -41,6 +41,7 @@ export function BoardSection({
   // Open on the server and first paint (no hydration mismatch); the saved choice applies right after mount.
   const [open, setOpen] = useState(true);
   useEffect(() => setOpen(readOpen()), []);
+  useEffect(() => onOpenChange?.(open), [open, onOpenChange]);
   const flip = () => {
     const next = !open;
     setOpen(next);

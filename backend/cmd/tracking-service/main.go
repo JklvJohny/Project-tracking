@@ -62,7 +62,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	docs := document.New(st, blobs, clock.UTC)
+	docs := document.New(st, blobs, userProvider, clock.UTC)
 	if cfg.Env == "local" {
 		if err := seedReports(docs); err != nil {
 			return err

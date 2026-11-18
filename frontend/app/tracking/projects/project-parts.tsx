@@ -50,7 +50,7 @@ export function Progress({ p }: { p: ProjectRow }) {
         aria-valuenow={pct}
         className="h-1.5 w-20 overflow-hidden rounded-full bg-muted"
       >
-        <span className="block h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
+        <span className="block h-full rounded-full bg-(--s-active)" style={{ width: `${pct}%` }} />
       </span>
       <span className="text-xs tabular-nums text-muted-foreground">
         {p.cardsDone}/{p.cardsTotal}

@@ -37,7 +37,7 @@ func TestOpenAPI_CoversEveryRoute(t *testing.T) {
 		project.Mount(r, project.New(st, up, ev, time.Now))
 		board.Mount(r, board.New(st, ev, time.Now))
 		card.Mount(r, card.New(st, up, ev, time.Now))
-		document.Mount(r, document.New(st, nil, time.Now))
+		document.Mount(r, document.New(st, nil, users.NewStub(), time.Now))
 	})
 
 	got := map[string]bool{}

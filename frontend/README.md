@@ -56,6 +56,17 @@ NEXT_PUBLIC_ENV=local npx next build && npx next start
 
 The gate before a commit: `npx vitest run && npx tsc --noEmit && npx next build`, with no warnings in the test output.
 
+## Pages
+
+| Route | What it shows |
+|---|---|
+| `/tracking` | Projects (list and grid views, owner, members, progress). |
+| `/tracking/<id>` | Board with header, collapsible board section, and an optional Timeline (bars grouped by assignee, resizable split). `?card=<id>` opens the card panel; `?card=<id>&focus=checklist` focuses the checklist input. |
+| `/tracking/reports` | Reports: project folders with document counts, a document table, upload (button or drag and drop, PDF only, 20 MB), a PDF viewer (double-click or Enter; arrows move between files), download, delete with Undo. `?project=<id>` opens a folder. Viewers cannot upload or delete; archived projects are read-only. |
+
+Reports needs the backend's `UPLOAD_DIR` (default `./uploads`); see `../backend/README.md`. The viewer loads the PDF
+with the request headers and shows it from an object URL, see section 3 of `../docs/host-integration.md`.
+
 ## Performance results
 
 Measured on 2026-11-18 against the production build (`NEXT_PUBLIC_ENV=local npx next build && npx next start`),
@@ -135,4 +146,5 @@ virtualising the lists or replacing `useSortable` for the cards.
 
 The pass in the task 18 report was done with scripted Chrome (Playwright, `playwright-core` with
 `executablePath` set to the installed Chrome): TH/EN x light/dark x 1440 px/400 px as users 1 (admin), 2 (manager),
-3 (member) and 6 (viewer). The scripts are not kept in the repo.
+3 (member) and 6 (viewer). The match-prototype pass (projects, board with Timeline, card panel, Reports) was done the
+same way and compared with screenshots of `../index.html`. The scripts are not kept in the repo.

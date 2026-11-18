@@ -1044,12 +1044,13 @@ components:
       allOf:
         - $ref: '#/components/schemas/Project'
         - type: object
-          required: [owner, members, cardsDone, cardsTotal]
+          required: [owner, members, cardsDone, cardsTotal, documentCount]
           properties:
             owner: { $ref: '#/components/schemas/User' }
             members: { type: array, items: { $ref: '#/components/schemas/User' } }
             cardsDone: { type: integer, description: Active cards with completedAt set. }
             cardsTotal: { type: integer, description: Cards not archived and not in an archived list. }
+            documentCount: { type: integer, description: Reports that are not deleted. }
     CreateProjectInput:
       type: object
       additionalProperties: false
@@ -1236,9 +1237,10 @@ components:
         position: { type: string }
     CardDetail:
       type: object
-      required: [id, listId, title, descriptionMd, priority, startDate, dueDate, position, completedAt, createdAt, updatedAt, archivedAt, assigneeIds, labelIds, checklist]
+      required: [id, createdBy, listId, title, descriptionMd, priority, startDate, dueDate, position, completedAt, createdAt, updatedAt, archivedAt, assigneeIds, labelIds, checklist]
       properties:
         id: { type: integer, format: int64 }
+        createdBy: { type: integer, format: int64, description: User id of the creator. }
         listId: { type: integer, format: int64 }
         title: { type: string, maxLength: 200 }
         descriptionMd: { type: string, maxLength: 20000 }
@@ -1291,7 +1293,7 @@ components:
     Document:
       type: object
       description: A project report. The storage key is never sent.
-      required: [id, projectId, filename, mimeType, sizeBytes, uploadedBy, createdAt]
+      required: [id, projectId, filename, mimeType, sizeBytes, uploadedBy, uploadedByName, createdAt]
       properties:
         id: { type: integer, format: int64 }
         projectId: { type: integer, format: int64 }
@@ -1299,6 +1301,7 @@ components:
         mimeType: { type: string, const: application/pdf }
         sizeBytes: { type: integer, format: int64 }
         uploadedBy: { type: integer, format: int64 }
+        uploadedByName: { type: string, description: Display name from the user cache; empty when the uploader is not cached. }
         createdAt: { type: string, format: date-time }
     CommentInput:
       type: object

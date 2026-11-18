@@ -1,10 +1,10 @@
 'use client';
 import { FileText, Folder } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
-import { Suspense, useMemo, useState } from 'react';
+import { Suspense, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useBoard, useMe, useProjects } from '../shared/api/queries';
+import { useMe, useProjects } from '../shared/api/queries';
 import { boardAccess } from '../shared/access';
 import { useConfirm } from '../shared/confirm';
 import { errorMessage } from '../shared/errors';
@@ -46,32 +46,24 @@ const TEXT = {
   },
 };
 
-function FolderPanel({ projectId, name }: { projectId: number; name: string }) {
+type Project = NonNullable<ReturnType<typeof useProjects>['data']>[number];
+
+function FolderPanel({ project }: { project: Project }) {
+  const { id: projectId, name } = project;
   const t = useT(TEXT);
   const { lang } = useLang();
   const confirm = useConfirm();
   const me = useMe();
-  const projects = useProjects();
   const docs = useDocuments(projectId);
-  // The board snapshot is the only place the caller's role on a project is exposed; it is cached for the board anyway.
-  const board = useBoard(projectId);
-  const access = boardAccess(board.data);
+  const access = boardAccess({ myRole: project.myRole, project });
   const del = useDeleteDocument(projectId);
   const [open, setOpen] = useState<number | null>(null);
-
-  // No user-lookup endpoint: names come from project owners/members plus the signed-in user. Others show as unknown.
-  const names = useMemo(() => {
-    const m = new Map<number, string>();
-    if (me.data) m.set(me.data.user.id, me.data.user.name);
-    for (const p of projects.data ?? []) for (const u of [p.owner, ...p.members]) m.set(u.id, u.name);
-    return m;
-  }, [me.data, projects.data]);
 
   const myId = me.data?.user.id;
   // Uploader (still an editor), PM or admin. Archived projects are read-only for everyone.
   const canDelete = (d: { uploadedBy: number }) => access.canManage || (access.canEdit && d.uploadedBy === myId);
 
-  if (docs.isPending || board.isPending) return <Skeleton className="h-72 rounded-xl" />;
+  if (docs.isPending) return <Skeleton className="h-72 rounded-xl" />;
   if (docs.isError)
     return (
       <div role="alert" className="flex flex-col items-start gap-3 rounded-xl border p-6">
@@ -93,7 +85,6 @@ function FolderPanel({ projectId, name }: { projectId: number; name: string }) {
     ) : (
       <DocumentTable
         docs={list}
-        names={names}
         canDelete={canDelete}
         onOpen={setOpen}
         onDelete={async (d) => {
@@ -124,7 +115,7 @@ function ReportsView() {
   const cur = list.find((p) => p.id === raw);
 
   let panel;
-  if (cur) panel = <FolderPanel key={cur.id} projectId={cur.id} name={cur.name} />;
+  if (cur) panel = <FolderPanel key={cur.id} project={cur} />;
   else
     panel = (
       <div className="flex flex-col items-center justify-center rounded-xl border border-dashed px-6 py-16 text-center">

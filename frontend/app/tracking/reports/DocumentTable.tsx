@@ -26,14 +26,12 @@ export function fmtSize(bytes: number): string {
 
 type Props = {
   docs: Doc[];
-  /** uploadedBy id to display name. The API has no user lookup, so this is built from project members. */
-  names: Map<number, string>;
   canDelete: (d: Doc) => boolean;
   onOpen: (index: number) => void;
   onDelete: (d: Doc) => void;
 };
 
-export function DocumentTable({ docs, names, canDelete, onOpen, onDelete }: Props) {
+export function DocumentTable({ docs, canDelete, onOpen, onDelete }: Props) {
   const t = useT(TEXT);
   const { lang } = useLang();
   const [selected, setSelected] = useState<number | null>(null);
@@ -55,7 +53,7 @@ export function DocumentTable({ docs, names, canDelete, onOpen, onDelete }: Prop
 
   return (
     <>
-      <div className="overflow-x-auto">
+      <div className="relative overflow-x-auto">
         <table className="w-full text-sm">
           <caption className="sr-only">{t.caption}</caption>
           <thead className="border-b bg-muted/50 text-left text-xs text-muted-foreground">
@@ -69,7 +67,7 @@ export function DocumentTable({ docs, names, canDelete, onOpen, onDelete }: Prop
           </thead>
           <tbody className="divide-y">
             {docs.map((d, i) => {
-              const name = names.get(d.uploadedBy) ?? `${t.unknown} #${d.uploadedBy}`;
+              const name = d.uploadedByName || `${t.unknown} #${d.uploadedBy}`;
               const sel = selected === d.id;
               return (
                 <tr

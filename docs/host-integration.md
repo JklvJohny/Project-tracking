@@ -39,6 +39,13 @@ Required component APIs (check each one in the host's file before keeping it):
 | `avatar` | `Avatar`, `AvatarImage`, `AvatarFallback`. |
 | `popover`, `tooltip`, `checkbox`, `skeleton`, `input`, `textarea` | The standard shadcn exports; animations use the `data-open:` / `data-closed:` variants from `shadcn/tailwind.css` (section 4). |
 
+The match-prototype work added files only under `app/tracking/`, so the copy above already includes them:
+`reports/` (the Reports page: folder list, document table, PDF viewer, upload zone, queries), `board/timeline/`
+(Timeline), `board/Splitter.tsx`, `board/BoardSection.tsx`, `board/BoardFilters.tsx`, `board/AssignPopover.tsx`,
+`card/StatusField.tsx`, and `shared/Avatar.tsx`, `AvatarStack.tsx`, `StatusPill.tsx`, `TrackingTabs.tsx`. It added no
+npm dependency and no shadcn part: the list above is unchanged. `tracking.css` gained colour tokens (light and dark)
+for the status pills, avatars and Timeline bars, so copy that file too.
+
 After the copy, open a board and a card panel in both themes as a final visual check; it does not replace the API
 check above.
 
@@ -68,6 +75,9 @@ Versions the harness was built and tested with. Use the same majors in the host.
 | `shadcn` | ^4.23.0 | Its `shadcn/tailwind.css` provides the data-state variants the sheet, dialog and select animations use; imported from the host's global CSS (section 4). |
 | `tailwindcss` | 4.3.3 | The host must be on Tailwind 4: the components use v4 syntax such as `max-sm:hidden` and `text-(--s-done)`. |
 
+No package was added for Reports or Timeline. The PDF viewer is a plain `<iframe>` and the upload is `fetch` with
+`FormData`.
+
 Dev only: `openapi-typescript` (`npm run gen:api` regenerates `app/tracking/shared/api/schema.d.ts` from
 `backend/api/openapi.yaml`; the generated file is committed, so the host does not need it to build).
 
@@ -90,6 +100,19 @@ async rewrites() {
 `TRACKING_API_URL` is the service base, for example `http://tracking-service:8081`. No CORS setup is needed.
 The service authenticates with whatever the host sends, see `getAuthHeaders` below. If the host already proxies
 `/api/*` in a different way (reverse proxy, gateway), route `/api/tracking/` to the tracking service there instead.
+
+Reports files. The Reports page lists and uploads PDFs through `/api/tracking/v1/projects/{id}/documents` and
+`/api/tracking/v1/documents/{id}` (file, delete, restore), all behind the same rewrite. The tracking service
+stores the bytes under its `UPLOAD_DIR` environment variable (default `./uploads`, relative to the service's working
+directory; in a container mount a persistent volume there, because the file store is local disk and metadata lives in
+the database). Uploads are PDF only and at most 20 MB. If the host's gateway or reverse proxy caps request bodies,
+raise the cap to at least 21 MB for `/api/tracking/`.
+
+PDF viewer note. The viewer does not point the iframe at the file URL. `getAuthHeaders` cannot be applied to an
+`<iframe src>` or an `<a download>`, so the viewer fetches the file with the same headers (`apiBlob`), turns the bytes
+into an object URL (`URL.createObjectURL`) and gives that to the iframe; the URL is revoked when the viewer changes
+file or closes. This works with any host auth. If the host sets a `Content-Security-Policy`, it must allow `blob:` in
+`frame-src` (and must not send `X-Frame-Options: DENY` for `blob:` documents, which it does not by default).
 
 ## 4. The CSS import
 
@@ -152,12 +175,15 @@ Page URLs are defined once in `app/tracking/shared/routes.ts`:
 const BASE = '/tracking';
 export const routes = {
   projects: BASE,                                       // projects list
+  reports: `${BASE}/reports`,                           // Reports page (?project=<id> opens a folder)
   board: (projectId) => `${BASE}/${projectId}`,         // board
   card: (projectId, cardId) => `${BASE}/${projectId}?card=${cardId}`, // board with the card panel open
 };
 ```
 
-Add one sidebar item whose `href` is `routes.projects` (label "Projects" / "โปรเจกต์"). The board and card links inside
+Add one sidebar item whose `href` is `routes.projects` (label "Projects" / "โปรเจกต์"). The tracking pages carry their
+own tab bar (Projects, Reports) from `shared/TrackingTabs.tsx`, so the Reports route needs no second sidebar entry;
+add one with `href: routes.reports` only if the host wants a direct link. The board and card links inside
 the tracking pages are built from the same file, so changing `BASE` there moves the whole feature to another mount
 point (and the route folder `app/tracking/` must move with it). Navigation inside tracking uses `<Link>`, never
 `router.push`.
@@ -180,3 +206,6 @@ point (and the route folder `app/tracking/` must move with it). Navigation insid
 4. Drag a card, open it (`?card=<id>`), comment with `@name`. The tracking service logs
    `tracking.comment.mentioned` for the mention.
 5. Stop the service and drag a card: the card snaps back and a toast offers Retry.
+6. Open `/tracking/reports`, pick a folder, upload a PDF, double-click it to open the viewer, delete it and press
+   Undo. A non-PDF and a file over 20 MB are rejected with a message.
+7. Open a board and press Timeline: bars appear grouped by assignee, and the splitter resizes the board and timeline.

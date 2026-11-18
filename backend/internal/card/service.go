@@ -46,6 +46,7 @@ type ChecklistItemView struct {
 // Comments are served separately.
 type CardDetail struct {
 	ID            int64               `json:"id"`
+	CreatedBy     int64               `json:"createdBy"`
 	ListID        int64               `json:"listId"`
 	Title         string              `json:"title"`
 	DescriptionMD string              `json:"descriptionMd"`
@@ -102,7 +103,7 @@ func (s *Service) detail(ctx context.Context, r store.Repos, c store.Card) (Card
 		return CardDetail{}, err
 	}
 	d := CardDetail{
-		ID: c.ID, ListID: c.ListID, Title: c.Title, DescriptionMD: c.Description,
+		ID: c.ID, CreatedBy: c.CreatedBy, ListID: c.ListID, Title: c.Title, DescriptionMD: c.Description,
 		Priority: store.PriorityName(c.Priority), StartDate: dateStr(c.StartDate), DueDate: dateStr(c.DueDate),
 		Position: c.Position, CompletedAt: c.CompletedAt, CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt,
 		ArchivedAt: c.ArchivedAt, AssigneeIDs: nonNil(ch.AssigneeIDs), LabelIDs: nonNil(ch.LabelIDs),

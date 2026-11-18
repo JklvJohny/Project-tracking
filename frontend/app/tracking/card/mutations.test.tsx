@@ -16,7 +16,7 @@ const summary: S['CardSummary'] = {
   updatedAt: 'x', labelIds: [1], assigneeIds: [], checklistTotal: 0, checklistDone: 0, commentCount: 4, checklistPreview: [],
 };
 const detail: S['CardDetail'] = {
-  ...summary, descriptionMd: '', createdAt: 'x', archivedAt: null, checklist: [],
+  ...summary, createdBy: 2, descriptionMd: '', createdAt: 'x', archivedAt: null, checklist: [],
 };
 const board: S['Board'] = {
   board: { id: 1, projectId: 1, updatedAt: 'x' },

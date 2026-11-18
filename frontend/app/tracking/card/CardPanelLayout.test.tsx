@@ -10,7 +10,7 @@ const apiMock = vi.mocked(api);
 
 type S = components['schemas'];
 const detail: S['CardDetail'] = {
-  id: 5, listId: 1, title: 'Fix login', descriptionMd: 'desc', priority: 'low', startDate: null, dueDate: null,
+  id: 5, createdBy: 3, listId: 1, title: 'Fix login', descriptionMd: 'desc', priority: 'low', startDate: null, dueDate: null,
   position: 'a', completedAt: null, createdAt: 'x', updatedAt: 'x', archivedAt: null, assigneeIds: [], labelIds: [],
   checklist: [],
 };
@@ -64,6 +64,17 @@ describe('CardPanel layout', () => {
     renderPanel();
     const nav = await screen.findByRole('navigation', { name: 'Location' });
     await waitFor(() => expect(nav.textContent).toBe('Website / Backlog'));
+  });
+
+  it('shows who created the card, or Unknown user when the board does not know them', async () => {
+    renderPanel();
+    expect(await screen.findByText('Created by')).toBeTruthy();
+    expect(screen.getAllByText('Unknown user #3').length).toBeGreaterThan(0);
+    cleanup();
+    board.users = [{ id: 3, name: 'Mali Rak', avatarUrl: '' }];
+    renderPanel();
+    expect(await screen.findByText('Mali Rak', { selector: 'span.truncate' })).toBeTruthy();
+    board.users = [];
   });
 
   it('Status (list) select moves the card to the end of the chosen list', async () => {

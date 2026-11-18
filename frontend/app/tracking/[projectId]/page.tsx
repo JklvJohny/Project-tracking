@@ -149,8 +149,22 @@ function BoardPage() {
     <div className="flex flex-col">
       <Header projectId={projectId} />
       <ArchivedBanner projectId={projectId} />
-      <BoardSection projectId={projectId} />
-      {/* Task 7: the Timeline section renders here, below the board. */}
+      {/* Both open on sm+: a fixed-height stack that the splitter divides. Below sm everything flows and scrolls with the page. */}
+      <div
+        ref={stack}
+        style={both ? ({ '--split': split } as CSSProperties) : undefined}
+        className={both ? 'flex flex-col sm:h-[max(32rem,calc(100dvh-12.5rem))]' : 'flex flex-col'}
+      >
+        <div className={both ? 'sm:min-h-0 sm:shrink-0 sm:basis-[calc(var(--split)*100%)] sm:overflow-auto' : undefined}>
+          <BoardSection projectId={projectId} onOpenChange={setBoardOpen} />
+        </div>
+        {both && (
+          <div className="max-sm:hidden">
+            <Splitter value={split} onChange={setSplit} containerRef={stack} />
+          </div>
+        )}
+        <TimelineSection projectId={projectId} onOpenChange={setTimelineOpen} />
+      </div>
       {cardId !== undefined && (
         <CardPanel
           key={cardId}

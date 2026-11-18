@@ -426,6 +426,15 @@ func TestList_IncludesOwnerMembersProgress(t *testing.T) {
 		if err := r.Lists.Save(e.ctx, l); err != nil {
 			return err
 		}
+		for _, deleted := range []bool{false, false, true} { // two live reports and a deleted one
+			d := store.Document{ProjectID: p.ID, StorageKey: "k", Filename: "f.pdf", UploadedBy: manager, CreatedAt: t0}
+			if deleted {
+				d.DeletedAt = ptr(t0)
+			}
+			if _, err := r.Documents.Create(e.ctx, d); err != nil {
+				return err
+			}
+		}
 		return mk(l.ID, "e", true, false)
 	}); err != nil {
 		t.Fatal(err)
@@ -454,8 +463,11 @@ func TestList_IncludesOwnerMembersProgress(t *testing.T) {
 	if it.CardsTotal != 3 || it.CardsDone != 1 {
 		t.Fatalf("cards = %d/%d, want 1/3", it.CardsDone, it.CardsTotal)
 	}
+	if it.DocumentCount != 2 {
+		t.Fatalf("documentCount = %d, want 2 (deleted excluded)", it.DocumentCount)
+	}
 	e0 := byID[empty.ID]
-	if e0.CardsTotal != 0 || e0.CardsDone != 0 || len(e0.Members) != 1 {
+	if e0.DocumentCount != 0 || e0.CardsTotal != 0 || e0.CardsDone != 0 || len(e0.Members) != 1 {
 		t.Fatalf("empty project = %+v", e0)
 	}
 }

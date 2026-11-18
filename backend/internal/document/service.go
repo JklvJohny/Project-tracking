@@ -22,6 +22,7 @@ import (
 	"tracking-service/internal/blob"
 	"tracking-service/internal/clock"
 	"tracking-service/internal/store"
+	"tracking-service/internal/users"
 )
 
 const (
@@ -37,27 +38,51 @@ const (
 type Service struct {
 	st  store.Store
 	bs  blob.Store
+	up  users.Provider
 	now clock.Clock
 }
 
-func New(st store.Store, bs blob.Store, now clock.Clock) *Service {
-	return &Service{st: st, bs: bs, now: now}
+func New(st store.Store, bs blob.Store, up users.Provider, now clock.Clock) *Service {
+	return &Service{st: st, bs: bs, up: up, now: now}
 }
 
 // View is a document as the client sees it. The storage key stays server-side.
 type View struct {
-	ID         int64     `json:"id"`
-	ProjectID  int64     `json:"projectId"`
-	Filename   string    `json:"filename"`
-	MimeType   string    `json:"mimeType"`
-	SizeBytes  int64     `json:"sizeBytes"`
-	UploadedBy int64     `json:"uploadedBy"`
-	CreatedAt  time.Time `json:"createdAt"`
+	ID         int64  `json:"id"`
+	ProjectID  int64  `json:"projectId"`
+	Filename   string `json:"filename"`
+	MimeType   string `json:"mimeType"`
+	SizeBytes  int64  `json:"sizeBytes"`
+	UploadedBy int64  `json:"uploadedBy"`
+	// UploadedByName comes from user_cache; empty when the uploader is not cached.
+	UploadedByName string    `json:"uploadedByName"`
+	CreatedAt      time.Time `json:"createdAt"`
 }
 
-func view(d store.Document) View {
+func view(d store.Document, names map[int64]string) View {
 	return View{ID: d.ID, ProjectID: d.ProjectID, Filename: d.Filename, MimeType: d.MimeType,
-		SizeBytes: d.SizeBytes, UploadedBy: d.UploadedBy, CreatedAt: d.CreatedAt}
+		SizeBytes: d.SizeBytes, UploadedBy: d.UploadedBy, UploadedByName: names[d.UploadedBy], CreatedAt: d.CreatedAt}
+}
+
+// uploaderNames maps each uploader's id to the cached display name in one read.
+func uploaderNames(ctx context.Context, r store.Repos, ds []store.Document) (map[int64]string, error) {
+	ids := make([]int64, 0, len(ds))
+	seen := map[int64]bool{}
+	for _, d := range ds {
+		if !seen[d.UploadedBy] {
+			seen[d.UploadedBy] = true
+			ids = append(ids, d.UploadedBy)
+		}
+	}
+	cached, err := r.Users.Get(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[int64]string, len(cached))
+	for _, u := range cached {
+		out[u.UserID] = u.DisplayName
+	}
+	return out, nil
 }
 
 // File is a document's content, to be streamed by the caller (who closes it).
@@ -137,10 +162,17 @@ func (s *Service) List(ctx context.Context, userID, projectID int64) ([]View, er
 			return err
 		}
 		ds, err := r.Documents.ByProject(ctx, projectID)
-		for _, d := range ds {
-			out = append(out, view(d))
+		if err != nil {
+			return err
 		}
-		return err
+		names, err := uploaderNames(ctx, r, ds)
+		if err != nil {
+			return err
+		}
+		for _, d := range ds {
+			out = append(out, view(d, names))
+		}
+		return nil
 	})
 	return out, err
 }
@@ -174,10 +206,17 @@ func (s *Service) Upload(ctx context.Context, userID, projectID int64, filename 
 		return View{}, tooLarge()
 	}
 
+	// Best effort, like a blob cleanup: a name that is missing shows as unknown.
+	found, _ := s.up.Get(ctx, []int64{userID})
 	var out View
 	err = s.st.Update(ctx, func(r store.Repos) error {
 		if err := canUpload(ctx, r, userID, projectID); err != nil {
 			return err
+		}
+		for _, u := range found {
+			if err := r.Users.Upsert(ctx, []store.CachedUser{{UserID: u.ID, DisplayName: u.Name, AvatarURL: u.AvatarURL}}); err != nil {
+				return err
+			}
 		}
 		d, err := r.Documents.Create(ctx, store.Document{
 			ProjectID: projectID, StorageKey: key, Filename: CleanFilename(filename), MimeType: mimePDF,
@@ -186,7 +225,11 @@ func (s *Service) Upload(ctx context.Context, userID, projectID int64, filename 
 		if err != nil {
 			return err
 		}
-		out = view(d)
+		names, err := uploaderNames(ctx, r, []store.Document{d})
+		if err != nil {
+			return err
+		}
+		out = view(d, names)
 		return s.record(ctx, r, projectID, userID, "document.uploaded", d.ID)
 	})
 	if err != nil {
@@ -273,7 +316,11 @@ func (s *Service) setDeleted(ctx context.Context, userID, docID int64, deleted b
 		if p.ArchivedAt != nil {
 			return apperr.ProjectArchived()
 		}
-		out = view(d)
+		names, err := uploaderNames(ctx, r, []store.Document{d})
+		if err != nil {
+			return err
+		}
+		out = view(d, names)
 		if (d.DeletedAt != nil) == deleted { // restoring a live document: nothing to do
 			return nil
 		}

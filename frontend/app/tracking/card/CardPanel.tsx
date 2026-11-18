@@ -12,6 +12,7 @@ import { ApiError } from '../shared/api/client';
 import { errorMessage } from '../shared/errors';
 import { priorityLabel } from '../shared/format';
 import { useLang, useT } from '../shared/i18n';
+import { Avatar } from '../shared/Avatar';
 import { AssigneePicker } from './AssigneePicker';
 import { Checklist } from './Checklist';
 import { Comments } from './Comments';
@@ -34,6 +35,8 @@ const TEXT = {
     location: 'ตำแหน่ง',
     details: 'ข้อมูลการ์ด',
     cardId: 'รหัสการ์ด',
+    createdBy: 'สร้างโดย',
+    unknown: 'ผู้ใช้ไม่ทราบชื่อ',
     gone: 'ไม่พบการ์ดนี้ หรือคุณไม่มีสิทธิ์เข้าถึง',
   },
   en: {
@@ -47,6 +50,8 @@ const TEXT = {
     location: 'Location',
     details: 'Card info',
     cardId: 'Card ID',
+    createdBy: 'Created by',
+    unknown: 'Unknown user',
     gone: 'Card not found, or you do not have access to it',
   },
 };
@@ -81,6 +86,8 @@ export function CardPanel({
   // A deleted card or a stale ?card id answers not_found/forbidden for good: retrying cannot help.
   const gone = card.error instanceof ApiError && (card.error.code === 'not_found' || card.error.code === 'forbidden');
   const readOnly = !canEdit || !!d?.archivedAt;
+  // Names come from the board's user list (members and past assignees); anyone else shows as unknown.
+  const creator = d && (board.data?.users.find((u) => u.id === d.createdBy) ?? { id: d.createdBy, name: `${t.unknown} #${d.createdBy}` });
 
   return (
     <Sheet open onOpenChange={(o) => !o && onClose()}>
@@ -217,7 +224,14 @@ export function CardPanel({
                 readOnly={readOnly}
                 canManage={canManage}
               />
-              <p className="border-t pt-3 text-xs text-muted-foreground">
+              {creator && (
+                <div className="flex items-center gap-2 border-t pt-3 text-xs text-muted-foreground">
+                  <span>{t.createdBy}</span>
+                  <Avatar user={creator} size="xs" />
+                  <span className="min-w-0 truncate text-foreground">{creator.name}</span>
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground">
                 {t.cardId} <code className="rounded bg-muted px-1 py-0.5 tabular-nums">{d.id}</code>
               </p>
             </aside>

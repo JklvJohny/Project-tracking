@@ -164,6 +164,18 @@ func TestCreate_ViewerForbidden(t *testing.T) {
 	}
 }
 
+func TestCreate_DetailCarriesCreator(t *testing.T) {
+	e := newEnv(t)
+	c := e.mk(t, e.lists(t)[0].ID, "x")
+	if c.CreatedBy != member {
+		t.Fatalf("createdBy = %d, want %d", c.CreatedBy, member)
+	}
+	b, _ := json.Marshal(c)
+	if !strings.Contains(string(b), `"createdBy":`) {
+		t.Fatalf("json = %s", b)
+	}
+}
+
 func TestCreate_AppendsAtEnd(t *testing.T) {
 	e := newEnv(t)
 	l := e.lists(t)[0].ID

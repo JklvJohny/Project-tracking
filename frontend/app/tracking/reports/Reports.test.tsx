@@ -16,12 +16,13 @@ const apiMock = vi.mocked(api);
 const blobMock = vi.mocked(apiBlob);
 
 const user = (id: number, name: string) => ({ id, name, avatarUrl: '' });
-const project = (id: number, name: string) => ({
+const project = (id: number, name: string, documentCount = 0) => ({
   id, name, description: '', ownerId: 7, status: 'active', startDate: null, endDate: null, createdAt: '', updatedAt: '',
-  archivedAt: null, owner: user(7, 'Somchai Dee'), members: [user(7, 'Somchai Dee'), user(8, 'Mali Rak')], cardsDone: 0, cardsTotal: 0,
+  archivedAt: id === 1 ? archived : null, myRole: role, owner: user(7, 'Somchai Dee'), members: [user(7, 'Somchai Dee'), user(8, 'Mali Rak')], cardsDone: 0, cardsTotal: 0,
+  documentCount,
 });
 const doc = (id: number, filename: string, uploadedBy = 7) => ({
-  id, projectId: 1, filename, mimeType: 'application/pdf', sizeBytes: 2048 * id, uploadedBy, createdAt: '2026-11-10T03:00:00Z',
+  id, projectId: 1, filename, mimeType: 'application/pdf', sizeBytes: 2048 * id, uploadedBy, uploadedByName: uploadedBy === 8 ? 'Mali Rak' : uploadedBy === 7 ? 'Somchai Dee' : '', createdAt: '2026-11-10T03:00:00Z',
 });
 let docs: ReturnType<typeof doc>[];
 let role = 'pm';
@@ -31,8 +32,7 @@ type Init = { method?: string };
 function impl() {
   return (async (path: string, init?: Init) => {
     if (path === '/me') return { user: user(8, 'Mali Rak'), isAdmin: false, canCreateProject: false };
-    if (path === '/projects') return [project(1, 'Website redesign'), project(2, 'Mobile app')];
-    if (path === '/projects/1/board') return { myRole: role, project: { id: 1, archivedAt: archived } };
+    if (path === '/projects') return [project(1, 'Website redesign', 3), project(2, 'Mobile app', 5)];
     if (path === '/projects/1/documents' && init?.method === 'POST') return doc(9, 'new.pdf', 8);
     if (path === '/projects/1/documents') return docs;
     if (path === '/projects/2/documents') return [];
@@ -84,16 +84,23 @@ describe('Reports page', () => {
     expect(screen.getByText('Select a project')).toBeTruthy();
   });
 
-  it('opening a folder lists its documents with a count on that folder only', async () => {
+  it('opening a folder lists its documents with a count on every folder', async () => {
     setup();
     const table = await screen.findByRole('table');
     for (const h of ['Name', 'Size', 'Uploaded by', 'Date']) expect(within(table).getByRole('columnheader', { name: h })).toBeTruthy();
     expect(within(table).getByText('Kickoff.pdf')).toBeTruthy();
     expect(within(table).getByText('2 KB')).toBeTruthy();
-    // uploader names come from project members; user 8 is both a member and the signed-in user
+    // uploader names come from the document itself; an uncached uploader is shown as unknown
     expect(within(table).getAllByText('Mali Rak').length).toBeGreaterThan(0);
     expect(within(screen.getByRole('link', { name: /Website redesign/ })).getByText('3')).toBeTruthy();
-    expect(within(screen.getByRole('link', { name: /Mobile app/ })).queryByText('0')).toBeNull();
+    // a folder that was not opened shows the count from the project list
+    expect(within(screen.getByRole('link', { name: /Mobile app/ })).getByText('5')).toBeTruthy();
+  });
+
+  it('shows Unknown user #id when the uploader has no cached name', async () => {
+    docs = [doc(1, 'Ghost.pdf', 9)];
+    setup();
+    expect((await screen.findAllByText('Unknown user #9')).length).toBeGreaterThan(0);
   });
 
   it('double-click opens the viewer with the authorised blob; arrows move; Escape closes', async () => {

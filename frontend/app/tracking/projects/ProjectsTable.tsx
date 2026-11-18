@@ -19,9 +19,9 @@ const TD = 'px-4 py-3 align-middle';
 export function ProjectsTable({ projects }: { projects: ProjectRow[] }) {
   const t = useT(TEXT);
   return (
-    <div className="overflow-x-auto rounded-lg border bg-card">
+    <div className="relative overflow-x-auto rounded-lg border bg-card">
       <table className="w-full text-sm">
-        <thead className="border-b text-left text-xs text-muted-foreground">
+        <thead className="border-b bg-muted/50 text-left text-xs text-muted-foreground">
           <tr>
             <th scope="col" className={TH}>{t.name}</th>
             <th scope="col" className={TH}>{t.owner}</th>

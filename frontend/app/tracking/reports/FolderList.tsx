@@ -15,7 +15,8 @@ const TEXT = {
 
 function Item({ p, current }: { p: Project; current: boolean }) {
   const t = useT(TEXT);
-  const count = useCachedDocCount(p.id);
+  // The opened folder's cache is fresher (it follows uploads and deletes); the list's count covers the rest.
+  const count = useCachedDocCount(p.id) ?? p.documentCount;
   return (
     <li>
       <Link
@@ -30,7 +31,7 @@ function Item({ p, current }: { p: Project; current: boolean }) {
         <Folder className={`h-4 w-4 shrink-0 ${current ? 'text-primary' : 'text-muted-foreground'}`} aria-hidden="true" />
         <span className="min-w-0 flex-1 truncate">{p.name}</span>
         {p.archivedAt && <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">{t.archived}</span>}
-        {count !== undefined && <span className="rounded-full bg-muted px-2 py-0.5 text-xs tabular-nums text-muted-foreground">{count}</span>}
+        {<span className="rounded-full bg-muted px-2 py-0.5 text-xs tabular-nums text-muted-foreground">{count}</span>}
       </Link>
     </li>
   );

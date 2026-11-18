@@ -75,6 +75,12 @@ func (r *projectRepo) Summaries(_ context.Context, projectIDs []int64) (map[int6
 			out[m.ProjectID] = s
 		}
 	}
+	for _, doc := range d.documents {
+		if s, ok := out[doc.ProjectID]; ok && doc.DeletedAt == nil {
+			s.Documents++
+			out[doc.ProjectID] = s
+		}
+	}
 	for _, c := range d.cards {
 		l, ok := d.lists[c.ListID]
 		if !ok || c.ArchivedAt != nil || l.ArchivedAt != nil {

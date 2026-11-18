@@ -124,7 +124,7 @@ describe('setListCompletion', () => {
 
 describe('detailToSummary', () => {
   const detail = {
-    id: 9, listId: 1, title: 't', descriptionMd: '', priority: 'low' as const, startDate: null, dueDate: null,
+    id: 9, createdBy: 2, listId: 1, title: 't', descriptionMd: '', priority: 'low' as const, startDate: null, dueDate: null,
     position: 'p', completedAt: null, createdAt: 'x', updatedAt: 'y', archivedAt: null, assigneeIds: [1], labelIds: [2],
     checklist: [
       { id: 1, text: 'a', isDone: true, position: 'a' },

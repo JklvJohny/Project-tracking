@@ -112,6 +112,7 @@ type ProjectSummary struct {
 	Members    []Member // every member, unordered; the service orders by role and name
 	CardsTotal int      // active cards: not archived and not in an archived list
 	CardsDone  int      // of those, completed_at IS NOT NULL
+	Documents  int      // reports not deleted (deleted_at IS NULL)
 }
 
 type CardAssignee struct {

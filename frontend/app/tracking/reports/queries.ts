@@ -19,9 +19,8 @@ export const useDocuments = (projectId: number) =>
   useQuery({ queryKey: dk.docs(projectId), queryFn: () => fetchDocs(projectId) });
 
 /**
- * Folder counts without extra requests: this subscribes to the cache only (enabled: false), so a folder shows its
- * count once it has been opened. There is no count endpoint and fetching every project's list just to badge the
- * sidebar would be N requests per visit.
+ * An opened folder's live count: this subscribes to the cache only (enabled: false), so the sidebar follows uploads
+ * and deletes without a request. Folders not yet opened use ProjectListItem.documentCount.
  */
 export const useCachedDocCount = (projectId: number) =>
   useQuery({ queryKey: dk.docs(projectId), queryFn: () => fetchDocs(projectId), enabled: false }).data?.length;

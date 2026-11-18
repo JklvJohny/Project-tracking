@@ -135,7 +135,7 @@ function TimelineBody({ projectId }: { projectId: number }) {
       </div>
 
       {/* Own horizontal scroll with a minimum width, so a phone scrolls the chart and not the page. */}
-      <div className="overflow-x-auto border-y bg-background">
+      <div className="relative overflow-x-auto border-y bg-background">
         <div className="relative min-w-[44rem]">
           <div className="flex border-b text-xs font-medium text-muted-foreground">
             <div className="shrink-0 border-r px-3 py-1.5" style={{ width: LEFT }} />
@@ -150,7 +150,7 @@ function TimelineBody({ projectId }: { projectId: number }) {
 
           {model.todayPct !== null && (
             <div className="pointer-events-none absolute inset-y-0 right-0 z-10" style={{ left: LEFT }} aria-hidden>
-              <div className="absolute inset-y-0 w-0.5 bg-primary" style={{ left: `${model.todayPct}%` }} title={t.todayLine} />
+              <div className="absolute inset-y-0 w-0.5 bg-(--s-active)" style={{ left: `${model.todayPct}%` }} title={t.todayLine} />
             </div>
           )}
 

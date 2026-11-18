@@ -67,6 +67,14 @@ describe('Projects page', () => {
     expect(within(row).getByRole('progressbar').getAttribute('aria-valuenow')).toBe('25');
   });
 
+  it('the table scroller is positioned, so screen-reader-only text cannot widen the page', async () => {
+    setup([full]);
+    const scroller = (await screen.findByRole('table')).parentElement!;
+    // sr-only content is absolutely positioned; without a positioned scroller it escapes the clip and adds page-level scroll
+    expect(scroller.className).toContain('relative');
+    expect(scroller.className).toContain('overflow-x-auto');
+  });
+
   it('tolerates entries without owner, members or progress', async () => {
     setup([plain]);
     const row = await screen.findByRole('row', { name: /Fresh project/ });

@@ -209,7 +209,7 @@ type ProjectRepo interface {
 	// AND archived_at IS NULL AND id <> $2).
 	NameTaken(ctx context.Context, name string, exceptID int64) (bool, error)
 
-	// Summaries returns members and card progress for each listed project in
+	// Summaries returns members, card progress and report count for each listed project in
 	// one call; a project without members or cards still gets an entry (empty
 	// Members, zero counts). Active cards exclude archived cards and cards of
 	// archived lists; done means completed_at IS NOT NULL.
@@ -218,7 +218,9 @@ type ProjectRepo interface {
 	// SELECT b.project_id, count(*) AS total, count(c.completed_at) AS done
 	// FROM boards b JOIN lists l ON l.board_id = b.id AND l.archived_at IS NULL
 	// JOIN cards c ON c.list_id = l.id AND c.archived_at IS NULL
-	// WHERE b.project_id = ANY($1) GROUP BY b.project_id (idx_cards_list).
+	// WHERE b.project_id = ANY($1) GROUP BY b.project_id (idx_cards_list);
+	// SELECT project_id, count(*) FROM documents
+	// WHERE project_id = ANY($1) AND deleted_at IS NULL GROUP BY project_id.
 	Summaries(ctx context.Context, projectIDs []int64) (map[int64]ProjectSummary, error)
 }
 
