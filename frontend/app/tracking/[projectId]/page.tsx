@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { usePathname, useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Settings, Upload, Users } from 'lucide-react';
 import dynamic from 'next/dynamic';
-import { Suspense, useCallback, useState } from 'react';
+import { Suspense, useCallback, useRef, useState, type CSSProperties } from 'react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { boardAccess } from '../shared/access';
@@ -15,6 +15,8 @@ import { routes } from '../shared/routes';
 import { ArchivedBanner } from '../board/ArchivedBanner';
 import { ArchivedSheet } from '../board/ArchivedSheet';
 import { BoardSection } from '../board/BoardSection';
+import { Splitter, useSplit } from '../board/Splitter';
+import { TimelineSection } from '../board/timeline/Timeline';
 
 // Loaded on demand: keeps markdown, the pickers and the member forms out of the board's first load.
 const CardPanel = dynamic(() => import('../card/CardPanel').then((m) => m.CardPanel));
@@ -137,6 +139,11 @@ function BoardPage() {
     const qs = next.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }, [router, pathname, search]);
+  const [boardOpen, setBoardOpen] = useState(true);
+  const [timelineOpen, setTimelineOpen] = useState(false);
+  const [split, setSplit] = useSplit();
+  const stack = useRef<HTMLDivElement>(null);
+  const both = boardOpen && timelineOpen;
   if (!Number.isInteger(projectId) || projectId <= 0) return <p className="p-6 text-sm">{t.invalid}</p>;
   return (
     <div className="flex flex-col">

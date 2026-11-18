@@ -29,7 +29,13 @@ function readOpen() {
 }
 
 /** The collapsible board region of the project page; the Timeline section sits below it. */
-export function BoardSection({ projectId }: { projectId: number }) {
+export function BoardSection({
+  projectId,
+  onOpenChange,
+}: {
+  projectId: number;
+  onOpenChange?: (open: boolean) => void;
+}) {
   const t = useT(TEXT);
   const board = useBoard(projectId);
   // Open on the server and first paint (no hydration mismatch); the saved choice applies right after mount.
