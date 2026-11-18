@@ -1,0 +1,45 @@
+/* Series tokens copied from index.html (the visual reference). They sit on :root
+   so portalled dialogs/popovers see them too. The surface tokens (background,
+   border, primary...) come from the host's shadcn theme, not from here. */
+:root {
+  /* status series */
+  --s-done: #059669; --s-active: #2563eb; --s-todo: #64748b; --s-overdue: #dc2626;
+  /* priority series */
+  --p-urgent: #b91c1c; --p-high: #d97706; --p-medium: #2563eb; --p-low: #64748b;
+  /* solid priority badge backgrounds under white text */
+  --pb-urgent: #b91c1c; --pb-high: #b45309; --pb-medium: #2563eb; --pb-low: #475569;
+  /* avatar fills under white initials (index.html member colours, Tailwind 600/700); all >= 4.5:1, see Avatar.test.tsx */
+  --av-0: #4f46e5; --av-1: #047857; --av-2: #b45309; --av-3: #be123c; --av-4: #0369a1; --av-5: #6d28d9;
+  /* project status pills: soft bg, text, dot */
+  --sp-active-bg: #d1fae5; --sp-active-fg: #065f46; --sp-active-dot: #059669;
+  --sp-on_hold-bg: #fef3c7; --sp-on_hold-fg: #78350f; --sp-on_hold-dot: #d97706;
+  --sp-done-bg: #dbeafe; --sp-done-fg: #1e40af; --sp-done-dot: #2563eb;
+  --sp-archived-bg: #f1f5f9; --sp-archived-fg: #334155; --sp-archived-dot: #64748b;
+  /* page background behind the tab bar and boards */
+  --board-bg: color-mix(in oklab, var(--muted) 45%, var(--background));
+}
+.dark {
+  --s-done: #059669; --s-active: #3b82f6; --s-todo: #64748b; --s-overdue: #ef4444;
+  --p-urgent: #e11d48; --p-high: #d97706; --p-medium: #3b82f6; --p-low: #64748b;
+  --pb-urgent: #b91c1c; --pb-high: #b45309; --pb-medium: #2563eb; --pb-low: #475569;
+  --av-0: #4f46e5; --av-1: #047857; --av-2: #b45309; --av-3: #be123c; --av-4: #0369a1; --av-5: #6d28d9;
+  --sp-active-bg: color-mix(in oklab, #34d399 15%, transparent); --sp-active-fg: #a7f3d0; --sp-active-dot: #34d399;
+  --sp-on_hold-bg: color-mix(in oklab, #fbbf24 15%, transparent); --sp-on_hold-fg: #fde68a; --sp-on_hold-dot: #fbbf24;
+  --sp-done-bg: color-mix(in oklab, #60a5fa 15%, transparent); --sp-done-fg: #bfdbfe; --sp-done-dot: #60a5fa;
+  --sp-archived-bg: color-mix(in oklab, #94a3b8 15%, transparent); --sp-archived-fg: #cbd5e1; --sp-archived-dot: #94a3b8;
+}
+
+/* Compact type scale: tracking pages are dense (body 13px in index.html). */
+.tracking-root { font-size: 13px; }
+
+/* Off-screen card rows skip style, layout and paint: a 2,000-card board otherwise spends its drag frames in
+   the browser's rendering work, not in React. `auto` remembers each row's real height once it has been seen. */
+.tracking-root .card-row { content-visibility: auto; contain-intrinsic-size: auto 6rem; }
+
+/* drag & drop and motion, as in index.html */
+.tracking-root .is-dragging { opacity: .4; transform: rotate(1deg); }
+.tracking-root .drop-ind { height: 4px; flex-shrink: 0; border-radius: 9999px; background: var(--primary); box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 20%, transparent); }
+.tracking-root .list-drop { width: 4px; align-self: stretch; flex-shrink: 0; border-radius: 9999px; background: var(--primary); }
+.tracking-root .just-dropped { animation: pt-dropped .9s ease-out; }
+@keyframes pt-dropped { 0% { box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 50%, transparent); } 100% { box-shadow: 0 0 0 0 transparent; } }
+@media (prefers-reduced-motion: reduce) { .tracking-root *, .tracking-root *::before, .tracking-root *::after { animation: none !important; transition: none !important; } }

@@ -1,0 +1,27 @@
+# Hot reload for local development: run `air` in backend/. Rebuilds and restarts tracking-service on every .go change.
+# Local only: the build uses the `local` tag (X-User-ID dev authenticator), which must never ship to production.
+root = "."
+tmp_dir = "tmp"
+# ENV=local and the port come from air.env, so a plain `air` works in any shell (bash or PowerShell).
+env_files = ["air.env"]
+
+[build]
+  cmd = "go build -tags local -o ./tmp/tracking-service ./cmd/tracking-service"
+  entrypoint = ["./tmp/tracking-service"]
+  include_ext = ["go"]
+  # uploads/ holds PDFs written at runtime; watching it would restart the service on every upload.
+  exclude_dir = ["tmp", "bin", "uploads", "api", "testdata"]
+  exclude_regex = ["_test\\.go$"]
+  delay = 500
+  stop_on_error = true
+  log = "tmp/build-errors.log"
+
+  [build.windows]
+    cmd = "go build -tags local -o ./tmp/tracking-service.exe ./cmd/tracking-service"
+    entrypoint = ["tmp\\tracking-service.exe"]
+
+[misc]
+  clean_on_exit = true
+
+[screen]
+  clear_on_rebuild = false
