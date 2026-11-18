@@ -16,7 +16,7 @@ export const qk = {
 
 export const useMe = () => useQuery({ queryKey: qk.me, queryFn: () => api<S['Me']>('/me') });
 
-export const useProjects = () => useQuery({ queryKey: qk.projects, queryFn: () => api<S['Project'][]>('/projects') });
+export const useProjects = () => useQuery({ queryKey: qk.projects, queryFn: () => api<S['ProjectListItem'][]>('/projects') });
 
 // The browser revalidates this URL with If-None-Match (see api()), so a refetch of an unchanged board is a 304.
 export const useBoard = (projectId: number) =>

@@ -12,6 +12,7 @@ import type { components } from '../shared/api/schema';
 import { errorMessage, errorText } from '../shared/errors';
 import { useLang, useT } from '../shared/i18n';
 import { routes } from '../shared/routes';
+import type { ProjectRow } from './project-row';
 
 type S = components['schemas'];
 const FIELDS = ['name', 'description', 'startDate', 'endDate'] as const;
@@ -49,7 +50,9 @@ export function useCreateProject() {
   return useMutation({
     mutationFn: (input: S['CreateProjectInput']) => api<S['Project']>('/projects', { method: 'POST', json: input satisfies S['CreateProjectInput'] }),
     onSuccess: (p) => {
-      qc.setQueryData<S['Project'][]>(qk.projects, (old) => [...(old ?? []), p]);
+      qc.setQueryData<ProjectRow[]>(qk.projects, (old) => [...(old ?? []), p]);
+      // The create response has no owner, members or progress; refetch fills them in (the table also tolerates the gap).
+      void qc.invalidateQueries({ queryKey: qk.projects });
       router.replace(routes.board(p.id));
     },
   });

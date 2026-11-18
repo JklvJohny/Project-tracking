@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tansta
 import { api } from '../shared/api/client';
 import { qk } from '../shared/api/queries';
 import type { components } from '../shared/api/schema';
+import type { ProjectRow } from './project-row';
 import { dropMember, patchBoardProject, setMyRole, upsertMember, type BoardData } from '../board/board-cache';
 
 type S = components['schemas'];
@@ -11,13 +12,14 @@ const membersKey = (projectId: number) => ['members', projectId] as const;
 
 /** Writes the Project response into the list cache and, when loaded, the board's project block. */
 export function patchProjectCaches(qc: QueryClient, p: S['Project']) {
-  qc.setQueryData<S['Project'][]>(qk.projects, (old) => old?.map((x) => (x.id === p.id ? p : x)));
+  // Merge so a settings or archive response keeps the owner, members and progress the list already has.
+  qc.setQueryData<ProjectRow[]>(qk.projects, (old) => old?.map((x) => (x.id === p.id ? { ...x, ...p } : x)));
   qc.setQueryData<BoardData>(qk.board(p.id), (b) => (b ? patchBoardProject(b, p) : b));
 }
 
 /** A project the caller can no longer see (they removed themselves) leaves the projects list at once. */
 export function dropProject(qc: QueryClient, projectId: number) {
-  qc.setQueryData<S['Project'][]>(qk.projects, (old) => old?.filter((x) => x.id !== projectId));
+  qc.setQueryData<ProjectRow[]>(qk.projects, (old) => old?.filter((x) => x.id !== projectId));
 }
 
 function patchBoard(qc: QueryClient, projectId: number, fn: (b: BoardData) => BoardData) {

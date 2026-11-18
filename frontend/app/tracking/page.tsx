@@ -1,6 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { LayoutGrid, Rows3 } from 'lucide-react';
 import { Suspense, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useMe, useProjects } from './shared/api/queries';
@@ -8,6 +9,7 @@ import { errorMessage } from './shared/errors';
 import { useLang, useT } from './shared/i18n';
 import { routes } from './shared/routes';
 import { CreateProjectDialog } from './projects/CreateProjectDialog';
+import { ProjectsGrid } from './projects/ProjectsGrid';
 import { ProjectsTable, ProjectsTableSkeleton } from './projects/ProjectsTable';
 
 const TEXT = {
@@ -25,6 +27,9 @@ const TEXT = {
     emptyHint: 'สร้างโปรเจกต์แรกเพื่อเริ่มต้น',
     emptyFiltered: 'ไม่มีโปรเจกต์ในสถานะนี้',
     retry: 'ลองอีกครั้ง',
+    layout: 'รูปแบบการแสดงผล',
+    table: 'มุมมองตาราง',
+    cards: 'มุมมองการ์ด',
   },
   en: {
     title: 'Projects',
@@ -40,11 +45,23 @@ const TEXT = {
     emptyHint: 'Create your first project to get started.',
     emptyFiltered: 'No projects with this status',
     retry: 'Retry',
+    layout: 'Layout',
+    table: 'Table view',
+    cards: 'Card view',
   },
 };
 
 const FILTERS = ['all', 'active', 'on_hold', 'done', 'archived'] as const;
 type Filter = (typeof FILTERS)[number];
+
+// Status and view live in the URL; each link carries the other so switching one keeps the other.
+const href = (status: Filter, view: 'list' | 'grid') => {
+  const q = new URLSearchParams();
+  if (status !== 'all') q.set('status', status);
+  if (view === 'grid') q.set('view', 'grid');
+  const s = q.toString();
+  return s ? `${routes.projects}?${s}` : routes.projects;
+};
 
 function ProjectsView() {
   const t = useT(TEXT);
@@ -52,6 +69,7 @@ function ProjectsView() {
   const sp = useSearchParams();
   const raw = sp.get('status');
   const status: Filter = FILTERS.includes(raw as Filter) ? (raw as Filter) : 'all';
+  const view = sp.get('view') === 'grid' ? 'grid' : 'list';
   const me = useMe();
   const projects = useProjects();
   const [creating, setCreating] = useState(false);
@@ -82,7 +100,7 @@ function ProjectsView() {
         {all.length === 0 && canCreate && <Button onClick={() => setCreating(true)}>{t.create}</Button>}
       </div>
     );
-  else body = <ProjectsTable projects={shown} />;
+  else body = view === 'grid' ? <ProjectsGrid projects={shown} /> : <ProjectsTable projects={shown} />;
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-5 sm:px-6 sm:py-6">
@@ -93,22 +111,45 @@ function ProjectsView() {
         </div>
         {canCreate && <Button onClick={() => setCreating(true)}>{t.create}</Button>}
       </div>
-      <div role="group" aria-label={t.filter} className="mb-4 flex max-w-full gap-1 overflow-x-auto rounded-lg bg-muted p-1">
-        {FILTERS.map((f) => (
-          <Link
-            key={f}
-            replace
-            scroll={false}
-            href={f === 'all' ? routes.projects : `${routes.projects}?status=${f}`}
-            aria-current={status === f ? 'true' : undefined}
-            className={`shrink-0 whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition ${
-              status === f ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {t[f]}
-            {projects.data && <span className="ml-1.5 text-xs tabular-nums">{pick(f).length}</span>}
-          </Link>
-        ))}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div role="group" aria-label={t.filter} className="flex max-w-full gap-1 overflow-x-auto rounded-lg bg-muted p-1">
+          {FILTERS.map((f) => (
+            <Link
+              key={f}
+              replace
+              scroll={false}
+              href={href(f, view)}
+              aria-current={status === f ? 'true' : undefined}
+              className={`shrink-0 whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition ${
+                status === f ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {t[f]}
+              {projects.data && <span className="ml-1.5 text-xs tabular-nums">{pick(f).length}</span>}
+            </Link>
+          ))}
+        </div>
+        <div role="group" aria-label={t.layout} className="inline-flex rounded-md border bg-card p-0.5">
+          {(
+            [
+              ['list', t.table, Rows3],
+              ['grid', t.cards, LayoutGrid],
+            ] as const
+          ).map(([v, label, Icon]) => (
+            <Link
+              key={v}
+              replace
+              scroll={false}
+              href={href(status, v)}
+              aria-label={label}
+              title={label}
+              aria-current={view === v ? 'true' : undefined}
+              className={`rounded p-1.5 ${view === v ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+            >
+              <Icon className="h-4 w-4" aria-hidden="true" />
+            </Link>
+          ))}
+        </div>
       </div>
       {body}
       {canCreate && <CreateProjectDialog open={creating} onOpenChange={setCreating} />}
