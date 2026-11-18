@@ -30,7 +30,7 @@ const labels = [{ id: 1, name: 'Bug', color: 'red' as const }];
 function renderCard(card: Card, lang: 'th' | 'en' = 'en') {
   return render(
     <TrackingProvider lang={lang}>
-      <CardPreview card={card} users={users} labels={labels} />
+      <CardPreview projectId={7} card={card} users={users} labels={labels} members={[]} canEdit={false} />
     </TrackingProvider>,
   );
 }
@@ -54,13 +54,12 @@ describe('CardPreview', () => {
     expect(screen.getByText('เร่งด่วน')).toBeTruthy();
   });
 
-  it('is a link to ?card=id keeping the path, with progress, label and comments', () => {
+  it('is a link to ?card=id keeping the path, with subtask count, label and comments', () => {
     renderCard(base);
     const a = screen.getByRole('link');
     expect(a.getAttribute('href')).toBe('/tracking/7?card=5');
     expect(screen.getByText('Bug')).toBeTruthy();
     expect(screen.getByText('1/4')).toBeTruthy();
-    expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('25');
     expect(screen.getByText('3')).toBeTruthy();
     expect(screen.getByText('Fix login')).toBeTruthy();
   });

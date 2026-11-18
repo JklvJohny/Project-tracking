@@ -38,14 +38,14 @@ const TEXT = {
   },
 };
 
-type ListCardsProps = Pick<ListColumnProps, 'projectId' | 'cards' | 'users' | 'labels' | 'canAddCards'>;
+type ListCardsProps = Pick<ListColumnProps, 'projectId' | 'cards' | 'users' | 'labels' | 'members' | 'canAddCards'>;
 
 /**
  * The rows live in their own memoised component: ListColumn re-renders on every pointer move of a drag (its
  * sortable hooks subscribe to dnd-kit's context), and without this boundary each of those renders rebuilt every
  * row of the list.
  */
-const ListCards = memo(function ListCards({ projectId, cards, users, labels, canAddCards }: ListCardsProps) {
+const ListCards = memo(function ListCards({ projectId, cards, users, labels, members, canAddCards }: ListCardsProps) {
   const t = useT(TEXT);
   const archiveCard = useArchiveCard(projectId);
   return (
@@ -54,7 +54,15 @@ const ListCards = memo(function ListCards({ projectId, cards, users, labels, can
           {cards.length === 0 && <li className="px-3 py-6 text-center text-xs text-muted-foreground">{t.empty}</li>}
           {cards.map((c) => (
             <SortableCard key={c.id} card={c}>
-              <CardPreview card={c} users={users} labels={labels} actionSpace={canAddCards} />
+              <CardPreview
+                projectId={projectId}
+                card={c}
+                users={users}
+                labels={labels}
+                members={members}
+                canEdit={canAddCards}
+                actionSpace={canAddCards}
+              />
               {canAddCards && (
                 <Button
                   variant="ghost"
@@ -93,6 +101,7 @@ type ListColumnProps = {
   cards: CardSummary[];
   users: S['User'][];
   labels: S['BoardLabel'][];
+  members: S['BoardMember'][];
   canManage: boolean;
   canAddCards: boolean;
 };
@@ -103,6 +112,7 @@ export const ListColumn = memo(function ListColumn({
   cards,
   users,
   labels,
+  members,
   canManage,
   canAddCards,
 }: ListColumnProps) {
@@ -190,7 +200,14 @@ export const ListColumn = memo(function ListColumn({
           isOver && canDragCards ? 'bg-primary/5 outline-2 -outline-offset-2 outline-primary/60 outline-dashed' : ''
         }`}
       >
-        <ListCards projectId={projectId} cards={cards} users={users} labels={labels} canAddCards={canAddCards} />
+        <ListCards
+          projectId={projectId}
+          cards={cards}
+          users={users}
+          labels={labels}
+          members={members}
+          canAddCards={canAddCards}
+        />
       </ol>
       {canAddCards && <AddCard projectId={projectId} listId={list.id} listName={list.name} />}
       {!canAddCards && <div className="h-2" />}

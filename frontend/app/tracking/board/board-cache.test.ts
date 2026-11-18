@@ -148,3 +148,20 @@ describe('bumpCommentCount', () => {
     expect(bumpCommentCount(b, 9, 1)).toBe(b);
   });
 });
+
+describe('setPreviewItemDone', () => {
+  const card = {
+    id: 5, listId: 1, title: 't', priority: 'low', startDate: null, dueDate: null, position: 'a', completedAt: null,
+    updatedAt: 'x', labelIds: [], assigneeIds: [], checklistTotal: 4, checklistDone: 1, commentCount: 0,
+    checklistPreview: [{ id: 1, text: 'a', isDone: true }, { id: 2, text: 'b', isDone: false }],
+  } as const;
+  const b = { cards: [card] } as unknown as import('./board-cache').BoardData;
+  it('flips the item and the done count, and is a no-op when unchanged', async () => {
+    const { setPreviewItemDone } = await import('./board-cache');
+    const on = setPreviewItemDone(b, 5, 2, true).cards[0];
+    expect(on.checklistDone).toBe(2);
+    expect(on.checklistPreview[1].isDone).toBe(true);
+    expect(setPreviewItemDone(b, 5, 1, true)).toEqual(b);
+    expect(setPreviewItemDone(b, 5, 1, false).cards[0].checklistDone).toBe(0);
+  });
+});

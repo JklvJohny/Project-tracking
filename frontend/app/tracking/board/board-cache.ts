@@ -115,6 +115,22 @@ export function detailToSummary(d: S['CardDetail'], prev?: CardSummary): CardSum
   };
 }
 
+/** Flips one checklist item on a board card (preview list and done count). Items past the first 3 are not in the summary. */
+export function setPreviewItemDone(b: BoardData, cardId: number, itemId: number, isDone: boolean): BoardData {
+  return {
+    ...b,
+    cards: b.cards.map((c) => {
+      const item = c.id === cardId ? c.checklistPreview.find((i) => i.id === itemId) : undefined;
+      if (!item || item.isDone === isDone) return c;
+      return {
+        ...c,
+        checklistDone: Math.max(0, c.checklistDone + (isDone ? 1 : -1)),
+        checklistPreview: c.checklistPreview.map((i) => (i.id === itemId ? { ...i, isDone } : i)),
+      };
+    }),
+  };
+}
+
 /** Mirrors a comment add (+1) or delete (-1) onto the board card's badge. */
 export function bumpCommentCount(b: BoardData, cardId: number, delta: number): BoardData {
   return b.cards.some((c) => c.id === cardId)

@@ -1,9 +1,12 @@
 'use client';
 import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { api } from '../shared/api/client';
 import { qk } from '../shared/api/queries';
 import type { components } from '../shared/api/schema';
-import { bumpCommentCount, detailToSummary, upsertCard, type BoardData } from '../board/board-cache';
+import { errorMessage } from '../shared/errors';
+import { useLang } from '../shared/i18n';
+import { bumpCommentCount, detailToSummary, setPreviewItemDone, upsertCard, type BoardData } from '../board/board-cache';
 
 type S = components['schemas'];
 type Detail = S['CardDetail'];
@@ -199,6 +202,35 @@ export function useDeleteComment(projectId: number, cardId: number) {
     onSuccess: (_r, id) => {
       qc.setQueryData<Comment[]>(qk.comments(cardId), (list) => list?.filter((x) => x.id !== id));
       bumpBoard(qc, projectId, cardId, -1);
+    },
+  });
+}
+
+/**
+ * Ticks a checklist item straight from a board card. Optimistic on the board summary and on the card detail when it is
+ * cached; a failure restores both snapshots. No success toast (inline edit).
+ */
+export function useToggleChecklistItem(projectId: number) {
+  const qc = useQueryClient();
+  const { lang } = useLang();
+  return useMutation({
+    mutationFn: ({ itemId, isDone }: { cardId: number; itemId: number; isDone: boolean }) =>
+      api<Item>(`/checklist/${itemId}`, { method: 'PATCH', json: { isDone } satisfies S['ItemPatch'] }),
+    onMutate: async ({ cardId, itemId, isDone }) => {
+      await qc.cancelQueries({ queryKey: qk.board(projectId) });
+      const prev = { card: qc.getQueryData<Detail>(qk.card(cardId)), board: qc.getQueryData<BoardData>(qk.board(projectId)) };
+      qc.setQueryData<BoardData>(qk.board(projectId), (b) => (b ? setPreviewItemDone(b, cardId, itemId, isDone) : b));
+      if (prev.card)
+        qc.setQueryData<Detail>(qk.card(cardId), {
+          ...prev.card,
+          checklist: prev.card.checklist.map((i) => (i.id === itemId ? { ...i, isDone } : i)),
+        });
+      return prev;
+    },
+    onError: (e, { cardId }, prev) => {
+      if (prev?.card) qc.setQueryData(qk.card(cardId), prev.card);
+      if (prev?.board) qc.setQueryData(qk.board(projectId), prev.board);
+      toast.error(errorMessage(e, lang));
     },
   });
 }

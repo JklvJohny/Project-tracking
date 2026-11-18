@@ -18,6 +18,7 @@ const TEXT = {
     restore: 'กู้คืน',
     restoreItem: (n: string) => `กู้คืน ${n}`,
     none: 'ไม่มีรายการที่เก็บถาวร',
+    count: (n: number) => `${n} รายการที่เก็บถาวร`,
     retry: 'ลองอีกครั้ง',
   },
   en: {
@@ -29,6 +30,7 @@ const TEXT = {
     restore: 'Restore',
     restoreItem: (n: string) => `Restore ${n}`,
     none: 'Nothing archived',
+    count: (n: number) => `${n} archived`,
     retry: 'Retry',
   },
 };
@@ -38,17 +40,24 @@ export function ArchivedSheet({ projectId, canRestoreLists }: { projectId: numbe
   const t = useT(TEXT);
   const { lang } = useLang();
   const [open, setOpen] = useState(false);
-  const archived = useArchived(projectId, open);
+  // Fetched eagerly: the header button shows the count. The sheet shares the same cache entry.
+  const archived = useArchived(projectId, true);
   const restoreList = useRestoreList(projectId);
   const restoreCard = useRestoreCard(projectId);
   const lists = archived.data?.lists ?? [];
   const cards = archived.data?.cards ?? [];
+  const count = lists.length + cards.length;
 
   return (
     <>
       <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
         <Archive aria-hidden />
         {t.open}
+        {archived.data && (
+          <span className="rounded-full bg-muted px-1.5 text-xs tabular-nums" aria-label={t.count(count)}>
+            {count}
+          </span>
+        )}
       </Button>
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent className="w-[min(26rem,100vw)] sm:max-w-md">

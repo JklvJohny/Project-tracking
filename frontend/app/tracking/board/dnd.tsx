@@ -298,7 +298,15 @@ export function BoardDnd({
         <DragOverlay dropAnimation={reduced ? null : undefined}>
           {activeCard && (
             <div style={{ width: active?.width }} className="rounded-lg bg-card shadow-lg ring-2 ring-primary/60">
-              <CardPreview card={activeCard} users={data.users} labels={data.labels} />
+              <CardPreview
+                projectId={data.project.id}
+                card={activeCard}
+                users={data.users}
+                labels={data.labels}
+                members={data.members}
+                // Same layout as the row it was lifted from (the "+" controls take height).
+                canEdit={canDragCards}
+              />
             </div>
           )}
           {activeList && (

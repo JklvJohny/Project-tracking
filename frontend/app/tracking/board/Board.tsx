@@ -79,6 +79,7 @@ export function Board({ projectId }: { projectId: number }) {
               cards={cardsOf(l.id)}
               users={data.users}
               labels={data.labels}
+              members={data.members}
               canManage={canManage}
               canAddCards={canAddCards}
             />
