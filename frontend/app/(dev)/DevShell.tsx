@@ -64,7 +64,7 @@ const TEXT = {
 
 type NavItem = { key: 'dashboard' | 'projects' | 'import' | 'reports' | 'settings'; icon: LucideIcon; href?: string };
 const TRACKING_NAV: NavItem[] = [
-  { key: 'dashboard', icon: BarChart3 },
+  { key: 'dashboard', icon: BarChart3, href: routes.dashboard },
   { key: 'projects', icon: FolderOpen, href: routes.projects },
   { key: 'import', icon: Upload },
   { key: 'reports', icon: FileText, href: routes.reports },
@@ -133,6 +133,7 @@ function Chrome({ children }: { children: ReactNode }) {
 
   const path = usePathname() ?? '';
   const onReports = path === routes.reports || path.startsWith(`${routes.reports}/`);
+  const onDashboard = path === routes.dashboard || path.startsWith(`${routes.dashboard}/`);
   const me = DEV_USERS.find((u) => String(u.id) === userId) ?? DEV_USERS[1];
   const dark = resolvedTheme === 'dark';
 
@@ -146,7 +147,8 @@ function Chrome({ children }: { children: ReactNode }) {
           {key !== 'settings' && <span className="ml-auto rounded-full bg-muted px-1.5 py-0.5 text-[10px]">{t.soon}</span>}
         </span>
       );
-    const current = key === 'reports' ? onReports : path.startsWith(routes.projects) && !onReports;
+    const current =
+      key === 'reports' ? onReports : key === 'dashboard' ? onDashboard : path.startsWith(routes.projects) && !onReports && !onDashboard;
     return (
       <Link
         key={key}
@@ -168,7 +170,10 @@ function Chrome({ children }: { children: ReactNode }) {
           <span aria-hidden="true" className="h-6 w-6 rounded-md bg-primary" />
           {t.app}
         </span>
-        {/* The sidebar is hidden on phones, so its two live links move into the header there. */}
+        {/* The sidebar is hidden on phones, so its live links move into the header there. */}
+        <Link href={routes.dashboard} className="rounded px-2 py-1 font-medium hover:bg-accent sm:hidden">
+          {t.dashboard}
+        </Link>
         <Link href={routes.projects} className="rounded px-2 py-1 font-medium hover:bg-accent sm:hidden">
           {t.projects}
         </Link>

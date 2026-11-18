@@ -176,15 +176,16 @@ Page URLs are defined once in `app/tracking/shared/routes.ts`:
 const BASE = '/tracking';
 export const routes = {
   projects: BASE,                                       // projects list
+  dashboard: `${BASE}/dashboard`,                       // Dashboard page (?project=<id> scopes it to one project)
   reports: `${BASE}/reports`,                           // Reports page (?project=<id> opens a folder)
   board: (projectId) => `${BASE}/${projectId}`,         // board
   card: (projectId, cardId) => `${BASE}/${projectId}?card=${cardId}`, // board with the card panel open
 };
 ```
 
-Add two sidebar items: `href: routes.projects` (label "Projects" / "โปรเจกต์") and `href: routes.reports` (label
-"Reports" / "รายงาน"). The tracking pages have no tab bar of their own; the host sidebar is the only way between
-them. Mark Projects as current for `/tracking` and `/tracking/<projectId>`, and Reports for `/tracking/reports`. The board and card links inside
+Add three sidebar items: `href: routes.dashboard` (label "Dashboard" / "แดชบอร์ด"), `href: routes.projects` (label
+"Projects" / "โปรเจกต์") and `href: routes.reports` (label "Reports" / "รายงาน"). The tracking pages have no tab bar of their own; the host sidebar is the only way between
+them. Mark Dashboard as current for `/tracking/dashboard`, Projects for `/tracking` and `/tracking/<projectId>`, and Reports for `/tracking/reports`. The board and card links inside
 the tracking pages are built from the same file, so changing `BASE` there moves the whole feature to another mount
 point (and the route folder `app/tracking/` must move with it). Navigation inside tracking uses `<Link>`, never
 `router.push`.
