@@ -22,6 +22,7 @@ type Repos struct {
 	Users     UserRepo
 	Activity  ActivityRepo
 	Documents DocumentRepo
+	Dashboard DashboardRepo
 }
 
 type CommentRepo interface {
@@ -423,4 +424,21 @@ type IDPos struct {
 	ID       int64
 	Position string
 	Archived bool
+}
+
+type DashboardRepo interface {
+	// Rows returns every active card of the listed projects: not archived, in a
+	// list that is not archived, in a project that is not archived. Rows are
+	// ordered by project id, then card id; AssigneeIDs ascending, never nil.
+	// SQL: one query, no N+1 for any len(projectIDs):
+	// SELECT c.id, p.id, p.name, l.name, c.title, c.priority, c.start_date,
+	// c.due_date, c.completed_at,
+	// COALESCE(array_agg(a.user_id ORDER BY a.user_id) FILTER (WHERE a.user_id IS NOT NULL), '{}')
+	// FROM cards c JOIN lists l ON l.id = c.list_id AND l.archived_at IS NULL
+	// JOIN boards b ON b.id = l.board_id
+	// JOIN projects p ON p.id = b.project_id AND p.archived_at IS NULL
+	// LEFT JOIN card_assignees a ON a.card_id = c.id
+	// WHERE p.id = ANY($1) AND c.archived_at IS NULL
+	// GROUP BY c.id, p.id, l.id ORDER BY p.id, c.id (idx_cards_list).
+	Rows(ctx context.Context, projectIDs []int64) ([]DashboardRow, error)
 }

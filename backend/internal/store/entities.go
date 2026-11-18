@@ -193,3 +193,18 @@ type BoardSnapshot struct {
 	Members []Member
 	Users   []CachedUser
 }
+
+// DashboardRow is one active card with the project and list it sits in, as the
+// dashboard reads it. AssigneeIDs is never nil.
+type DashboardRow struct {
+	CardID      int64
+	ProjectID   int64
+	ProjectName string
+	ListName    string
+	Title       string
+	Priority    int16
+	StartDate   *Date
+	DueDate     *Date
+	CompletedAt *time.Time
+	AssigneeIDs []int64
+}

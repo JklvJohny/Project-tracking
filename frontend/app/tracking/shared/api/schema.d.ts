@@ -653,6 +653,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Open-work overview across the projects the caller can see (an admin sees all non-archived projects). Counts only active cards in active lists of non-archived projects. `projectId` narrows it to one project; a project the caller cannot see, or an archived one, is 404. Today is the Asia/Bangkok date. */
+        get: operations["getDashboard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -977,6 +994,65 @@ export interface components {
             text?: string;
             isDone?: boolean;
         };
+        /** @description Status rules match the Timeline. done is completedAt set; overdue is not done and dueDate before today; in progress is not done, not overdue and startDate on or before today; otherwise not started. Open means not done. */
+        Dashboard: {
+            /**
+             * Format: date
+             * @description Today in Asia/Bangkok.
+             */
+            asOf: string;
+            totals: {
+                total: number;
+                done: number;
+                open: number;
+                inProgress: number;
+                notStarted: number;
+                overdue: number;
+                /** @description Open cards due today through today plus 7 days. */
+                dueSoon: number;
+                /** @description Open cards with no assignee. */
+                unassigned: number;
+            };
+            /** @description Projects that have at least one active card, by name. */
+            byProject: {
+                /** Format: int64 */
+                id: number;
+                name: string;
+                done: number;
+                inProgress: number;
+                notStarted: number;
+                overdue: number;
+                total: number;
+            }[];
+            /** @description Every member of the scoped projects with their open cards, most open first, then by name. Members with no open cards are included. */
+            workload: {
+                user: components["schemas"]["User"];
+                inProgress: number;
+                notStarted: number;
+                overdue: number;
+                open: number;
+            }[];
+            /** @description Open cards per priority; all four are always present, urgent first. */
+            byPriority: {
+                priority: components["schemas"]["Priority"];
+                open: number;
+            }[];
+            /** @description Open cards that are overdue or due within 14 days, soonest first, at most 20. */
+            deadlines: {
+                /** Format: int64 */
+                cardId: number;
+                /** Format: int64 */
+                projectId: number;
+                projectName: string;
+                listName: string;
+                title: string;
+                /** Format: date */
+                dueDate: string;
+                /** @description Days from today to dueDate; negative when overdue. */
+                daysLeft: number;
+                assignees: components["schemas"]["User"][];
+            }[];
+        };
         /** @description A project report. The storage key is never sent. */
         Document: {
             /** Format: int64 */
@@ -1209,6 +1285,19 @@ export interface components {
                     /** @constant */
                     success: true;
                     data: components["schemas"]["Comment"];
+                };
+            };
+        };
+        /** @description The dashboard. */
+        Dashboard: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    /** @constant */
+                    success: true;
+                    data: components["schemas"]["Dashboard"];
                 };
             };
         };
@@ -2305,6 +2394,23 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    getDashboard: {
+        parameters: {
+            query?: {
+                projectId?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Dashboard"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
     };
 }

@@ -91,6 +91,7 @@ func (s *Store) repos(d *data) store.Repos {
 		Users:     &usersRepo{d: d, now: s.now},
 		Activity:  &activityRepo{d: d, now: s.now},
 		Documents: &documentRepo{d: d},
+		Dashboard: &dashboardRepo{d: d},
 	}
 }
 

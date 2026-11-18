@@ -787,3 +787,13 @@ Uploaded files are bytes in a `blob.Store`, never in the database and never in a
 - `Delete(ctx, key)`: a missing key is not an error.
 - The key is server-generated, `<projectID>/<random>.pdf`, and never derived from the client file name. The original name lives only in `documents.filename`. A key that is empty, absolute, or has a `.`, `..` or empty segment is `blob.ErrInvalidKey`.
 - The local implementation writes under `UPLOAD_DIR` (default `./uploads`, git-ignored). A MinIO implementation replaces it later behind the same interface.
+
+### DashboardRepo
+
+Backs the Dashboard page (`internal/dashboard`). Read-only; the service runs it in `View` together with the project scope, `Projects.Summaries` (members) and one `user_cache` read.
+
+**`Rows`**
+
+- Does: Rows returns every active card of the listed projects (card not archived, list not archived, project not archived), one `DashboardRow` per card with project id and name, list name, title, priority, start and due dates, `completed_at` and assignee ids (ascending, never nil). Ordered by project id, then card id. Status classification and all counts are done in Go (`dashboard.Build`), so the SQL carries no status logic.
+- SQL obligation: one query, no N+1 for any number of projects: `SELECT c.id, p.id, p.name, l.name, c.title, c.priority, c.start_date, c.due_date, c.completed_at, COALESCE(array_agg(a.user_id ORDER BY a.user_id) FILTER (WHERE a.user_id IS NOT NULL), '{}') FROM cards c JOIN lists l ON l.id = c.list_id AND l.archived_at IS NULL JOIN boards b ON b.id = l.board_id JOIN projects p ON p.id = b.project_id AND p.archived_at IS NULL LEFT JOIN card_assignees a ON a.card_id = c.id WHERE p.id = ANY($1) AND c.archived_at IS NULL GROUP BY c.id, p.id, l.id ORDER BY p.id, c.id` (`idx_cards_list`).
+- Today: the service computes today as the Asia/Bangkok date from the injected clock (fixed `+07:00` fallback), never in SQL, so memory and PostgreSQL agree.

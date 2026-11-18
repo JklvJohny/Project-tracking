@@ -19,6 +19,7 @@ import (
 	"tracking-service/internal/card"
 	"tracking-service/internal/clock"
 	"tracking-service/internal/config"
+	"tracking-service/internal/dashboard"
 	"tracking-service/internal/document"
 	"tracking-service/internal/events"
 	"tracking-service/internal/httpx"
@@ -63,6 +64,7 @@ func run() error {
 		return err
 	}
 	docs := document.New(st, blobs, userProvider, clock.UTC)
+	dash := dashboard.New(st, clock.UTC)
 	if cfg.Env == "local" {
 		if err := seedReports(docs); err != nil {
 			return err
@@ -79,6 +81,7 @@ func run() error {
 				board.Mount(r, boards)
 				card.Mount(r, cards)
 				document.Mount(r, docs)
+				dashboard.Mount(r, dash)
 			})
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
