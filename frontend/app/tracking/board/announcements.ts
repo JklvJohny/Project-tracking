@@ -9,11 +9,11 @@ const TEXT = {
   th: {
     card: 'การ์ด',
     list: 'ลิสต์',
-    start: (what: string) => `หยิบ${what}แล้ว ใช้ปุ่มลูกศรเพื่อย้าย กด Space เพื่อวาง กด Esc เพื่อยกเลิก`,
-    over: (what: string, over: string) => `${what}อยู่เหนือ ${over}`,
-    end: (what: string, over: string) => `วาง${what}ที่ ${over} แล้ว`,
-    endFree: (what: string) => `วาง${what}แล้ว`,
-    cancel: (what: string) => `ยกเลิกการย้าย${what}`,
+    start: (what: string) => `หยิบ${what} แล้ว ใช้ปุ่มลูกศรเพื่อย้าย กด Space เพื่อวาง กด Esc เพื่อยกเลิก`,
+    over: (what: string, over: string) => `${what} อยู่เหนือ ${over}`,
+    end: (what: string, over: string) => `วาง${what} ที่ ${over} แล้ว`,
+    endFree: (what: string) => `วาง${what} แล้ว`,
+    cancel: (what: string) => `ยกเลิกการย้าย ${what}`,
     movedCard: (title: string, list: string, pos: number, n: number) =>
       `ย้ายการ์ด ${title} ไปที่ ${list} ตำแหน่ง ${pos} จาก ${n}`,
     movedList: (name: string, pos: number, n: number) => `ย้ายลิสต์ ${name} ไปตำแหน่ง ${pos} จาก ${n}`,

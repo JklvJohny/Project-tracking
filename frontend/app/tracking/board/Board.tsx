@@ -21,7 +21,7 @@ export function BoardSkeleton() {
   const t = useT(TEXT);
   return (
     <div
-      className="flex min-h-[28rem] items-start gap-3 overflow-x-auto px-4 pb-4"
+      className="relative flex min-h-[28rem] items-start gap-3 overflow-x-auto px-4 pb-4"
       role="status"
       aria-label={t.loading}
     >
@@ -48,7 +48,8 @@ export function Board({ projectId }: { projectId: number }) {
   const byList = useMemo(() => (data ? cardsByList(data) : null), [data]);
 
   if (board.isPending) return <BoardSkeleton />;
-  if (board.isError || !data || !byList)
+  // A failed background refetch (for example right after a failed move) must not hide a board we already have.
+  if (!data || !byList)
     return (
       <div role="alert" className="mx-4 flex flex-col items-start gap-3 rounded-lg border p-6">
         <p className="text-sm">{errorMessage(board.error, lang)}</p>
@@ -68,7 +69,7 @@ export function Board({ projectId }: { projectId: number }) {
         <div
           role="group"
           aria-label={t.lists}
-          className="flex min-h-[28rem] items-start gap-3 overflow-x-auto px-4 pb-4"
+          className="relative flex min-h-[28rem] items-start gap-3 overflow-x-auto px-4 pb-4"
         >
           {data.lists.map((l) => (
             <ListColumn

@@ -160,7 +160,7 @@ function bumpBoard(qc: QueryClient, projectId: number, cardId: number, delta: nu
 export function useAddComment(projectId: number, cardId: number) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (bodyMd: string) => api<Comment>(`/cards/${cardId}/comments`, { method: 'POST', json: { bodyMd } }),
+    mutationFn: (bodyMd: string) => api<Comment>(`/cards/${cardId}/comments`, { method: 'POST', json: { body: bodyMd } }),
     onSuccess: (c) => {
       qc.setQueryData<Comment[]>(qk.comments(cardId), (list) =>
         list && !list.some((x) => x.id === c.id) ? [...list, c] : list,
@@ -174,7 +174,7 @@ export function useEditComment(cardId: number) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, bodyMd }: { id: number; bodyMd: string }) =>
-      api<Comment>(`/comments/${id}`, { method: 'PATCH', json: { bodyMd } }),
+      api<Comment>(`/comments/${id}`, { method: 'PATCH', json: { body: bodyMd } }),
     onSuccess: (c) => qc.setQueryData<Comment[]>(qk.comments(cardId), (list) => list?.map((x) => (x.id === c.id ? c : x))),
   });
 }

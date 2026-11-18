@@ -4,6 +4,7 @@ import { api } from '../shared/api/client';
 import type { components } from '../shared/api/schema';
 import { TrackingProvider } from '../shared/provider';
 import { Board } from './Board';
+import { isShifted } from './dnd';
 
 vi.mock('../shared/api/client', async (orig) => ({ ...(await orig<object>()), api: vi.fn() }));
 vi.mock('next/navigation', () => ({ usePathname: () => '/tracking/1' }));
@@ -110,5 +111,14 @@ describe('keyboard moves', () => {
     fireEvent.keyDown(screen.getByRole('button', { name: /Move list L1/ }), { key: 'ArrowRight', altKey: true });
     await waitFor(() => expect(writes()).toHaveLength(1));
     expect(writes()[0]).toEqual(['/lists/1/move', { method: 'POST', json: { beforeId: 2, afterId: null } }]);
+  });
+});
+
+describe('isShifted', () => {
+  it('treats dnd-kit identity transforms as not shifted, so rows do not each get a compositor layer', () => {
+    expect(isShifted(null)).toBe(false);
+    expect(isShifted({ x: 0, y: 0, scaleX: 1, scaleY: 1 })).toBe(false);
+    expect(isShifted({ x: 0, y: 40, scaleX: 1, scaleY: 1 })).toBe(true);
+    expect(isShifted({ x: 0, y: 0, scaleX: 1, scaleY: 0.9 })).toBe(true);
   });
 });

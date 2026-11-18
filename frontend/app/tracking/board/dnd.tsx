@@ -312,6 +312,14 @@ export function BoardDnd({
   );
 }
 
+/**
+ * dnd-kit hands every row an identity transform while a drag runs. A `translate3d(0,0,0)` on 2,000 rows promotes
+ * each to its own compositor layer (about 2.4 s of layerize work over one drag), so only rows that move get one.
+ */
+export function isShifted(t: { x: number; y: number; scaleX: number; scaleY: number } | null) {
+  return !!t && (t.x !== 0 || t.y !== 0 || t.scaleX !== 1 || t.scaleY !== 1);
+}
+
 /** Thin sortable shell for one card row; the heavy content is the memoised CardPreview passed as children. */
 export function SortableCard({ card, children }: { card: CardSummary; children: ReactNode }) {
   const { canDragCards, moveCard } = useDndCtx();
@@ -341,8 +349,8 @@ export function SortableCard({ card, children }: { card: CardSummary; children: 
   return (
     <li
       ref={ref}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={`group relative ${isDragging ? 'opacity-40 ring-2 ring-primary/50 ring-inset' : ''}`}
+      style={{ transform: isShifted(transform) ? CSS.Transform.toString(transform) : undefined, transition }}
+      className={`card-row group relative ${isDragging ? 'opacity-40 ring-2 ring-primary/50 ring-inset' : ''}`}
       {...drag}
     >
       {children}

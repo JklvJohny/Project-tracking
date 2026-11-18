@@ -35,7 +35,9 @@ function setup(role: B['myRole'], me = 2) {
     if (path === '/me') return { user: { id: me, name: 'x', avatarUrl: '' }, isAdmin: false, canCreateProject: false };
     if (path === '/projects/1/board') return board(role);
     if (path === '/cards/5/comments' && init?.method === 'POST')
-      return { id: 9, cardId: 5, authorId: me, bodyMd: (init.json as { bodyMd: string }).bodyMd, createdAt: '2026-11-04T00:00:00Z', editedAt: null, mentionIds: [] };
+      return { id: 9, cardId: 5, authorId: me, bodyMd: (init.json as { body: string }).body, createdAt: '2026-11-04T00:00:00Z', editedAt: null, mentionIds: [] };
+    if (path === '/comments/1' && init?.method === 'PATCH')
+      return { ...comments[0], bodyMd: (init.json as { body: string }).body, editedAt: '2026-11-05T00:00:00Z' };
     if (path === '/cards/5/comments') return comments;
     return {};
   });
@@ -85,7 +87,7 @@ describe('Comments', () => {
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'new one' } });
     fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter', ctrlKey: true });
     expect(await screen.findByText('new one')).toBeTruthy();
-    await waitFor(() => expect(apiMock).toHaveBeenCalledWith('/cards/5/comments', { method: 'POST', json: { bodyMd: 'new one' } }));
+    await waitFor(() => expect(apiMock).toHaveBeenCalledWith('/cards/5/comments', { method: 'POST', json: { body: 'new one' } }));
   });
 
   it('delete asks for confirmation, then removes the comment', async () => {
@@ -96,6 +98,16 @@ describe('Comments', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
     await waitFor(() => expect(apiMock).toHaveBeenCalledWith('/comments/1', { method: 'DELETE' }));
     await waitFor(() => expect(screen.queryByText('bold')).toBeNull());
+  });
+
+  it('editing sends the body as `body`, the field the API expects', async () => {
+    setup('member');
+    await screen.findByText('mine', { exact: false });
+    fireEvent.click(screen.getByRole('button', { name: /^Edit comment/ }));
+    const box = screen.getAllByRole('textbox')[0];
+    fireEvent.change(box, { target: { value: 'changed' } });
+    fireEvent.keyDown(box, { key: 'Enter', ctrlKey: true });
+    await waitFor(() => expect(apiMock).toHaveBeenCalledWith('/comments/1', { method: 'PATCH', json: { body: 'changed' } }));
   });
 
   it('Escape in an unsent comment is marked dirty so the panel stays open', async () => {

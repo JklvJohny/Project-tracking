@@ -18,6 +18,10 @@
 /* Compact type scale: tracking pages are dense (body 13px in index.html). */
 .tracking-root { font-size: 13px; }
 
+/* Off-screen card rows skip style, layout and paint: a 2,000-card board otherwise spends its drag frames in
+   the browser's rendering work, not in React. `auto` remembers each row's real height once it has been seen. */
+.tracking-root .card-row { content-visibility: auto; contain-intrinsic-size: auto 6rem; }
+
 /* drag & drop and motion, as in index.html */
 .tracking-root .is-dragging { opacity: .4; transform: rotate(1deg); }
 .tracking-root .drop-ind { height: 4px; flex-shrink: 0; border-radius: 9999px; background: var(--primary); box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 20%, transparent); }

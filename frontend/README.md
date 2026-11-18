@@ -1,36 +1,119 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Project Tracking frontend
 
-## Getting Started
+Next.js 16 (App Router, React 19), Tailwind 4, shadcn/ui. The tracking code lives only in `app/tracking/**`; the rest
+of this project (`app/(dev)`, `app/layout.tsx`, `app/page.tsx`) is a local harness standing in for the host app.
+To move tracking into the host, read [`../docs/host-integration.md`](../docs/host-integration.md).
 
-First, run the development server:
+The Go service it talks to is in `../backend` (API contract: `../backend/api/openapi.yaml`).
 
-```bash
+## Run locally
+
+```sh
+# 1. backend (port 8081). SEED_LARGE=1 adds the "Load Test" project: 8 lists, 2,000 cards.
+cd backend
+ENV=local SEED_LARGE=1 go run -tags local ./cmd/tracking-service
+
+# 2. frontend (port 3000)
+cd frontend
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+`/api/tracking/*` is proxied to `TRACKING_API_URL` (default `http://localhost:8081`) by the rewrite in `next.config.ts`.
+Open `http://localhost:3000/tracking`. The dev shell has a user switcher (dev users 1 to 8, see `../backend/README.md`),
+a language switch (TH/EN) and a theme switch.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+The user switcher renders only when `NEXT_PUBLIC_ENV=local`. `next dev` sets that by default; a production build does
+not, so build with the variable when you need the switcher on `next start`:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```sh
+NEXT_PUBLIC_ENV=local npx next build && npx next start
+```
 
-## Learn More
+## Scripts
 
-To learn more about Next.js, take a look at the following resources:
+| Command | What it does |
+|---|---|
+| `npm run dev` | Dev server. |
+| `npm run build` / `npm start` | Production build and server. |
+| `npm test` | Vitest (jsdom). |
+| `npx tsc --noEmit` | Type check. |
+| `npm run gen:api` | Regenerates `app/tracking/shared/api/schema.d.ts` from `../backend/api/openapi.yaml`. |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+The gate before a commit: `npx vitest run && npx tsc --noEmit && npx next build`, with no warnings in the test output.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Performance results
 
-## Deploy on Vercel
+Measured on 2026-11-18 against the production build (`NEXT_PUBLIC_ENV=local npx next build && npx next start`),
+backend started with `SEED_LARGE=1`, board `http://localhost:3000/tracking/3` (Load Test, 2,000 cards, user 2),
+Windows 11, installed Chrome, headless, no CPU throttling.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+| Metric | Budget | Result |
+|---|---|---|
+| LCP (Lighthouse 13.6, desktop preset, 3 runs) | < 2 s | 0.9 s, 0.8 s, 0.8 s |
+| CLS | < 0.1 | 0 in all 3 runs |
+| Total blocking time (informational) | | 190 to 500 ms (noisy, 2,000 cards hydrate in one go) |
+| Route JS, gzip, whole first load of `/tracking/[projectId]` | < 180 KB | 289 KB, see note |
+| Route JS, gzip, chunks only this route loads | | 49 KB |
+| Drag frames (2,000 cards, one cross-list drag), p50 / p95 | | 7 ms / 14 to 21 ms (2 runs) |
+| Longest tasks during that drag | | one 320 to 520 ms task when the drag starts (dnd-kit measures all 2,000 rows), then 55 to 190 ms tasks |
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Lighthouse command (Chrome path via `CHROME_PATH`):
+
+```sh
+CHROME_PATH="C:/Program Files/Google/Chrome/Application/chrome.exe" \
+  npx lighthouse http://localhost:3000/tracking/3 --only-categories=performance --preset=desktop \
+  --chrome-flags="--headless=new"
+```
+
+Route JS note. `next build` in Next 16 no longer prints per-route sizes, so the figure is the sum of the gzip sizes of
+the script chunks the page's HTML references:
+
+```sh
+for f in $(curl -s localhost:3000/tracking/3 | grep -o '_next/static/chunks/[^"]*\.js' | sort -u); do
+  curl -s localhost:3000/$f | gzip -9 | wc -c
+done   # sum the numbers
+```
+
+That gives 289 KB for the board, 250 KB for the projects list and 240 KB for `/_not-found`. About 240 KB is the shared
+baseline every page of this app pays (React 19, the Next client, and the provider with React Query, toasts, tooltip and
+dialogs); the board adds 49 KB on top. The 180 KB budget is therefore not met as a whole-page number. The host app
+already ships React and Next, so the cost tracking adds there is nearer the 49 KB plus the provider. Already done to
+keep it down: the card panel, members dialog and settings dialog are loaded on demand with `next/dynamic`, which
+moved the markdown renderer and the pickers out of the first load (350 KB before, 289 KB now).
+
+### What the drag profile found, and the fixes
+
+Method. `React.Profiler` is not available in a production build, so the commits were counted through the React
+DevTools global hook (`__REACT_DEVTOOLS_GLOBAL_HOOK__.onCommitFiberRoot`), counting function-component fibers that did
+render work, with unchanged subtrees pruned as DevTools does. Frame times come from a `requestAnimationFrame` loop and
+a `longtask` observer, both injected with Playwright into the installed Chrome (`playwright-core`, no browser download),
+plus a CDP CPU profile and trace. One drag: pick up the first card of list 1, move it into list 2 and drop (46 commits).
+
+| | Before | After |
+|---|---|---|
+| Frame time p95 during the drag | 132 ms | 14 to 21 ms |
+| Compositor "Layerize" work in the trace | 2,391 ms | about 360 ms |
+| Card rows re-rendered (`CardPreview`) | every card on every commit | 2 to 10 in the whole drag |
+| List row groups re-rendered | all 8 lists on every commit | 8 to 20 in the whole drag (the two affected lists, when the preview changes) |
+
+Causes and fixes:
+
+1. dnd-kit gives every sortable row an identity `translate3d(0,0,0)` while dragging, which made 2,000 compositor
+   layers. Rows now get a `transform` only when they are really shifted (`isShifted` in `board/dnd.tsx`).
+2. `ListColumn` re-renders on each pointer move because its sortable hooks subscribe to dnd-kit's context. Its rows
+   moved into a memoised `ListCards` with an element-wise `cards` comparison, so the cards of lists the drag does not
+   touch are not rebuilt.
+3. `content-visibility: auto` on card rows (`.card-row` in `tracking.css`) skips layout and paint for off-screen rows.
+4. List virtualisation was not needed.
+
+What is left: every row shell (`SortableCard`, about 700 of them per commit, 32,000 over the drag) still re-renders,
+because `useSortable` subscribes each row to dnd-kit's context and that context changes on every pointer move. Their
+children are memoised so this is cheap, but it is what bounds the drag-start spike. Going further would mean
+virtualising the lists or replacing `useSortable` for the cards.
+
+## Manual verification
+
+The pass in the task 18 report was done with scripted Chrome (Playwright, `playwright-core` with
+`executablePath` set to the installed Chrome): TH/EN x light/dark x 1440 px/400 px as users 1 (admin), 2 (manager),
+3 (member) and 6 (viewer). The scripts are not kept in the repo.

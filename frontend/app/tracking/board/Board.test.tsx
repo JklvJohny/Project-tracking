@@ -54,4 +54,13 @@ describe('Board permissions', () => {
     expect(screen.getByRole('button', { name: 'Add list' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Actions for list To do' })).toBeTruthy();
   });
+
+  // Absolute children (sr-only counters) escape an overflow scroller unless it is a containing block:
+  // without `relative` the whole page gained a horizontal scrollbar on narrow screens.
+  it('the lists scroller is positioned so it clips its absolute children', async () => {
+    await renderAs('pm');
+    const scroller = screen.getByRole('group', { name: 'Lists' });
+    expect(scroller.className).toContain('relative');
+    expect(scroller.className).toContain('overflow-x-auto');
+  });
 });

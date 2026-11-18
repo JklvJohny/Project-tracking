@@ -1,7 +1,7 @@
 'use client';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CheckCircle2, Archive, GripVertical } from 'lucide-react';
-import { useRef, useState, type KeyboardEvent } from 'react';
+import { memo, useRef, useState, type KeyboardEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { components } from '../shared/api/schema';
@@ -38,15 +38,56 @@ const TEXT = {
   },
 };
 
-export function ListColumn({
-  projectId,
-  list,
-  cards,
-  users,
-  labels,
-  canManage,
-  canAddCards,
-}: {
+type ListCardsProps = Pick<ListColumnProps, 'projectId' | 'cards' | 'users' | 'labels' | 'canAddCards'>;
+
+/**
+ * The rows live in their own memoised component: ListColumn re-renders on every pointer move of a drag (its
+ * sortable hooks subscribe to dnd-kit's context), and without this boundary each of those renders rebuilt every
+ * row of the list.
+ */
+const ListCards = memo(function ListCards({ projectId, cards, users, labels, canAddCards }: ListCardsProps) {
+  const t = useT(TEXT);
+  const archiveCard = useArchiveCard(projectId);
+  return (
+    <>
+        <SortableContext items={cards.map((c) => cardDndId(c.id))} strategy={verticalListSortingStrategy}>
+          {cards.length === 0 && <li className="px-3 py-6 text-center text-xs text-muted-foreground">{t.empty}</li>}
+          {cards.map((c) => (
+            <SortableCard key={c.id} card={c}>
+              <CardPreview card={c} users={users} labels={labels} actionSpace={canAddCards} />
+              {canAddCards && (
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  className="absolute top-2 right-2 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
+                  aria-label={t.archiveCard(c.title)}
+                  title={t.archiveCard(c.title)}
+                  onClick={() => archiveCard.mutate(c)}
+                  // Pressing the button must never start a drag from the row around it.
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onTouchStart={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
+                >
+                  <Archive aria-hidden />
+                </Button>
+              )}
+            </SortableCard>
+          ))}
+        </SortableContext>
+    </>
+  );
+}, sameProps);
+
+/**
+ * A drag preview hands every list a fresh `cards` array, equal or not. Comparing the cards element-wise keeps
+ * the lists the drag does not touch from re-rendering all of their rows on each pointer move.
+ */
+function sameProps<P extends { cards: CardSummary[] }>(a: P, b: P) {
+  if (a.cards !== b.cards && (a.cards.length !== b.cards.length || a.cards.some((c, i) => c !== b.cards[i]))) return false;
+  return (Object.keys(a) as (keyof P)[]).every((k) => k === 'cards' || a[k] === b[k]);
+}
+
+type ListColumnProps = {
   projectId: number;
   list: ListData;
   cards: CardSummary[];
@@ -54,10 +95,19 @@ export function ListColumn({
   labels: S['BoardLabel'][];
   canManage: boolean;
   canAddCards: boolean;
-}) {
+};
+
+export const ListColumn = memo(function ListColumn({
+  projectId,
+  list,
+  cards,
+  users,
+  labels,
+  canManage,
+  canAddCards,
+}: ListColumnProps) {
   const t = useT(TEXT);
   const update = useUpdateList(projectId);
-  const archiveCard = useArchiveCard(projectId);
   const { canDragCards, canDragLists } = useDndCtx();
   const { setColumn, columnStyle, setHandle, handleProps, setDrop, isDragging, isOver } = useSortableList(list.id);
   const [renaming, setRenaming] = useState(false);
@@ -140,33 +190,10 @@ export function ListColumn({
           isOver && canDragCards ? 'bg-primary/5 outline-2 -outline-offset-2 outline-primary/60 outline-dashed' : ''
         }`}
       >
-        <SortableContext items={cards.map((c) => cardDndId(c.id))} strategy={verticalListSortingStrategy}>
-          {cards.length === 0 && <li className="px-3 py-6 text-center text-xs text-muted-foreground">{t.empty}</li>}
-          {cards.map((c) => (
-            <SortableCard key={c.id} card={c}>
-              <CardPreview card={c} users={users} labels={labels} actionSpace={canAddCards} />
-              {canAddCards && (
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  className="absolute top-2 right-2 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
-                  aria-label={t.archiveCard(c.title)}
-                  title={t.archiveCard(c.title)}
-                  onClick={() => archiveCard.mutate(c)}
-                  // Pressing the button must never start a drag from the row around it.
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onTouchStart={(e) => e.stopPropagation()}
-                  onKeyDown={(e) => e.stopPropagation()}
-                >
-                  <Archive aria-hidden />
-                </Button>
-              )}
-            </SortableCard>
-          ))}
-        </SortableContext>
+        <ListCards projectId={projectId} cards={cards} users={users} labels={labels} canAddCards={canAddCards} />
       </ol>
       {canAddCards && <AddCard projectId={projectId} listId={list.id} listName={list.name} />}
       {!canAddCards && <div className="h-2" />}
     </section>
   );
-}
+}, sameProps);

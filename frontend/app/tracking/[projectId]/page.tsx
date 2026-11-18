@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import { usePathname, useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Settings, Users } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import { Suspense, useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -10,9 +11,13 @@ import { useT } from '../shared/i18n';
 import { routes } from '../shared/routes';
 import { ArchivedSheet } from '../board/ArchivedSheet';
 import { Board } from '../board/Board';
-import { CardPanel } from '../card/CardPanel';
-import { MembersDialog } from '../projects/MembersDialog';
-import { ProjectSettingsDialog } from '../projects/ProjectSettingsDialog';
+
+// Loaded on demand: keeps markdown, the pickers and the member forms out of the board's first load.
+const CardPanel = dynamic(() => import('../card/CardPanel').then((m) => m.CardPanel));
+const MembersDialog = dynamic(() => import('../projects/MembersDialog').then((m) => m.MembersDialog));
+const ProjectSettingsDialog = dynamic(() =>
+  import('../projects/ProjectSettingsDialog').then((m) => m.ProjectSettingsDialog),
+);
 
 const TEXT = {
   th: { projects: 'โปรเจกต์', invalid: 'ไม่พบโปรเจกต์', settings: 'ตั้งค่า', members: 'สมาชิก' },
@@ -26,7 +31,7 @@ function Header({ projectId }: { projectId: number }) {
   const canManage = role === 'admin' || role === 'pm';
   const [dialog, setDialog] = useState<'settings' | 'members' | null>(null);
   return (
-    <div className="flex h-14 items-center justify-between gap-3 px-4">
+    <div className="flex min-h-14 flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-2">
       <div className="flex min-w-0 items-center gap-2">
         <Link href={routes.projects} className="text-muted-foreground hover:text-foreground">
           {t.projects}
@@ -40,7 +45,7 @@ function Header({ projectId }: { projectId: number }) {
           <Skeleton className="h-6 w-40" />
         )}
       </div>
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {canManage && (
           <>
             <Button variant="outline" size="sm" onClick={() => setDialog('members')}>
@@ -51,8 +56,8 @@ function Header({ projectId }: { projectId: number }) {
               <Settings aria-hidden />
               {t.settings}
             </Button>
-            <ProjectSettingsDialog projectId={projectId} open={dialog === 'settings'} onOpenChange={(o) => !o && setDialog(null)} />
-            <MembersDialog projectId={projectId} open={dialog === 'members'} onOpenChange={(o) => !o && setDialog(null)} />
+            {dialog === 'settings' && <ProjectSettingsDialog projectId={projectId} open onOpenChange={(o) => !o && setDialog(null)} />}
+            {dialog === 'members' && <MembersDialog projectId={projectId} open onOpenChange={(o) => !o && setDialog(null)} />}
           </>
         )}
         {role && role !== 'viewer' && <ArchivedSheet projectId={projectId} />}

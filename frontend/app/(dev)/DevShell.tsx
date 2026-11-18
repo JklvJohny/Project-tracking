@@ -70,7 +70,7 @@ function Chrome({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-screen">
-      <aside className="w-48 shrink-0 border-r bg-muted/40 p-3 text-sm" aria-label={t.nav}>
+      <aside className="w-48 shrink-0 border-r bg-muted/40 p-3 text-sm max-sm:hidden" aria-label={t.nav}>
         <nav className="flex flex-col gap-1">
           <Link href={routes.projects} className="rounded px-2 py-1.5 font-medium hover:bg-accent">
             {t.projects}
@@ -79,6 +79,9 @@ function Chrome({ children }: { children: ReactNode }) {
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex flex-wrap items-center justify-end gap-3 border-b px-4 py-2 text-xs">
+          <Link href={routes.projects} className="mr-auto rounded px-2 py-1 font-medium hover:bg-accent sm:hidden">
+            {t.projects}
+          </Link>
           {SHOW_USERS && (
             <label className="flex items-center gap-1.5">
               {t.user}
