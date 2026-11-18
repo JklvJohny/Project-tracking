@@ -32,7 +32,7 @@ function usePatchBoard(projectId: number) {
 export function useCreateList(projectId: number) {
   const patch = usePatchBoard(projectId);
   return useMutation({
-    mutationFn: (name: string) => api<S['List']>(`/projects/${projectId}/lists`, { method: 'POST', json: { name } }),
+    mutationFn: (name: string) => api<S['List']>(`/projects/${projectId}/lists`, { method: 'POST', json: { name } satisfies S['CreateListInput'] }),
     onSuccess: (l) => patch((b) => upsertList(b, l)),
   });
 }
@@ -42,7 +42,7 @@ export function useUpdateList(projectId: number) {
   const { lang } = useLang();
   return useMutation({
     mutationFn: ({ listId, ...input }: { listId: number } & S['UpdateListInput']) =>
-      api<S['List']>(`/lists/${listId}`, { method: 'PATCH', json: input }),
+      api<S['List']>(`/lists/${listId}`, { method: 'PATCH', json: input satisfies S['UpdateListInput'] }),
     onSuccess: (l, v) =>
       patch((b) => {
         const next = upsertList(b, l);
@@ -88,7 +88,7 @@ export function useCreateCard(projectId: number) {
   const patch = usePatchBoard(projectId);
   return useMutation({
     mutationFn: ({ listId, title }: { listId: number; title: string }) =>
-      api<S['CardDetail']>(`/lists/${listId}/cards`, { method: 'POST', json: { title } }),
+      api<S['CardDetail']>(`/lists/${listId}/cards`, { method: 'POST', json: { title } satisfies S['CreateCardInput'] }),
     onSuccess: (d) => patch((b) => upsertCard(b, detailToSummary(d))),
   });
 }

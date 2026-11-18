@@ -41,7 +41,8 @@ Versions the harness was built and tested with. Use the same majors in the host.
 | `class-variance-authority` | ^0.7.1 | shadcn variants. |
 | `next-themes` | ^0.4.6 | Imported by `components/ui/sonner.tsx`. |
 | `cn` | ^0.5.2 | `lib/utils.ts`. |
-| `tw-animate-css` | ^1.4.0 | Dialog and sheet animations (Tailwind 4 setup). |
+| `tw-animate-css` | ^1.4.0 | Dialog and sheet animations; imported from the host's global CSS (section 4). |
+| `shadcn` | ^4.23.0 | Its `shadcn/tailwind.css` provides the data-state variants the sheet, dialog and select animations use; imported from the host's global CSS (section 4). |
 | `tailwindcss` | 4.3.3 | The host must be on Tailwind 4: the components use v4 syntax such as `max-sm:hidden` and `text-(--s-done)`. |
 
 Dev only: `openapi-typescript` (`npm run gen:api` regenerates `app/tracking/shared/api/schema.d.ts` from
@@ -69,14 +70,28 @@ The service authenticates with whatever the host sends, see `getAuthHeaders` bel
 
 ## 4. The CSS import
 
-`app/tracking/layout.tsx` already imports `./tracking.css`, so nothing to do when the tracking folder is mounted as
-a route segment. If the host mounts the pages another way, import `app/tracking/tracking.css` once from whatever
-layout wraps them.
+Two parts.
 
-`tracking.css` holds only the series colours (`--s-*`, `--p-*`, `--pb-*`), the 13px type scale of `.tracking-root`,
-and the drag styles. All surface colours (`background`, `border`, `primary`, `muted`...) come from the host's shadcn
-theme, so tracking follows the host's light and dark themes with no extra tokens. The Tailwind 4 `@custom-variant dark`
-must match how the host marks dark mode (`.dark` on `<html>`).
+**Host global CSS.** The host's global stylesheet (the file that has `@import "tailwindcss";`) must also carry:
+
+```css
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+```
+
+Without `tw-animate-css` and `shadcn/tailwind.css` the dialogs, sheets, selects and popovers lose their open and
+close animations and state variants. The `@custom-variant dark` line must match how the host marks dark mode
+(`.dark` on `<html>`). A host created with the shadcn CLI usually has all of this already: check, do not duplicate.
+
+**Tracking's own CSS.** `app/tracking/layout.tsx` imports `./tracking.css`, so nothing more is needed when the
+tracking folder is mounted as a route segment. If the host mounts the pages another way, import
+`app/tracking/tracking.css` once from whatever layout wraps them. It holds only the series colours (`--s-*`,
+`--p-*`, `--pb-*`), the 13px type scale of `.tracking-root`, the drag styles and the `.card-row`
+`content-visibility` rule. All surface colours (`background`, `border`, `primary`, `muted`...) come from the host's
+shadcn theme, so tracking follows the host's light and dark themes.
 
 ## 5. TrackingProvider props
 
@@ -132,7 +147,7 @@ point (and the route folder `app/tracking/` must move with it). Navigation insid
 - The dev user switcher only renders when `NEXT_PUBLIC_ENV=local`; the host never sets that variable, and the
   `X-User-ID` header is not accepted by a production backend build (`-tags local` only).
 - `next.config.ts` of the harness (the host merges only the rewrite from section 3), `vitest.config.mts`,
-  `eslint.config.mjs`, `components.json`, `AGENTS.md`.
+  `eslint.config.mjs`, `components.json`, `AGENTS.md`, `app/globals.css` (merge only the imports from section 4).
 
 ## 8. Checks in the host
 

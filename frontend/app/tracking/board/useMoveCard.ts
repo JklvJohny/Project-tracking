@@ -90,7 +90,7 @@ export function useMoveCard(projectId: number) {
     mutationFn: ({ cardId, toListId, beforeId, afterId }: MoveCardInput) =>
       api<S['CardDetail']>(`/cards/${cardId}/move`, {
         method: 'POST',
-        json: { toListId, beforeId, afterId },
+        json: { toListId, beforeId, afterId } satisfies S['MoveCardInput'],
       }),
     onMutate: async (v) => {
       await qc.cancelQueries({ queryKey: key });

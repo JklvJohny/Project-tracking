@@ -47,7 +47,7 @@ export function useCreateProject() {
   const qc = useQueryClient();
   const router = useRouter();
   return useMutation({
-    mutationFn: (input: S['CreateProjectInput']) => api<S['Project']>('/projects', { method: 'POST', json: input }),
+    mutationFn: (input: S['CreateProjectInput']) => api<S['Project']>('/projects', { method: 'POST', json: input satisfies S['CreateProjectInput'] }),
     onSuccess: (p) => {
       qc.setQueryData<S['Project'][]>(qk.projects, (old) => [...(old ?? []), p]);
       router.replace(routes.board(p.id));

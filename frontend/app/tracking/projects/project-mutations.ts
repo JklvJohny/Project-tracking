@@ -23,7 +23,7 @@ export function useUpdateProject(projectId: number) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: S['UpdateProjectInput']) =>
-      api<S['Project']>(`/projects/${projectId}`, { method: 'PATCH', json: input }),
+      api<S['Project']>(`/projects/${projectId}`, { method: 'PATCH', json: input satisfies S['UpdateProjectInput'] }),
     onSuccess: (p) => patchProjectCaches(qc, p),
   });
 }
@@ -66,7 +66,7 @@ export function useAddMember(projectId: number) {
   const w = useMemberWrites(projectId);
   return useMutation({
     mutationFn: (input: S['AddMemberInput']) =>
-      api<S['Member']>(`/projects/${projectId}/members`, { method: 'POST', json: input }),
+      api<S['Member']>(`/projects/${projectId}/members`, { method: 'POST', json: input satisfies S['AddMemberInput'] }),
     onSuccess: w.put,
   });
 }
@@ -76,7 +76,7 @@ export function useSetRole(projectId: number) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ userId, role }: { userId: number; role: S['ProjectRole'] }) =>
-      api<S['Member']>(`/projects/${projectId}/members/${userId}`, { method: 'PATCH', json: { role } }),
+      api<S['Member']>(`/projects/${projectId}/members/${userId}`, { method: 'PATCH', json: { role } satisfies S['SetRoleInput'] }),
     onSuccess: (m) => {
       w.put(m);
       // Demoting yourself must close the manage controls now, not after a refetch.

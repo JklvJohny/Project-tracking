@@ -82,6 +82,11 @@ already ships React and Next, so the cost tracking adds there is nearer the 49 K
 keep it down: the card panel, members dialog and settings dialog are loaded on demand with `next/dynamic`, which
 moved the markdown renderer and the pickers out of the first load (350 KB before, 289 KB now).
 
+Rulings recorded for P1:
+
+- R12: the 289 KB first-load route JS against the 180 KB budget is accepted. About 240 KB is the shared React/Next/provider baseline the host app already ships; the route-only 49 KB is within budget.
+- R13: about 700 `SortableCard` shell re-renders per drag commit are accepted. Measured p95 frame time is 14 to 21 ms on 2,000 cards, within the INP budget; virtualisation is deferred.
+
 ### What the drag profile found, and the fixes
 
 Method. `React.Profiler` is not available in a production build, so the commits were counted through the React

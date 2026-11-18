@@ -43,7 +43,7 @@ function putChecklist(qc: QueryClient, projectId: number, cardId: number, fn: (i
 export function useUpdateCard(projectId: number, cardId: number) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: S['UpdateCardInput']) => api<Detail>(`/cards/${cardId}`, { method: 'PATCH', json: input }),
+    mutationFn: (input: S['UpdateCardInput']) => api<Detail>(`/cards/${cardId}`, { method: 'PATCH', json: input satisfies S['UpdateCardInput'] }),
     onSuccess: (d) => putDetail(qc, projectId, d),
   });
 }
@@ -73,13 +73,13 @@ function patchLabels(qc: QueryClient, projectId: number, fn: (b: BoardData) => B
 export function useLabelCrud(projectId: number) {
   const qc = useQueryClient();
   const create = useMutation({
-    mutationFn: (input: S['LabelInput']) => api<S['Label']>(`/projects/${projectId}/labels`, { method: 'POST', json: input }),
+    mutationFn: (input: S['LabelInput']) => api<S['Label']>(`/projects/${projectId}/labels`, { method: 'POST', json: input satisfies S['LabelInput'] }),
     onSuccess: (l) =>
       patchLabels(qc, projectId, (b) => ({ ...b, labels: [...b.labels, { id: l.id, name: l.name, color: l.color }] })),
   });
   const update = useMutation({
     mutationFn: ({ id, ...input }: { id: number } & S['LabelPatch']) =>
-      api<S['Label']>(`/labels/${id}`, { method: 'PATCH', json: input }),
+      api<S['Label']>(`/labels/${id}`, { method: 'PATCH', json: input satisfies S['LabelPatch'] }),
     onSuccess: (l) =>
       patchLabels(qc, projectId, (b) => ({
         ...b,
@@ -109,12 +109,12 @@ export type MoveItem = { id: number; beforeId: number | null; afterId: number | 
 export function useChecklist(projectId: number, cardId: number) {
   const qc = useQueryClient();
   const add = useMutation({
-    mutationFn: (text: string) => api<Item>(`/cards/${cardId}/checklist`, { method: 'POST', json: { text } }),
+    mutationFn: (text: string) => api<Item>(`/cards/${cardId}/checklist`, { method: 'POST', json: { text } satisfies S['AddItemInput'] }),
     onSuccess: (item) => putChecklist(qc, projectId, cardId, (items) => [...items, item]),
   });
   const update = useMutation({
     mutationFn: ({ id, ...input }: { id: number } & S['ItemPatch']) =>
-      api<Item>(`/checklist/${id}`, { method: 'PATCH', json: input }),
+      api<Item>(`/checklist/${id}`, { method: 'PATCH', json: input satisfies S['ItemPatch'] }),
     onSuccess: (item) => putChecklist(qc, projectId, cardId, (items) => items.map((i) => (i.id === item.id ? item : i))),
   });
   const remove = useMutation({
@@ -123,7 +123,7 @@ export function useChecklist(projectId: number, cardId: number) {
   });
   const move = useMutation({
     mutationFn: ({ id, beforeId, afterId }: MoveItem) =>
-      api<Item>(`/checklist/${id}/move`, { method: 'POST', json: { beforeId, afterId } }),
+      api<Item>(`/checklist/${id}/move`, { method: 'POST', json: { beforeId, afterId } satisfies S['MoveInput'] }),
     onMutate: async ({ id, beforeId, afterId }) => {
       // A refetch landing mid-move would overwrite the local order with the pre-move one.
       await qc.cancelQueries({ queryKey: qk.card(cardId) });
@@ -160,7 +160,7 @@ function bumpBoard(qc: QueryClient, projectId: number, cardId: number, delta: nu
 export function useAddComment(projectId: number, cardId: number) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (bodyMd: string) => api<Comment>(`/cards/${cardId}/comments`, { method: 'POST', json: { body: bodyMd } }),
+    mutationFn: (bodyMd: string) => api<Comment>(`/cards/${cardId}/comments`, { method: 'POST', json: { body: bodyMd } satisfies S['CommentInput'] }),
     onSuccess: (c) => {
       qc.setQueryData<Comment[]>(qk.comments(cardId), (list) =>
         list && !list.some((x) => x.id === c.id) ? [...list, c] : list,
@@ -174,7 +174,7 @@ export function useEditComment(cardId: number) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, bodyMd }: { id: number; bodyMd: string }) =>
-      api<Comment>(`/comments/${id}`, { method: 'PATCH', json: { body: bodyMd } }),
+      api<Comment>(`/comments/${id}`, { method: 'PATCH', json: { body: bodyMd } satisfies S['CommentInput'] }),
     onSuccess: (c) => qc.setQueryData<Comment[]>(qk.comments(cardId), (list) => list?.map((x) => (x.id === c.id ? c : x))),
   });
 }

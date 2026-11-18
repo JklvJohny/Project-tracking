@@ -23,7 +23,7 @@ export function useMoveList(projectId: number) {
     mutationFn: ({ listId, beforeId, afterId }: MoveListInput) =>
       api<S['List']>(`/lists/${listId}/move`, {
         method: 'POST',
-        json: { beforeId, afterId },
+        json: { beforeId, afterId } satisfies S['MoveInput'],
       }),
     onMutate: async (v) => {
       await qc.cancelQueries({ queryKey: key });
