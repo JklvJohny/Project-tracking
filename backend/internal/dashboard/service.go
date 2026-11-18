@@ -34,9 +34,13 @@ func (s *Service) Get(ctx context.Context, userID int64, projectID *int64) (View
 	today := store.Date(s.now().In(bangkok).Format(time.DateOnly))
 	var out View
 	err := s.st.View(ctx, func(r store.Repos) error {
-		ids, err := scope(ctx, r, userID, projectID)
+		ps, err := scope(ctx, r, userID, projectID)
 		if err != nil {
 			return err
+		}
+		ids := make([]int64, len(ps))
+		for i, p := range ps {
+			ids[i] = p.ID
 		}
 		rows, err := r.Dashboard.Rows(ctx, ids)
 		if err != nil {
@@ -59,14 +63,14 @@ func (s *Service) Get(ctx context.Context, userID int64, projectID *int64) (View
 		for _, u := range cached {
 			users[u.UserID] = u
 		}
-		out = Build(rows, members, users, today)
+		out = Build(rows, ps, members, users, today)
 		return nil
 	})
 	return out, err
 }
 
-// scope resolves the non-archived project ids the caller may view.
-func scope(ctx context.Context, r store.Repos, userID int64, projectID *int64) ([]int64, error) {
+// scope resolves the non-archived projects the caller may view.
+func scope(ctx context.Context, r store.Repos, userID int64, projectID *int64) ([]store.Project, error) {
 	if projectID != nil {
 		role, err := authz.ProjectRole(ctx, r, userID, *projectID)
 		if err != nil {
@@ -82,7 +86,7 @@ func scope(ctx context.Context, r store.Repos, userID int64, projectID *int64) (
 		if p.ArchivedAt != nil {
 			return nil, apperr.NotFound("project")
 		}
-		return []int64{p.ID}, nil
+		return []store.Project{p}, nil
 	}
 	ur, err := r.UserRoles.Get(ctx, userID)
 	if err != nil {
@@ -97,13 +101,13 @@ func scope(ctx context.Context, r store.Repos, userID int64, projectID *int64) (
 	if err != nil {
 		return nil, err
 	}
-	ids := make([]int64, 0, len(ps))
+	active := make([]store.Project, 0, len(ps))
 	for _, p := range ps {
 		if p.ArchivedAt == nil {
-			ids = append(ids, p.ID)
+			active = append(active, p)
 		}
 	}
-	return ids, nil
+	return active, nil
 }
 
 func notFound(err error) error {

@@ -1013,7 +1013,7 @@ export interface components {
                 /** @description Open cards with no assignee. */
                 unassigned: number;
             };
-            /** @description Projects that have at least one active card, by name. */
+            /** @description Every scoped project by name; a project with no active cards has all zeros. */
             byProject: {
                 /** Format: int64 */
                 id: number;

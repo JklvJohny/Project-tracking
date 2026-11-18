@@ -116,9 +116,9 @@ func userView(id int64, users map[int64]store.CachedUser) UserView {
 }
 
 // Build aggregates the dashboard from active cards. It is pure: the caller
-// supplies the rows, the members of the scoped projects, the cached profiles
+// supplies the rows, the scoped projects (so empty ones still get a bar), the members of the scoped projects, the cached profiles
 // and today's date in the business zone.
-func Build(rows []store.DashboardRow, members []store.Member, users map[int64]store.CachedUser, today store.Date) View {
+func Build(rows []store.DashboardRow, scoped []store.Project, members []store.Member, users map[int64]store.CachedUser, today store.Date) View {
 	v := View{
 		AsOf:       string(today),
 		ByProject:  []ProjectBar{},
@@ -131,6 +131,9 @@ func Build(rows []store.DashboardRow, members []store.Member, users map[int64]st
 	}
 
 	projects := map[int64]*ProjectBar{}
+	for _, p := range scoped {
+		projects[p.ID] = &ProjectBar{ID: p.ID, Name: p.Name}
+	}
 	load := map[int64]*PersonLoad{}
 	for _, m := range members {
 		if _, ok := load[m.UserID]; !ok {

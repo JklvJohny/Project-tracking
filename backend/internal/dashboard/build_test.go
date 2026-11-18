@@ -47,7 +47,7 @@ func TestBuild_StatusBoundaries(t *testing.T) {
 		row(9, "", "2026-11-25", false, 1),           // today+7: due soon
 		row(10, "", "2026-11-26", false, 1),          // today+8: not due soon
 	}
-	v := dashboard.Build(rows, nil, nil, today)
+	v := dashboard.Build(rows, nil, nil, nil, today)
 	want := dashboard.Totals{Total: 10, Done: 1, Open: 9, InProgress: 2, NotStarted: 5, Overdue: 2, DueSoon: 3, Unassigned: 9}
 	if v.Totals != want {
 		t.Fatalf("totals = %+v, want %+v", v.Totals, want)
@@ -63,7 +63,7 @@ func TestBuild_DueSoonIncludesTodayAndExcludesDoneAndOverdue(t *testing.T) {
 		row(2, "", "2026-11-20", true, 1),
 		row(3, "", "2026-11-17", false, 1),
 	}
-	if got := dashboard.Build(rows, nil, nil, today).Totals.DueSoon; got != 1 {
+	if got := dashboard.Build(rows, nil, nil, nil, today).Totals.DueSoon; got != 1 {
 		t.Fatalf("dueSoon = %d, want 1", got)
 	}
 }
@@ -74,7 +74,7 @@ func TestBuild_UnassignedCountsOpenOnly(t *testing.T) {
 		row(2, "", "", false, 1, 7),
 		row(3, "", "", true, 1),
 	}
-	if got := dashboard.Build(rows, nil, nil, today).Totals.Unassigned; got != 1 {
+	if got := dashboard.Build(rows, nil, nil, nil, today).Totals.Unassigned; got != 1 {
 		t.Fatalf("unassigned = %d, want 1", got)
 	}
 }
@@ -89,7 +89,7 @@ func TestBuild_ByProjectSortedByNameWithSplit(t *testing.T) {
 	for _, r := range []*store.DashboardRow{&a, &b, &c, &e} {
 		r.ProjectID, r.ProjectName = 2, "Beta"
 	}
-	v := dashboard.Build([]store.DashboardRow{z, a, b, c, e}, nil, nil, today)
+	v := dashboard.Build([]store.DashboardRow{z, a, b, c, e}, nil, nil, nil, today)
 	if len(v.ByProject) != 2 || v.ByProject[0].Name != "Beta" || v.ByProject[1].Name != "Zeta" {
 		t.Fatalf("byProject = %+v", v.ByProject)
 	}
@@ -118,7 +118,7 @@ func TestBuild_WorkloadIncludesZeroTaskMembersAndOrders(t *testing.T) {
 		row(4, "", "", true, 1, 1),   // done: not workload
 		row(5, "", "", false, 1, 99), // assignee outside the scope: ignored
 	}
-	v := dashboard.Build(rows, members, users, today)
+	v := dashboard.Build(rows, nil, members, users, today)
 	var names []string
 	for _, w := range v.Workload {
 		names = append(names, w.User.Name)
@@ -141,11 +141,11 @@ func TestBuild_ByPriorityAllFourAlwaysPresent(t *testing.T) {
 		row(1, "", "", false, 3), row(2, "", "", false, 3), row(3, "", "", false, 0),
 		row(4, "", "", true, 2),
 	}
-	v := dashboard.Build(rows, nil, nil, today)
+	v := dashboard.Build(rows, nil, nil, nil, today)
 	if got := fmt.Sprint(v.ByPriority); got != "[{urgent 2} {high 0} {medium 0} {low 1}]" {
 		t.Fatalf("byPriority = %s", got)
 	}
-	if empty := dashboard.Build(nil, nil, nil, today); len(empty.ByPriority) != 4 {
+	if empty := dashboard.Build(nil, nil, nil, nil, today); len(empty.ByPriority) != 4 {
 		t.Fatalf("empty byPriority = %v", empty.ByPriority)
 	}
 }
@@ -159,7 +159,7 @@ func TestBuild_DeadlinesFilterOrderAndDaysLeft(t *testing.T) {
 	a6 := row(6, "", "", false, 1)              // no due: out
 	a7 := row(7, "", "2026-11-16", false, 1)    // same date as 1: by card id
 	users := map[int64]store.CachedUser{5: {UserID: 5, DisplayName: "Eve", AvatarURL: "e.png"}}
-	v := dashboard.Build([]store.DashboardRow{a7, a6, a5, a4, a3, a2, a1}, nil, users, today)
+	v := dashboard.Build([]store.DashboardRow{a7, a6, a5, a4, a3, a2, a1}, nil, nil, users, today)
 	var ids []int64
 	for _, x := range v.Deadlines {
 		ids = append(ids, x.CardID)
@@ -185,14 +185,14 @@ func TestBuild_DeadlinesCappedAt20(t *testing.T) {
 	for i := int64(1); i <= 25; i++ {
 		rows = append(rows, row(i, "", "2026-11-20", false, 1))
 	}
-	v := dashboard.Build(rows, nil, nil, today)
+	v := dashboard.Build(rows, nil, nil, nil, today)
 	if len(v.Deadlines) != 20 || v.Deadlines[0].CardID != 1 || v.Deadlines[19].CardID != 20 {
 		t.Fatalf("deadlines len=%d", len(v.Deadlines))
 	}
 }
 
 func TestBuild_EmptyJSONHasNoNulls(t *testing.T) {
-	b, err := json.Marshal(dashboard.Build(nil, nil, nil, today))
+	b, err := json.Marshal(dashboard.Build(nil, nil, nil, nil, today))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,5 +202,16 @@ func TestBuild_EmptyJSONHasNoNulls(t *testing.T) {
 		if _, ok := m[k].([]any); !ok {
 			t.Errorf("%s = %v, want array", k, m[k])
 		}
+	}
+}
+
+func TestBuild_ByProjectIncludesEmptyScopedProjects(t *testing.T) {
+	projects := []store.Project{{ID: 1, Name: "Alpha"}, {ID: 3, Name: "Mobile App v2"}, {ID: 2, Name: "Beta"}}
+	v := dashboard.Build([]store.DashboardRow{row(1, "", "", false, 1)}, projects, nil, nil, today)
+	if len(v.ByProject) != 3 || v.ByProject[0].Name != "Alpha" || v.ByProject[1].Name != "Beta" || v.ByProject[2].Name != "Mobile App v2" {
+		t.Fatalf("byProject = %+v", v.ByProject)
+	}
+	if v.ByProject[0].Total != 1 || v.ByProject[1] != (dashboard.ProjectBar{ID: 2, Name: "Beta"}) {
+		t.Fatalf("counts = %+v", v.ByProject)
 	}
 }

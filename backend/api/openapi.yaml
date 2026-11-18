@@ -1334,7 +1334,7 @@ components:
             unassigned: { type: integer, description: Open cards with no assignee. }
         byProject:
           type: array
-          description: Projects that have at least one active card, by name.
+          description: Every scoped project by name; a project with no active cards has all zeros.
           items:
             type: object
             required: [id, name, done, inProgress, notStarted, overdue, total]
