@@ -56,6 +56,12 @@ Pass the id in the `X-User-ID` header. Names come from the stub user-service (id
 
 Only admins and managers can create projects. Seed project ids: 1 Website Redesign, 2 Mobile App v2 (on hold), 3 Load Test (only with `SEED_LARGE=1`).
 
+## Dashboard
+
+`GET /api/tracking/v1/dashboard?projectId=<id>` returns totals, per-project and per-person counts, open tasks by priority and the next deadlines. `projectId` is optional; a project the caller cannot see answers `not_found`. Admins see all non-archived projects, everyone else sees the projects they belong to. Only active cards in active lists count.
+
+"Today" is the date in Asia/Bangkok (fixed +07:00 if the zone database is missing). Status rules, the same as the Timeline: done = `completedAt` set; overdue = not done and due before today; in progress = not done, not overdue, start on or before today; not started = the rest. "Due in 7 days" is open with today <= due <= today+7. Deadlines list overdue cards and cards due within 14 days, soonest first, at most 20.
+
 ## Tests
 
 ```sh
