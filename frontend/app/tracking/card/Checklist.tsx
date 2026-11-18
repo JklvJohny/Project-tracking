@@ -1,6 +1,6 @@
 'use client';
 import { ArrowDown, ArrowUp, Trash2 } from 'lucide-react';
-import { useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -154,7 +154,20 @@ function ItemRow({
   );
 }
 
-export function Checklist({ projectId, cardId, readOnly }: { projectId: number; cardId: number; readOnly: boolean }) {
+export function Checklist({
+  projectId,
+  cardId,
+  readOnly,
+  focusAdd = false,
+  onFocusHandled,
+}: {
+  projectId: number;
+  cardId: number;
+  readOnly: boolean;
+  /** Focus the add-item input once on mount (the card preview's "+" link). */
+  focusAdd?: boolean;
+  onFocusHandled?: () => void;
+}) {
   const t = useT(TEXT);
   const { lang } = useLang();
   const items = useCard(cardId).data?.checklist ?? [];
@@ -163,6 +176,14 @@ export function Checklist({ projectId, cardId, readOnly }: { projectId: number; 
   const root = useRef<HTMLElement>(null);
   const [announce, setAnnounce] = useState('');
   const [newText, setNewText] = useState('');
+  const addRef = useRef<HTMLInputElement>(null);
+  const handled = useRef(false);
+  useEffect(() => {
+    if (!focusAdd || handled.current) return;
+    handled.current = true;
+    addRef.current?.focus();
+    onFocusHandled?.();
+  }, [focusAdd, onFocusHandled]);
   const done = items.filter((i) => i.isDone).length;
   const pct = items.length ? Math.round((done / items.length) * 100) : 0;
 
@@ -237,6 +258,7 @@ export function Checklist({ projectId, cardId, readOnly }: { projectId: number; 
       {!readOnly && (
         <>
           <Input
+            ref={addRef}
             value={newText}
             maxLength={500}
             aria-label={t.add}

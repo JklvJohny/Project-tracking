@@ -3,6 +3,7 @@ import { Pencil, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Avatar } from '../shared/Avatar';
 import { boardAccess } from '../shared/access';
 import { useBoard, useComments, useMe } from '../shared/api/queries';
 import type { components } from '../shared/api/schema';
@@ -63,7 +64,7 @@ export function Comments({ projectId, cardId, readOnly = false }: { projectId: n
   const { state, save } = useInlineSave<number>(del.mutateAsync);
   const [editing, setEditing] = useState<number | null>(null);
 
-  const users = useMemo(() => new Map((board?.users ?? []).map((u) => [u.id, { name: u.name }])), [board?.users]);
+  const users = useMemo(() => new Map((board?.users ?? []).map((u) => [u.id, u])), [board?.users]);
   // Mentions are for project members only; names come from the users profile list.
   const mentionable = useMemo(
     () => (board?.members ?? []).map((m) => ({ id: m.userId, name: users.get(m.userId)?.name ?? m.name })),
@@ -103,7 +104,10 @@ export function Comments({ projectId, cardId, readOnly = false }: { projectId: n
             return (
               <li key={c.id} data-comment={c.id} className="flex flex-col gap-1 rounded-lg border p-3">
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground">{name}</span>
+                  <Avatar user={users.get(c.authorId) ?? { id: c.authorId, name }} size="xs" />
+                  <span className="font-medium text-foreground" aria-hidden>
+                    {name}
+                  </span>
                   <time dateTime={c.createdAt}>{fmtDate(c.createdAt, lang)}</time>
                   {c.editedAt && <span>({t.edited})</span>}
                   <span className="ml-auto" />

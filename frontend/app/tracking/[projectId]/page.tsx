@@ -129,6 +129,14 @@ function BoardPage() {
     const qs = next.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }, [router, pathname, search]);
+  const focusChecklist = search.get('focus') === 'checklist';
+  // One-shot hint from the card preview's "+": drop only `focus` so a reload or Back does not re-focus.
+  const focusHandled = useCallback(() => {
+    const next = new URLSearchParams(search.toString());
+    next.delete('focus');
+    const qs = next.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }, [router, pathname, search]);
   if (!Number.isInteger(projectId) || projectId <= 0) return <p className="p-6 text-sm">{t.invalid}</p>;
   return (
     <div className="flex flex-col">
@@ -136,7 +144,16 @@ function BoardPage() {
       <ArchivedBanner projectId={projectId} />
       <BoardSection projectId={projectId} />
       {/* Task 7: the Timeline section renders here, below the board. */}
-      {cardId !== undefined && <CardPanel key={cardId} projectId={projectId} cardId={cardId} onClose={closeCard} />}
+      {cardId !== undefined && (
+        <CardPanel
+          key={cardId}
+          projectId={projectId}
+          cardId={cardId}
+          onClose={closeCard}
+          focusChecklist={focusChecklist}
+          onFocusHandled={focusHandled}
+        />
+      )}
     </div>
   );
 }

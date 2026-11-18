@@ -60,7 +60,7 @@ describe('CardPanel', () => {
   it('viewer sees no inputs', async () => {
     renderPanel('viewer');
     await screen.findByText('Fix login');
-    await screen.findByText('Bug');
+    await screen.findAllByText('Bug');
     expect(screen.queryAllByRole('textbox')).toHaveLength(0);
     expect(screen.queryAllByRole('combobox')).toHaveLength(0);
     // Only the sheet's own Close button is allowed.
@@ -79,7 +79,7 @@ describe('CardPanel', () => {
       </TrackingProvider>,
     );
     await screen.findByText('Fix login');
-    await screen.findByText('Bug');
+    await screen.findAllByText('Bug');
     expect(screen.queryAllByRole('textbox')).toHaveLength(0);
     expect(screen.queryAllByRole('button').map((b) => b.textContent)).toEqual(['Close']);
   });

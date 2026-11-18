@@ -96,7 +96,7 @@ export function MetaFields({
   const { state, save } = useInlineSave(update.mutateAsync);
 
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+    <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
         <span className="text-xs font-medium text-muted-foreground">{t.priority}</span>
         {readOnly ? (
@@ -124,11 +124,7 @@ export function MetaFields({
         <span className="text-xs font-medium text-muted-foreground">{t.due}</span>
         <DateField label={t.due} value={card.dueDate} readOnly={readOnly} onSave={(v) => save({ dueDate: v })} />
       </div>
-      {!readOnly && (
-        <div className="sm:col-span-3">
-          <SaveStatus state={state} />
-        </div>
-      )}
+      {!readOnly && <SaveStatus state={state} />}
     </div>
   );
 }
