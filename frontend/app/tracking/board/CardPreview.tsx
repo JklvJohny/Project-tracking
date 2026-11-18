@@ -155,8 +155,9 @@ export const CardPreview = memo(function CardPreview({
               {card.checklistPreview.map((i) => (
                 <li key={i.id}>
                   <label
-                    className="pointer-events-auto flex w-fit max-w-full cursor-pointer items-center gap-2 py-0.5 text-[13px]"
-                    {...stopDrag}
+                    // A read-only row must let the click through to the card link underneath.
+                    className={`flex w-fit max-w-full items-center gap-2 py-0.5 text-[13px] ${canEdit ? 'pointer-events-auto cursor-pointer' : ''}`}
+                    {...(canEdit ? stopDrag : {})}
                   >
                     <Checkbox
                       checked={i.isDone}

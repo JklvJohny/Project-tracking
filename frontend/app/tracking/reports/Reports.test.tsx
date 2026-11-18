@@ -86,7 +86,7 @@ describe('Reports page', () => {
 
   it('opening a folder lists its documents with a count on every folder', async () => {
     setup();
-    const table = await screen.findByRole('table');
+    const table = await screen.findByRole('grid');
     for (const h of ['Name', 'Size', 'Uploaded by', 'Date']) expect(within(table).getByRole('columnheader', { name: h })).toBeTruthy();
     expect(within(table).getByText('Kickoff.pdf')).toBeTruthy();
     expect(within(table).getByText('2 KB')).toBeTruthy();
@@ -164,6 +164,32 @@ describe('Reports page', () => {
     expect((await screen.findByRole('alert')).textContent).toBe('The file is larger than 20 MB');
   });
 
+  it('shows the archived text for a 409 project_archived upload', async () => {
+    setup();
+    const base = impl() as (p: string, i?: Init) => Promise<unknown>;
+    apiMock.mockImplementation(((p: string, i?: Init) =>
+      p === '/projects/1/documents' && i?.method === 'POST'
+        ? Promise.reject(new ApiError('conflict', 409, 'project_archived'))
+        : base(p, i)) as never);
+    fireEvent.change(await screen.findByTestId('upload-input'), { target: { files: [pdf()] } });
+    expect((await screen.findByRole('alert')).textContent).toBe('This project is archived and cannot be changed');
+  });
+
+  it('the viewer has one translated Close button, and a list change does not switch the viewed file', async () => {
+    setup();
+    fireEvent.doubleClick(await screen.findByRole('row', { name: /Kickoff/ }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getAllByRole('button', { name: 'Close' })).toHaveLength(1);
+    // a new document lands at the top of the list while Kickoff is open
+    fireEvent.change(screen.getByTestId('upload-input'), { target: { files: [pdf('new.pdf')] } });
+    await waitFor(() => expect(posted()).toHaveLength(1));
+    await waitFor(() => expect(screen.getByRole('row', { name: /new\.pdf/, hidden: true })).toBeTruthy());
+    expect(within(dialog).getByText('Kickoff.pdf')).toBeTruthy();
+    expect(within(dialog).getByText(/2 of 4/)).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
   it('delete asks to confirm, removes the row, and Undo restores it', async () => {
     setup();
     const row = await screen.findByRole('row', { name: /Kickoff/ });
@@ -181,7 +207,7 @@ describe('Reports page', () => {
   it('a viewer sees no upload or delete', async () => {
     role = 'viewer';
     setup();
-    await screen.findByRole('table');
+    await screen.findByRole('grid');
     expect(screen.queryByTestId('upload-input')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Upload PDF' })).toBeNull();
@@ -190,14 +216,14 @@ describe('Reports page', () => {
   it('a member deletes only their own upload; an archived project has no controls', async () => {
     role = 'member';
     setup();
-    await screen.findByRole('table');
+    await screen.findByRole('grid');
     expect(within(screen.getByRole('row', { name: /Weekly/ })).getByRole('button', { name: 'Delete' })).toBeTruthy();
     expect(within(screen.getByRole('row', { name: /Kickoff/ })).queryByRole('button', { name: 'Delete' })).toBeNull();
     cleanup();
     role = 'pm';
     archived = '2026-11-01T00:00:00Z';
     setup();
-    await screen.findByRole('table');
+    await screen.findByRole('grid');
     expect(screen.queryByTestId('upload-input')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
   });

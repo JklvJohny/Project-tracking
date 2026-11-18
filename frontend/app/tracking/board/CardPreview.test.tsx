@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { components } from '../shared/api/schema';
 import { TrackingProvider } from '../shared/provider';
@@ -62,5 +62,45 @@ describe('CardPreview', () => {
     expect(screen.getByText('1/4')).toBeTruthy();
     expect(screen.getByText('3')).toBeTruthy();
     expect(screen.getByText('Fix login')).toBeTruthy();
+  });
+});
+
+describe('CardPreview controls inside a draggable row', () => {
+  const withItems: Card = { ...base, checklistPreview: [{ id: 11, text: 'Write spec', isDone: false }] };
+  const members = [{ userId: 2, name: 'Somchai Jai', avatarUrl: '', role: 'member' as const }];
+  function renderIn(canEdit: boolean, row: () => void) {
+    return render(
+      <TrackingProvider lang="en">
+        {/* stands in for the sortable row, whose dnd-kit activator listens to pointerdown */}
+        <div onPointerDown={row}>
+          <CardPreview projectId={7} card={withItems} users={users} labels={labels} members={members} canEdit={canEdit} />
+        </div>
+      </TrackingProvider>,
+    );
+  }
+
+  it('pointer-down on a checkbox, its label, the subtask + and the assign + never reaches the row', () => {
+    const row = vi.fn();
+    renderIn(true, row);
+    for (const el of [
+      screen.getByRole('checkbox', { name: 'Write spec' }),
+      screen.getByText('Write spec'),
+      screen.getByRole('link', { name: 'Add subtask' }),
+      screen.getByRole('button', { name: 'Add assignee' }),
+    ])
+      fireEvent.pointerDown(el);
+    expect(row).not.toHaveBeenCalled();
+    // the card body itself still starts a drag
+    fireEvent.pointerDown(screen.getByText('Fix login'));
+    expect(row).toHaveBeenCalledTimes(1);
+  });
+
+  it('a read-only checkbox row lets the click through to the card link', () => {
+    renderIn(false, vi.fn());
+    const label = screen.getByText('Write spec').closest('label')!;
+    expect(label.className).not.toContain('pointer-events-auto');
+    cleanup();
+    renderIn(true, vi.fn());
+    expect(screen.getByText('Write spec').closest('label')!.className).toContain('pointer-events-auto');
   });
 });

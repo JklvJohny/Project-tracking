@@ -16,7 +16,9 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"testing/iotest"
 	"time"
+	"tracking-service/internal/apperr"
 
 	"github.com/go-chi/chi/v5"
 
@@ -256,6 +258,16 @@ func TestUpload_TooLarge(t *testing.T) {
 	}
 }
 
+// A body that is already over the request cap fails on the very first read; that is too_large, not not_pdf.
+func TestUpload_CapHitWhileSniffingIsTooLarge(t *testing.T) {
+	e := newEnv(t)
+	_, err := e.svc.Upload(context.Background(), member, e.pid, "x.pdf", iotest.ErrReader(&http.MaxBytesError{Limit: 1}))
+	var ae *apperr.Error
+	if !errors.As(err, &ae) || ae.Fields["file"] != "too_large" {
+		t.Fatalf("err = %v, want file=too_large", err)
+	}
+}
+
 func TestUpload_ViewerForbidden_NonMemberNotFound(t *testing.T) {
 	e := newEnv(t)
 	if rec, _ := e.upload(viewer, "x.pdf", pdf("")); rec.Code != 403 {
@@ -306,7 +318,7 @@ func TestFile_StreamsWithHeaders(t *testing.T) {
 	if h.Get("Content-Type") != "application/pdf" || h.Get("X-Content-Type-Options") != "nosniff" {
 		t.Errorf("headers = %v", h)
 	}
-	want := "inline; filename*=UTF-8''%E0%B8%A3%E0%B8%B2%E0%B8%A2%E0%B8%87%E0%B8%B2%E0%B8%99%20%28v1%29.pdf"
+	want := "attachment; filename*=UTF-8''%E0%B8%A3%E0%B8%B2%E0%B8%A2%E0%B8%87%E0%B8%B2%E0%B8%99%20%28v1%29.pdf"
 	if h.Get("Content-Disposition") != want {
 		t.Errorf("Content-Disposition = %q, want %q", h.Get("Content-Disposition"), want)
 	}

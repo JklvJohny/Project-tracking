@@ -3,7 +3,7 @@ import { Loader2, Upload } from 'lucide-react';
 import { useRef, useState, type DragEvent, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { ApiError } from '../shared/api/client';
-import { errorText } from '../shared/errors';
+import { errorKey, errorText } from '../shared/errors';
 import { useLang, useT } from '../shared/i18n';
 import { MAX_BYTES, useUploadDocument } from './queries';
 
@@ -19,7 +19,7 @@ export function checkPdf(f: File): 'not_pdf' | 'too_large' | null {
 }
 
 // The server reports file problems as 422 fields.file; everything else is an envelope code.
-const codeOf = (e: unknown) => (e instanceof ApiError ? (e.fields?.file ?? e.code) : 'server_error');
+const codeOf = (e: unknown) => (e instanceof ApiError ? (e.fields?.file ?? errorKey(e)) : 'server_error');
 
 /** Wraps the document table: a button and drag & drop. Render only for editors. */
 export function UploadZone({ projectId, children }: { projectId: number; children: ReactNode }) {

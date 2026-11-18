@@ -58,6 +58,21 @@ describe('card mutations', () => {
     expect(boardCard()).toMatchObject({ checklistTotal: 1, checklistDone: 0 });
   });
 
+  it('checklist toggle and delete keep the board card preview in step', async () => {
+    const items = [1, 2, 3, 4].map((n) => ({ id: n, text: `i${n}`, isDone: false, position: `p${n}` }));
+    qc.setQueryData(qk.card(5), { ...detail, checklist: items, checklistTotal: 4 });
+    qc.setQueryData(qk.board(1), { ...board, cards: [{ ...summary, checklistTotal: 4, checklistPreview: items.slice(0, 3).map(({ id, text, isDone }) => ({ id, text, isDone })) }] });
+    const { result } = renderHook(() => useChecklist(1, 5), { wrapper });
+    apiMock.mockResolvedValue({ ...items[1], isDone: true });
+    await act(() => result.current.update.mutateAsync({ id: 2, isDone: true }));
+    expect(boardCard().checklistPreview[1]).toEqual({ id: 2, text: 'i2', isDone: true });
+    apiMock.mockResolvedValue({});
+    await act(() => result.current.remove.mutateAsync(1));
+    // the 4th item slides into the first three; the deleted one is gone (no 404 on a later tick)
+    expect(boardCard().checklistPreview.map((i) => i.id)).toEqual([2, 3, 4]);
+    expect(boardCard()).toMatchObject({ checklistTotal: 3, checklistDone: 1 });
+  });
+
   it('label delete strips the id from board labels and cards', async () => {
     apiMock.mockResolvedValue({});
     const { result } = renderHook(() => useLabelCrud(1), { wrapper });

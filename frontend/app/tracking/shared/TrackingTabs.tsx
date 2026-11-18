@@ -6,7 +6,7 @@ import { useT } from './i18n';
 import { routes } from './routes';
 
 const TEXT = {
-  th: { nav: 'เมนูติดตามงาน', dashboard: 'แดชบอร์ด', projects: 'โปรเจกต์', reports: 'รายงาน', import: 'นำเข้า', soon: 'เร็วๆ นี้' },
+  th: { nav: 'เมนูติดตามงาน', dashboard: 'แดชบอร์ด', projects: 'โปรเจกต์', reports: 'รายงาน', import: 'นำเข้า', soon: 'เร็ว ๆ นี้' },
   en: { nav: 'Tracking', dashboard: 'Dashboard', projects: 'Projects', reports: 'Reports', import: 'Import', soon: 'Soon' },
 };
 

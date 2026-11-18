@@ -54,7 +54,7 @@ export function DocumentTable({ docs, canDelete, onOpen, onDelete }: Props) {
   return (
     <>
       <div className="relative overflow-x-auto">
-        <table className="w-full text-sm">
+        <table role="grid" className="w-full text-sm">
           <caption className="sr-only">{t.caption}</caption>
           <thead className="border-b bg-muted/50 text-left text-xs text-muted-foreground">
             <tr>

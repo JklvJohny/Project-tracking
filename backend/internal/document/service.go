@@ -184,7 +184,12 @@ func (s *Service) Upload(ctx context.Context, userID, projectID int64, filename 
 		return View{}, err
 	}
 	br := bufio.NewReader(content)
-	head, _ := br.Peek(5)
+	head, perr := br.Peek(5)
+	// A body already past the request cap surfaces here when the first bytes are read: that is too large, not "not a PDF".
+	var mbe *http.MaxBytesError
+	if errors.As(perr, &mbe) {
+		return View{}, tooLarge()
+	}
 	if !bytes.Equal(head, []byte("%PDF-")) {
 		return View{}, notPDF()
 	}
@@ -194,7 +199,6 @@ func (s *Service) Upload(ctx context.Context, userID, projectID int64, filename 
 	}
 	// one byte past the cap tells "exactly the cap" from "over it"
 	size, err := s.bs.Put(ctx, key, io.LimitReader(br, MaxFileSize+1))
-	var mbe *http.MaxBytesError
 	if errors.As(err, &mbe) {
 		return View{}, tooLarge()
 	}

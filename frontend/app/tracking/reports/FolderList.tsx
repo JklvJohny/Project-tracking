@@ -2,21 +2,20 @@
 import { Folder } from 'lucide-react';
 import Link from 'next/link';
 import { useT } from '../shared/i18n';
-import type { components } from '../shared/api/schema';
+import type { ProjectRow } from '../projects/project-row';
 import { routes } from '../shared/routes';
 import { useCachedDocCount } from './queries';
 
-type Project = components['schemas']['ProjectListItem'];
 
 const TEXT = {
   th: { nav: 'โฟลเดอร์โปรเจกต์', none: 'ยังไม่มีโปรเจกต์', archived: 'เก็บถาวร' },
   en: { nav: 'Project folders', none: 'No projects', archived: 'Archived' },
 };
 
-function Item({ p, current }: { p: Project; current: boolean }) {
+function Item({ p, current }: { p: ProjectRow; current: boolean }) {
   const t = useT(TEXT);
   // The opened folder's cache is fresher (it follows uploads and deletes); the list's count covers the rest.
-  const count = useCachedDocCount(p.id) ?? p.documentCount;
+  const count = useCachedDocCount(p.id) ?? p.documentCount ?? 0;
   return (
     <li>
       <Link
@@ -37,7 +36,7 @@ function Item({ p, current }: { p: Project; current: boolean }) {
   );
 }
 
-export function FolderList({ projects, current }: { projects: Project[]; current: number | null }) {
+export function FolderList({ projects, current }: { projects: ProjectRow[]; current: number | null }) {
   const t = useT(TEXT);
   return (
     <nav aria-label={t.nav}>

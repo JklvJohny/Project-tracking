@@ -36,6 +36,7 @@ const TEXT = {
     open: (title: string) => `เปิดการ์ด ${title}`,
     status: { done: 'เสร็จแล้ว', active: 'กำลังทำ', todo: 'ยังไม่เริ่ม', overdue: 'เลยกำหนด' } as Record<TimelineStatus, string>,
     todayLine: 'วันนี้',
+    milestone: 'หมุดหมาย',
   },
   en: {
     title: 'Timeline',
@@ -51,6 +52,7 @@ const TEXT = {
     open: (title: string) => `Open card ${title}`,
     status: { done: 'Done', active: 'Active', todo: 'Not started', overdue: 'Overdue' } as Record<TimelineStatus, string>,
     todayLine: 'Today',
+    milestone: 'Milestone',
   },
 };
 
@@ -75,6 +77,25 @@ function Bar({ row, group, pathname }: { row: TimelineRow; group: TimelineGroup;
   const dates = row.from === row.to ? fmtDate(row.from, lang) : `${fmtDate(row.from, lang)} – ${fmtDate(row.to, lang)}`;
   const label = `${who}: ${row.card.title}. ${dates}. ${t.status[row.status]}`;
   const token = `var(--s-${row.status})`;
+  // A one-day card is a point in time, not a span: a diamond centred on its day, not a 1.5rem sliver of a bar.
+  if (row.kind === 'milestone')
+    return (
+      <Link
+        href={`${pathname}?card=${row.card.id}`}
+        scroll={false}
+        data-kind="milestone"
+        aria-label={`${t.milestone}. ${label}`}
+        title={`${t.milestone} · ${row.card.title} · ${dates} · ${t.status[row.status]}`}
+        className="absolute top-2.5 flex size-5 -translate-x-1/2 items-center justify-center focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+        style={{ left: `${row.startPct + row.widthPct / 2}%` }}
+      >
+        <span
+          aria-hidden
+          className="size-3.5 rotate-45 border-2 shadow-sm"
+          style={{ borderColor: token, background: `color-mix(in srgb, ${token} 45%, var(--background))` }}
+        />
+      </Link>
+    );
   return (
     <Link
       href={`${pathname}?card=${row.card.id}`}

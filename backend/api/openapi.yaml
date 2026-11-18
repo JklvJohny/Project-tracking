@@ -931,7 +931,7 @@ components:
               success: { const: true }
               data: { $ref: '#/components/schemas/Document' }
     DocumentFile:
-      description: The PDF bytes, not the JSON envelope. Sent with `Content-Disposition inline; filename*=UTF-8''<name>` and `X-Content-Type-Options nosniff`.
+      description: The PDF bytes, not the JSON envelope. Sent with `Content-Disposition attachment; filename*=UTF-8''<name>` and `X-Content-Type-Options nosniff`.
       headers:
         Content-Disposition: { schema: { type: string } }
         X-Content-Type-Options: { schema: { type: string, const: nosniff } }

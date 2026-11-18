@@ -57,7 +57,8 @@ function FolderPanel({ project }: { project: Project }) {
   const docs = useDocuments(projectId);
   const access = boardAccess({ myRole: project.myRole, project });
   const del = useDeleteDocument(projectId);
-  const [open, setOpen] = useState<number | null>(null);
+  // The open document is tracked by id: a refetch that reorders the list must not switch the viewed file.
+  const [openId, setOpenId] = useState<number | null>(null);
 
   const myId = me.data?.user.id;
   // Uploader (still an editor), PM or admin. Archived projects are read-only for everyone.
@@ -75,6 +76,7 @@ function FolderPanel({ project }: { project: Project }) {
     );
 
   const list = docs.data;
+  const openIndex = openId === null ? -1 : list.findIndex((d) => d.id === openId);
   const body =
     list.length === 0 ? (
       <div className="flex flex-col items-center px-6 py-14 text-center">
@@ -86,7 +88,7 @@ function FolderPanel({ project }: { project: Project }) {
       <DocumentTable
         docs={list}
         canDelete={canDelete}
-        onOpen={setOpen}
+        onOpen={(i) => setOpenId(list[i]?.id ?? null)}
         onDelete={async (d) => {
           if (await confirm({ title: t.delTitle, description: t.delDesc(d.filename), confirmLabel: t.del, destructive: true })) del.mutate(d);
         }}
@@ -101,7 +103,9 @@ function FolderPanel({ project }: { project: Project }) {
         <span className="text-xs text-muted-foreground">{t.docs(list.length)}</span>
       </div>
       {access.canEdit ? <UploadZone projectId={projectId}>{body}</UploadZone> : body}
-      {open !== null && list[open] && <DocViewer docs={list} index={open} onIndex={setOpen} onClose={() => setOpen(null)} />}
+      {openIndex >= 0 && (
+        <DocViewer docs={list} index={openIndex} onIndex={(i) => setOpenId(list[i]?.id ?? null)} onClose={() => setOpenId(null)} />
+      )}
     </section>
   );
 }

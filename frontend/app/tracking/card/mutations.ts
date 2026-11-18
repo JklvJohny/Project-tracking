@@ -5,8 +5,10 @@ import { api } from '../shared/api/client';
 import { qk } from '../shared/api/queries';
 import type { components } from '../shared/api/schema';
 import { errorMessage } from '../shared/errors';
-import { useLang } from '../shared/i18n';
+import { useLang, useT } from '../shared/i18n';
 import { bumpCommentCount, detailToSummary, setPreviewItemDone, upsertCard, type BoardData } from '../board/board-cache';
+
+const TEXT = { th: { retry: 'ลองอีกครั้ง' }, en: { retry: 'Retry' } };
 
 type S = components['schemas'];
 type Detail = S['CardDetail'];
@@ -35,7 +37,14 @@ function putChecklist(qc: QueryClient, projectId: number, cardId: number, fn: (i
           ...b,
           cards: b.cards.map((c) =>
             c.id === cardId
-              ? { ...c, checklistTotal: next.length, checklistDone: next.filter((i) => i.isDone).length }
+              ? {
+                  ...c,
+                  checklistTotal: next.length,
+                  checklistDone: next.filter((i) => i.isDone).length,
+                  // The board card shows the first three items by position; keep them in step with the panel.
+                  // `next` is already in position order (the optimistic move reorders it before positions are known).
+                  checklistPreview: next.slice(0, 3).map(({ id, text, isDone }) => ({ id, text, isDone })),
+                }
               : c,
           ),
         }
@@ -213,11 +222,13 @@ export function useDeleteComment(projectId: number, cardId: number) {
 export function useToggleChecklistItem(projectId: number) {
   const qc = useQueryClient();
   const { lang } = useLang();
-  return useMutation({
+  const t = useT(TEXT);
+  const toggle = useMutation({
     mutationFn: ({ itemId, isDone }: { cardId: number; itemId: number; isDone: boolean }) =>
       api<Item>(`/checklist/${itemId}`, { method: 'PATCH', json: { isDone } satisfies S['ItemPatch'] }),
     onMutate: async ({ cardId, itemId, isDone }) => {
       await qc.cancelQueries({ queryKey: qk.board(projectId) });
+      await qc.cancelQueries({ queryKey: qk.card(cardId) });
       const prev = { card: qc.getQueryData<Detail>(qk.card(cardId)), board: qc.getQueryData<BoardData>(qk.board(projectId)) };
       qc.setQueryData<BoardData>(qk.board(projectId), (b) => (b ? setPreviewItemDone(b, cardId, itemId, isDone) : b));
       if (prev.card)
@@ -227,10 +238,13 @@ export function useToggleChecklistItem(projectId: number) {
         });
       return prev;
     },
-    onError: (e, { cardId }, prev) => {
+    onError: (e, vars, prev) => {
+      const { cardId, itemId } = vars;
       if (prev?.card) qc.setQueryData(qk.card(cardId), prev.card);
       if (prev?.board) qc.setQueryData(qk.board(projectId), prev.board);
-      toast.error(errorMessage(e, lang));
+      // Per-item id: repeated failures replace one toast; Retry re-sends the same tick.
+      toast.error(errorMessage(e, lang), { id: `checklist-${itemId}`, action: { label: t.retry, onClick: () => toggle.mutate(vars) } });
     },
   });
+  return toggle;
 }

@@ -78,7 +78,7 @@ func upload(s *Service) http.HandlerFunc {
 	})
 }
 
-// contentDisposition is RFC 6266 inline with an RFC 5987 encoded name, so
+// contentDisposition is RFC 6266 attachment with an RFC 5987 encoded name, so
 // Thai and other non-ASCII names survive.
 func contentDisposition(name string) string {
 	const attrChars = "!#$&+-.^_|~"
@@ -91,7 +91,7 @@ func contentDisposition(name string) string {
 			fmt.Fprintf(&b, "%%%02X", c)
 		}
 	}
-	return "inline; filename*=UTF-8''" + b.String()
+	return "attachment; filename*=UTF-8''" + b.String()
 }
 
 // Mount registers the document routes on r, which must sit behind the auth

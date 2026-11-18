@@ -1,5 +1,5 @@
 'use client';
-import { ChevronLeft, ChevronRight, Download } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
@@ -9,8 +9,8 @@ import { useLang, useT } from '../shared/i18n';
 import type { Doc } from './queries';
 
 const TEXT = {
-  th: { prev: 'ก่อนหน้า', next: 'ถัดไป', download: 'ดาวน์โหลด', loading: 'กำลังโหลดเอกสาร…', of: (i: number, n: number) => `${i} จาก ${n}`, desc: 'ตัวอ่านเอกสาร PDF' },
-  en: { prev: 'Previous', next: 'Next', download: 'Download', loading: 'Loading document…', of: (i: number, n: number) => `${i} of ${n}`, desc: 'PDF document viewer' },
+  th: { prev: 'ก่อนหน้า', next: 'ถัดไป', download: 'ดาวน์โหลด', close: 'ปิด', loading: 'กำลังโหลดเอกสาร…', of: (i: number, n: number) => `${i} จาก ${n}`, desc: 'ตัวอ่านเอกสาร PDF' },
+  en: { prev: 'Previous', next: 'Next', download: 'Download', close: 'Close', loading: 'Loading document…', of: (i: number, n: number) => `${i} of ${n}`, desc: 'PDF document viewer' },
 };
 
 /**
@@ -53,12 +53,13 @@ export function DocViewer({ docs, index, onIndex, onClose }: { docs: Doc[]; inde
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent
         className="flex h-[92vh] w-full max-w-6xl flex-col gap-0 p-0 sm:max-w-6xl"
+        showCloseButton={false}
         onKeyDown={(e) => {
           if (e.key === 'ArrowRight') go(index + 1);
           else if (e.key === 'ArrowLeft') go(index - 1);
         }}
       >
-        <div className="flex items-center gap-2 border-b px-4 py-2 pr-12">
+        <div className="flex items-center gap-2 border-b px-4 py-2">
           <div className="min-w-0 flex-1">
             <DialogTitle className="truncate text-sm font-semibold">{doc.filename}</DialogTitle>
             <DialogDescription className="text-xs">
@@ -84,6 +85,10 @@ export function DocViewer({ docs, index, onIndex, onClose }: { docs: Doc[]; inde
               {t.download}
             </Button>
           )}
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            <X aria-hidden="true" />
+            {t.close}
+          </Button>
         </div>
         {error ? (
           <p role="alert" className="p-6 text-sm">

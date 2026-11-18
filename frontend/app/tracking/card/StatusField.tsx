@@ -45,7 +45,9 @@ export function StatusField({
     const from = card.listId;
     setList(toListId);
     try {
-      await move.mutateAsync({ cardId: card.id, toListId, beforeId: last?.id ?? null, afterId: null });
+      const d = await move.mutateAsync({ cardId: card.id, toListId, beforeId: last?.id ?? null, afterId: null });
+      // Also correct when the move succeeds through the toast's Retry after the optimistic value was rolled back.
+      qc.setQueryData(key, d);
     } catch {
       // The hook already rolled the board back and toasted.
       setList(from);

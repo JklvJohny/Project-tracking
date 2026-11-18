@@ -52,7 +52,7 @@ const DEV_USERS = [
 const TEXT = {
   th: {
     nav: 'เมนูหลัก', app: 'แอปหลัก', section: 'ติดตามงาน', other: 'อื่นๆ', dashboard: 'แดชบอร์ด', projects: 'โปรเจกต์',
-    import: 'นำเข้า', reports: 'รายงาน', settings: 'ตั้งค่า', soon: 'เร็วๆ นี้', lang: 'ภาษา', theme: 'สลับธีม',
+    import: 'นำเข้า', reports: 'รายงาน', settings: 'ตั้งค่า', soon: 'เร็ว ๆ นี้', lang: 'ภาษา', theme: 'สลับธีม',
     user: 'ผู้ใช้ (dev)', mobileNav: 'ไปที่',
   },
   en: {

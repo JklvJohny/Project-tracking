@@ -42,7 +42,7 @@ describe('TrackingTabs', () => {
     renderTabs('th');
     expect(screen.getByRole('link', { name: 'รายงาน' }).getAttribute('aria-current')).toBe('page');
     expect(screen.getByRole('link', { name: 'โปรเจกต์' }).getAttribute('aria-current')).toBeNull();
-    expect(screen.getAllByText('เร็วๆ นี้').length).toBe(2);
+    expect(screen.getAllByText('เร็ว ๆ นี้').length).toBe(2);
     pathname = '/tracking';
   });
 });

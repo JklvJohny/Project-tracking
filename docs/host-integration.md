@@ -106,7 +106,8 @@ Reports files. The Reports page lists and uploads PDFs through `/api/tracking/v1
 stores the bytes under its `UPLOAD_DIR` environment variable (default `./uploads`, relative to the service's working
 directory; in a container mount a persistent volume there, because the file store is local disk and metadata lives in
 the database). Uploads are PDF only and at most 20 MB. If the host's gateway or reverse proxy caps request bodies,
-raise the cap to at least 21 MB for `/api/tracking/`.
+raise the cap to at least 21 MiB for `/api/tracking/` (nginx: `client_max_body_size 21m;`). A lower cap
+surfaces as an HTTP 413 from the proxy, not the service's `too_large` message.
 
 PDF viewer note. The viewer does not point the iframe at the file URL. `getAuthHeaders` cannot be applied to an
 `<iframe src>` or an `<a download>`, so the viewer fetches the file with the same headers (`apiBlob`), turns the bytes

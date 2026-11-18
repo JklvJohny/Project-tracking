@@ -1238,7 +1238,7 @@ export interface components {
                 };
             };
         };
-        /** @description The PDF bytes, not the JSON envelope. Sent with `Content-Disposition inline; filename*=UTF-8''<name>` and `X-Content-Type-Options nosniff`. */
+        /** @description The PDF bytes, not the JSON envelope. Sent with `Content-Disposition attachment; filename*=UTF-8''<name>` and `X-Content-Type-Options nosniff`. */
         DocumentFile: {
             headers: {
                 "Content-Disposition"?: string;

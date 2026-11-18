@@ -13,8 +13,8 @@ import { stopDrag } from './stopDrag';
 type S = components['schemas'];
 
 const TEXT = {
-  th: { add: 'เพิ่มผู้รับผิดชอบ', search: 'ค้นหาสมาชิก', empty: 'ไม่พบสมาชิก' },
-  en: { add: 'Add assignee', search: 'Search members', empty: 'No members found' },
+  th: { add: 'เพิ่มผู้รับผิดชอบ', search: 'ค้นหาสมาชิก', empty: 'ไม่พบสมาชิก', retry: 'ลองอีกครั้ง' },
+  en: { add: 'Add assignee', search: 'Search members', empty: 'No members found', retry: 'Retry' },
 };
 
 /**
@@ -33,6 +33,15 @@ export function AssignPopover({
   const t = useT(TEXT);
   const { lang } = useLang();
   const assign = useAssign(projectId, card.id);
+  const toggle = (userId: number, on: boolean) =>
+    assign.mutate(
+      { userId, on },
+      {
+        // One toast per card+member: a second failure replaces the first instead of stacking.
+        onError: (e) =>
+          toast.error(errorMessage(e, lang), { id: `assign-${card.id}-${userId}`, action: { label: t.retry, onClick: () => toggle(userId, on) } }),
+      },
+    );
 
   return (
     <Popover>
@@ -62,12 +71,7 @@ export function AssignPopover({
                     value={`${m.name} ${m.userId}`}
                     data-checked={on}
                     aria-checked={on}
-                    onSelect={() =>
-                      assign.mutate(
-                        { userId: m.userId, on: !on },
-                        { onError: (e) => toast.error(errorMessage(e, lang)) },
-                      )
-                    }
+                    onSelect={() => toggle(m.userId, !on)}
                   >
                     <Avatar user={{ id: m.userId, name: m.name, avatarUrl: m.avatarUrl }} size="sm" />
                     <span className="truncate">{m.name}</span>

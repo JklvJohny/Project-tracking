@@ -57,6 +57,23 @@ describe('TimelineSection', () => {
     expect(localStorage.getItem('pt-timeline-open')).toBe('1');
   });
 
+  it('renders a one-day card as a labelled milestone diamond, not a bar', async () => {
+    localStorage.setItem('pt-timeline-open', '1');
+    vi.mocked(api).mockResolvedValue({
+      ...snap,
+      cards: [card({ id: 7, title: 'Launch', assigneeIds: [1], startDate: '2026-11-19', dueDate: '2026-11-19' })],
+    });
+    render(
+      <TrackingProvider lang="en">
+        <TimelineSection projectId={1} />
+      </TrackingProvider>,
+    );
+    const m = await screen.findByRole('link', { name: /^Milestone\. Ann Lee: Launch\./ });
+    expect(m.getAttribute('data-kind')).toBe('milestone');
+    expect(m.getAttribute('href')).toBe('/tracking/1?card=7');
+    expect(m.textContent).toBe('');
+  });
+
   it('renders labelled bars, the assignee group and the no-dates list', async () => {
     localStorage.setItem('pt-timeline-open', '1');
     mount();
