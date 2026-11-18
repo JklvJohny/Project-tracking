@@ -8,7 +8,31 @@ import { TrackingProvider } from '../tracking/shared/provider';
 import { routes } from '../tracking/shared/routes';
 
 const DEV_USER_KEY = 'pt-dev-user';
+const DEV_MODE_KEY = 'pt-dev-mode';
 const SHOW_USERS = process.env.NEXT_PUBLIC_ENV === 'local';
+
+// Dev tools stay hidden so screens look like the host app; Ctrl+Shift+B shows them, Ctrl+Alt+Shift+B hides them.
+// Matched on `code`, so the shortcut works with the Thai keyboard layout too.
+function devModeShortcut(e: KeyboardEvent): boolean | null {
+  if (!e.ctrlKey || !e.shiftKey || e.metaKey || e.code !== 'KeyB') return null;
+  return !e.altKey;
+}
+
+function readDevMode(): boolean {
+  try {
+    return localStorage.getItem(DEV_MODE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function saveDevMode(on: boolean) {
+  try {
+    localStorage.setItem(DEV_MODE_KEY, on ? '1' : '0');
+  } catch {
+    /* storage blocked: the mode lasts only until reload */
+  }
+}
 
 // From backend/README.md (dev users). Roles are the system role; project roles vary per project.
 const DEV_USERS = [
@@ -52,10 +76,29 @@ function Chrome({ children }: { children: ReactNode }) {
   const { theme, setTheme } = useTheme();
   const qc = useQueryClient();
   const [userId, setUserId] = useState('2');
+  const [devMode, setDevMode] = useState(false);
 
-  // sessionStorage is not available during SSR; sync after mount.
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => setUserId(readDevUser()), []);
+  // Storage is not available during SSR; sync after mount.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setUserId(readDevUser());
+    setDevMode(readDevMode());
+  }, []);
+
+  useEffect(() => {
+    // A non-local build has no dev tools to show, so the shortcut does nothing there.
+    if (!SHOW_USERS) return;
+    const onKey = (e: KeyboardEvent) => {
+      const on = devModeShortcut(e);
+      if (on === null) return;
+      // Chrome binds Ctrl+Shift+B to the bookmarks bar.
+      e.preventDefault();
+      saveDevMode(on);
+      setDevMode(on);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   const pickUser = (id: string) => {
     try {
@@ -82,7 +125,7 @@ function Chrome({ children }: { children: ReactNode }) {
           <Link href={routes.projects} className="mr-auto rounded px-2 py-1 font-medium hover:bg-accent sm:hidden">
             {t.projects}
           </Link>
-          {SHOW_USERS && (
+          {SHOW_USERS && devMode && (
             <label className="flex items-center gap-1.5">
               {t.user}
               <select

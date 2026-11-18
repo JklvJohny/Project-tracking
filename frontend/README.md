@@ -20,11 +20,25 @@ npm run dev
 ```
 
 `/api/tracking/*` is proxied to `TRACKING_API_URL` (default `http://localhost:8081`) by the rewrite in `next.config.ts`.
-Open `http://localhost:3000/tracking`. The dev shell has a user switcher (dev users 1 to 8, see `../backend/README.md`),
-a language switch (TH/EN) and a theme switch.
+Open `http://localhost:3000/tracking`. The dev shell has a language switch (TH/EN), a theme switch, and a dev-mode
+user switcher (dev users 1 to 8, see `../backend/README.md`).
 
-The user switcher renders only when `NEXT_PUBLIC_ENV=local`. `next dev` sets that by default; a production build does
-not, so build with the variable when you need the switcher on `next start`:
+### Dev mode
+
+Dev mode shows the user switcher in the header. It is off by default, so screens look like the host app.
+
+| Shortcut | Effect |
+|---|---|
+| `Ctrl` + `Shift` + `B` | Turn dev mode on (show the user switcher) |
+| `Ctrl` + `Alt` + `Shift` + `B` | Turn dev mode off (hide the user switcher) |
+
+- The choice is kept in `localStorage` (`pt-dev-mode`), so it survives a reload.
+- Hiding the switcher does not log you out. Requests keep using the last chosen dev user (`sessionStorage` `pt-dev-user`, default user 2).
+- The shortcuts work with the Thai keyboard layout, because they match the physical `B` key.
+
+Dev mode exists only when `NEXT_PUBLIC_ENV=local`. In any other build the shortcuts do nothing and no `X-User-ID`
+header is sent. `next dev` sets the variable by default; a production build does not, so build with the variable when
+you need dev mode on `next start`:
 
 ```sh
 NEXT_PUBLIC_ENV=local npx next build && npx next start
