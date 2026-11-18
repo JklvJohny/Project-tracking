@@ -151,6 +151,20 @@ type Comment struct {
 	DeletedAt *time.Time
 }
 
+// Document is an uploaded file's metadata. The bytes live in the blob store
+// under StorageKey (server-generated), never in the database.
+type Document struct {
+	ID         int64
+	ProjectID  int64
+	StorageKey string
+	Filename   string
+	MimeType   string
+	SizeBytes  int64
+	UploadedBy int64
+	CreatedAt  time.Time
+	DeletedAt  *time.Time
+}
+
 type CommentMention struct {
 	CommentID int64
 	UserID    int64

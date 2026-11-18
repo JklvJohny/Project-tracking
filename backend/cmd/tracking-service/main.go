@@ -14,10 +14,12 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"tracking-service/internal/auth"
+	"tracking-service/internal/blob"
 	"tracking-service/internal/board"
 	"tracking-service/internal/card"
 	"tracking-service/internal/clock"
 	"tracking-service/internal/config"
+	"tracking-service/internal/document"
 	"tracking-service/internal/events"
 	"tracking-service/internal/httpx"
 	"tracking-service/internal/project"
@@ -56,6 +58,16 @@ func run() error {
 	projects := project.New(st, userProvider, publisher, clock.UTC)
 	boards := board.New(st, publisher, clock.UTC)
 	cards := card.New(st, userProvider, publisher, clock.UTC)
+	blobs, err := blob.NewLocal(cfg.UploadDir)
+	if err != nil {
+		return err
+	}
+	docs := document.New(st, blobs, clock.UTC)
+	if cfg.Env == "local" {
+		if err := seedReports(docs); err != nil {
+			return err
+		}
+	}
 	// Later modules mount in the same group.
 
 	srv := &http.Server{
@@ -66,6 +78,7 @@ func run() error {
 				project.Mount(r, projects)
 				board.Mount(r, boards)
 				card.Mount(r, cards)
+				document.Mount(r, docs)
 			})
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
@@ -108,4 +121,16 @@ func refreshUserCache(ctx context.Context, p *project.Service) {
 			}
 		}
 	}
+}
+
+// seedReports imports the prototype's sample PDFs, when ../reports exists, into
+// the seeded projects (1 Website Redesign, 2 Mobile App v2), uploaded by the
+// seeded pm (user 2). Absent files are skipped silently.
+func seedReports(docs *document.Service) error {
+	n, err := document.SeedFromDir(context.Background(), docs, "../reports",
+		map[string]int64{"website-redesign": 1, "mobile-app-v2": 2}, 2)
+	if n > 0 {
+		slog.Info("seeded reports", "files", n)
+	}
+	return err
 }

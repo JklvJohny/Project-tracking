@@ -31,6 +31,7 @@ type data struct {
 	labels        map[int64]store.Label
 	checklist     map[int64]store.ChecklistItem
 	comments      map[int64]store.Comment
+	documents     map[int64]store.Document
 	mentions      map[mentionKey]store.CommentMention
 	userRoles     map[int64]store.UserRole
 	userCache     map[int64]store.CachedUser
@@ -52,6 +53,7 @@ func newData() *data {
 		labels:        map[int64]store.Label{},
 		checklist:     map[int64]store.ChecklistItem{},
 		comments:      map[int64]store.Comment{},
+		documents:     map[int64]store.Document{},
 		mentions:      map[mentionKey]store.CommentMention{},
 		userRoles:     map[int64]store.UserRole{},
 		userCache:     map[int64]store.CachedUser{},
@@ -88,6 +90,7 @@ func (s *Store) repos(d *data) store.Repos {
 		UserRoles: &userRolesRepo{d: d},
 		Users:     &usersRepo{d: d, now: s.now},
 		Activity:  &activityRepo{d: d, now: s.now},
+		Documents: &documentRepo{d: d},
 	}
 }
 

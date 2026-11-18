@@ -26,6 +26,7 @@ tags:
   - name: cards
   - name: checklist
   - name: comments
+  - name: documents
   - name: ops
 paths:
   /healthz:
@@ -669,6 +670,79 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+  /projects/{projectID}/documents:
+    parameters:
+      - $ref: '#/components/parameters/projectID'
+    get:
+      tags: [documents]
+      operationId: listDocuments
+      summary: The project's non-deleted reports, newest first. Any member or admin; others get 404.
+      responses:
+        '200': { $ref: '#/components/responses/DocumentList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [documents]
+      operationId: uploadDocument
+      summary: Upload a PDF (admin, pm or member; a viewer gets 403). Max 20 MiB, and the content must start with `%PDF-` whatever the client claims. Field `file`; extra parts are ignored.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary, description: The PDF. The file name is cleaned (no path parts or control characters, at most 200 characters). }
+      responses:
+        '201': { $ref: '#/components/responses/Document' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /documents/{documentID}/file:
+    parameters:
+      - $ref: '#/components/parameters/documentID'
+    get:
+      tags: [documents]
+      operationId: downloadDocument
+      summary: Stream the PDF through an authorised route (any member or admin). A deleted document is 404.
+      responses:
+        '200': { $ref: '#/components/responses/DocumentFile' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /documents/{documentID}:
+    parameters:
+      - $ref: '#/components/parameters/documentID'
+    delete:
+      tags: [documents]
+      operationId: deleteDocument
+      summary: Soft-delete (the file is kept so restore works). The uploader, a pm or an admin; another member or a viewer gets 403.
+      responses:
+        '200': { $ref: '#/components/responses/Empty' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /documents/{documentID}/restore:
+    parameters:
+      - $ref: '#/components/parameters/documentID'
+    post:
+      tags: [documents]
+      operationId: restoreDocument
+      summary: Undo a delete. Same permission as delete; restoring a live document is a no-op.
+      responses:
+        '200': { $ref: '#/components/responses/Document' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
 components:
   securitySchemes:
     userHeader:
@@ -684,6 +758,7 @@ components:
     labelID: { name: labelID, in: path, required: true, schema: { type: integer, format: int64, minimum: 1 } }
     itemID: { name: itemID, in: path, required: true, schema: { type: integer, format: int64, minimum: 1 } }
     commentID: { name: commentID, in: path, required: true, schema: { type: integer, format: int64, minimum: 1 } }
+    documentID: { name: documentID, in: path, required: true, schema: { type: integer, format: int64, minimum: 1 } }
   responses:
     Health:
       description: Service is up.
@@ -835,6 +910,34 @@ components:
             properties:
               success: { const: true }
               data: { $ref: '#/components/schemas/Comment' }
+    DocumentList:
+      description: Non-deleted documents, newest first.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [success, data]
+            properties:
+              success: { const: true }
+              data: { type: array, items: { $ref: '#/components/schemas/Document' } }
+    Document:
+      description: The document.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [success, data]
+            properties:
+              success: { const: true }
+              data: { $ref: '#/components/schemas/Document' }
+    DocumentFile:
+      description: The PDF bytes, not the JSON envelope. Sent with `Content-Disposition inline; filename*=UTF-8''<name>` and `X-Content-Type-Options nosniff`.
+      headers:
+        Content-Disposition: { schema: { type: string } }
+        X-Content-Type-Options: { schema: { type: string, const: nosniff } }
+      content:
+        application/pdf:
+          schema: { type: string, format: binary }
     Empty:
       description: Done; data is an empty object.
       content:
@@ -890,7 +993,7 @@ components:
           description: Present with validation_failed. Maps a request field to why it failed.
           additionalProperties:
             type: string
-            enum: [required, too_long, invalid, invalid_date, before_start, not_member]
+            enum: [required, too_long, invalid, invalid_date, before_start, not_member, too_large, not_pdf]
     ProjectStatus:
       type: string
       enum: [active, on_hold, done]
@@ -1185,6 +1288,18 @@ components:
       properties:
         text: { type: string, minLength: 1, maxLength: 500 }
         isDone: { type: boolean }
+    Document:
+      type: object
+      description: A project report. The storage key is never sent.
+      required: [id, projectId, filename, mimeType, sizeBytes, uploadedBy, createdAt]
+      properties:
+        id: { type: integer, format: int64 }
+        projectId: { type: integer, format: int64 }
+        filename: { type: string }
+        mimeType: { type: string, const: application/pdf }
+        sizeBytes: { type: integer, format: int64 }
+        uploadedBy: { type: integer, format: int64 }
+        createdAt: { type: string, format: date-time }
     CommentInput:
       type: object
       additionalProperties: false

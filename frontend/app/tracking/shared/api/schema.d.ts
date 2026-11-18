@@ -576,6 +576,83 @@ export interface paths {
         patch: operations["editComment"];
         trace?: never;
     };
+    "/projects/{projectID}/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectID: components["parameters"]["projectID"];
+            };
+            cookie?: never;
+        };
+        /** The project's non-deleted reports, newest first. Any member or admin; others get 404. */
+        get: operations["listDocuments"];
+        put?: never;
+        /** Upload a PDF (admin, pm or member; a viewer gets 403). Max 20 MiB, and the content must start with `%PDF-` whatever the client claims. Field `file`; extra parts are ignored. */
+        post: operations["uploadDocument"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/documents/{documentID}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                documentID: components["parameters"]["documentID"];
+            };
+            cookie?: never;
+        };
+        /** Stream the PDF through an authorised route (any member or admin). A deleted document is 404. */
+        get: operations["downloadDocument"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/documents/{documentID}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                documentID: components["parameters"]["documentID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Soft-delete (the file is kept so restore works). The uploader, a pm or an admin; another member or a viewer gets 403. */
+        delete: operations["deleteDocument"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/documents/{documentID}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                documentID: components["parameters"]["documentID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Undo a delete. Same permission as delete; restoring a live document is a no-op. */
+        post: operations["restoreDocument"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -589,7 +666,7 @@ export interface components {
             code: "bad_request" | "unauthorized" | "forbidden" | "not_found" | "conflict" | "validation_failed" | "server_error";
             /** @description Present with validation_failed. Maps a request field to why it failed. */
             fields?: {
-                [key: string]: "required" | "too_long" | "invalid" | "invalid_date" | "before_start" | "not_member";
+                [key: string]: "required" | "too_long" | "invalid" | "invalid_date" | "before_start" | "not_member" | "too_large" | "not_pdf";
             };
         };
         /** @enum {string} */
@@ -893,6 +970,22 @@ export interface components {
             text?: string;
             isDone?: boolean;
         };
+        /** @description A project report. The storage key is never sent. */
+        Document: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            projectId: number;
+            filename: string;
+            /** @constant */
+            mimeType: "application/pdf";
+            /** Format: int64 */
+            sizeBytes: number;
+            /** Format: int64 */
+            uploadedBy: number;
+            /** Format: date-time */
+            createdAt: string;
+        };
         CommentInput: {
             body: string;
         };
@@ -1110,6 +1203,43 @@ export interface components {
                 };
             };
         };
+        /** @description Non-deleted documents, newest first. */
+        DocumentList: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    /** @constant */
+                    success: true;
+                    data: components["schemas"]["Document"][];
+                };
+            };
+        };
+        /** @description The document. */
+        Document: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    /** @constant */
+                    success: true;
+                    data: components["schemas"]["Document"];
+                };
+            };
+        };
+        /** @description The PDF bytes, not the JSON envelope. Sent with `Content-Disposition inline; filename*=UTF-8''<name>` and `X-Content-Type-Options nosniff`. */
+        DocumentFile: {
+            headers: {
+                "Content-Disposition"?: string;
+                "X-Content-Type-Options"?: "nosniff";
+                [name: string]: unknown;
+            };
+            content: {
+                "application/pdf": string;
+            };
+        };
         /** @description Done; data is an empty object. */
         Empty: {
             headers: {
@@ -1186,6 +1316,7 @@ export interface components {
         labelID: number;
         itemID: number;
         commentID: number;
+        documentID: number;
     };
     requestBodies: never;
     headers: never;
@@ -2063,6 +2194,108 @@ export interface operations {
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             422: components["responses"]["ValidationFailed"];
+        };
+    };
+    listDocuments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectID: components["parameters"]["projectID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["DocumentList"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    uploadDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectID: components["parameters"]["projectID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /**
+                     * Format: binary
+                     * @description The PDF. The file name is cleaned (no path parts or control characters
+                     */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            201: components["responses"]["Document"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
+    downloadDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                documentID: components["parameters"]["documentID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["DocumentFile"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                documentID: components["parameters"]["documentID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Empty"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    restoreDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                documentID: components["parameters"]["documentID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Document"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
 }

@@ -737,3 +737,53 @@ Append(ctx context.Context, e ActivityEvent) error
 - Does: Append records one event; the store assigns ID and, when CreatedAt is zero, sets it to now. Must run in the same transaction as the change it describes.
 - SQL obligation: INSERT INTO activity_events (project_id, card_id, actor_id, type, payload, created_at) ...; payload is changed ids/values only.
 
+
+### DocumentRepo
+
+Backs the Reports page (`internal/document`). Table `documents`: `id, project_id, storage_key, filename, mime_type, size_bytes, uploaded_by, created_at, deleted_at`, with `idx_documents_project (project_id, created_at DESC)`. Document writes do not touch `boards.updated_at` (the board does not show documents), so there is no board ETag bump and no board lock; the service runs a plain `Update`. Each write records its activity event (`document.uploaded`, `document.deleted`, `document.restored`, `card_id` NULL, payload `{"documentId": id}`) in the same transaction.
+
+**`Create`**
+
+```go
+Create(ctx context.Context, d Document) (Document, error)
+```
+
+- Does: Create assigns ID and stores d as given.
+- SQL obligation: INSERT INTO documents (project_id, storage_key, filename, mime_type, size_bytes, uploaded_by, created_at) ... RETURNING id.
+
+**`Get`**
+
+```go
+Get(ctx context.Context, id int64) (Document, error)
+```
+
+- Does: Get returns a document even when soft-deleted (the caller checks DeletedAt); ErrNotFound if absent.
+- SQL obligation: SELECT ... FROM documents WHERE id = $1.
+
+**`SetDeleted`**
+
+```go
+SetDeleted(ctx context.Context, id int64, at *time.Time) error
+```
+
+- Does: SetDeleted sets deleted_at (nil restores); ErrNotFound if absent. No other column changes.
+- SQL obligation: UPDATE documents SET deleted_at = $2 WHERE id = $1.
+
+**`ByProject`**
+
+```go
+ByProject(ctx context.Context, projectID int64) ([]Document, error)
+```
+
+- Does: ByProject returns the project's non-deleted documents, newest first.
+- SQL obligation: SELECT ... FROM documents WHERE project_id = $1 AND deleted_at IS NULL ORDER BY created_at DESC, id DESC (idx_documents_project).
+
+### Blob store contract (`internal/blob`)
+
+Uploaded files are bytes in a `blob.Store`, never in the database and never in a public folder. The service writes the blob first and the row second inside `Store.Update`; if the row write fails it deletes the blob. Delete is soft: only `deleted_at` is set, the blob stays so restore works.
+
+- `Put(ctx, key, r) (int64, error)`: stores r under key, returns the bytes written, and leaves nothing behind on failure.
+- `Open(ctx, key)`: returns the content, or `blob.ErrNotFound`.
+- `Delete(ctx, key)`: a missing key is not an error.
+- The key is server-generated, `<projectID>/<random>.pdf`, and never derived from the client file name. The original name lives only in `documents.filename`. A key that is empty, absolute, or has a `.`, `..` or empty segment is `blob.ErrInvalidKey`.
+- The local implementation writes under `UPLOAD_DIR` (default `./uploads`, git-ignored). A MinIO implementation replaces it later behind the same interface.

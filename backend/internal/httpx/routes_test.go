@@ -16,6 +16,7 @@ import (
 	"tracking-service/internal/auth"
 	"tracking-service/internal/board"
 	"tracking-service/internal/card"
+	"tracking-service/internal/document"
 	"tracking-service/internal/events"
 	"tracking-service/internal/httpx"
 	"tracking-service/internal/project"
@@ -36,6 +37,7 @@ func TestOpenAPI_CoversEveryRoute(t *testing.T) {
 		project.Mount(r, project.New(st, up, ev, time.Now))
 		board.Mount(r, board.New(st, ev, time.Now))
 		card.Mount(r, card.New(st, up, ev, time.Now))
+		document.Mount(r, document.New(st, nil, time.Now))
 	})
 
 	got := map[string]bool{}

@@ -21,6 +21,7 @@ type Repos struct {
 	UserRoles UserRoleRepo
 	Users     UserRepo
 	Activity  ActivityRepo
+	Documents DocumentRepo
 }
 
 type CommentRepo interface {
@@ -57,6 +58,27 @@ type CommentRepo interface {
 	// SQL: DELETE FROM comment_mentions WHERE comment_id = $1;
 	// INSERT INTO comment_mentions (comment_id, user_id) SELECT $1, unnest($2::bigint[]).
 	SetMentions(ctx context.Context, commentID int64, userIDs []int64) error
+}
+
+type DocumentRepo interface {
+	// Create assigns ID and stores d as given.
+	// SQL: INSERT INTO documents (project_id, storage_key, filename, mime_type, size_bytes, uploaded_by, created_at) ... RETURNING id.
+	Create(ctx context.Context, d Document) (Document, error)
+
+	// Get returns a document even when soft-deleted (the caller checks
+	// DeletedAt); ErrNotFound if absent.
+	// SQL: SELECT ... FROM documents WHERE id = $1.
+	Get(ctx context.Context, id int64) (Document, error)
+
+	// SetDeleted sets deleted_at (nil restores); ErrNotFound if absent. No
+	// other column changes.
+	// SQL: UPDATE documents SET deleted_at = $2 WHERE id = $1.
+	SetDeleted(ctx context.Context, id int64, at *time.Time) error
+
+	// ByProject returns the project's non-deleted documents, newest first.
+	// SQL: SELECT ... FROM documents WHERE project_id = $1 AND deleted_at IS NULL
+	// ORDER BY created_at DESC, id DESC (idx_documents_project).
+	ByProject(ctx context.Context, projectID int64) ([]Document, error)
 }
 
 type ChecklistRepo interface {

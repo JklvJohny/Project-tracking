@@ -4,3 +4,4 @@ backend/bin/
 *.exe
 .env*
 .superpowers/
+backend/uploads/
