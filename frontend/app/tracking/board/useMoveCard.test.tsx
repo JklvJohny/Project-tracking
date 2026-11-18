@@ -48,6 +48,7 @@ const crd = (id: number, listId: number): S['CardSummary'] => ({
   checklistTotal: 0,
   checklistDone: 0,
   commentCount: 0,
+  checklistPreview: [],
 });
 const board = (): BoardData => ({
   board: { id: 1, projectId: 1, updatedAt: 'x' },

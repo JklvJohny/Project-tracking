@@ -22,6 +22,7 @@ const base: Card = {
   checklistTotal: 4,
   checklistDone: 1,
   commentCount: 3,
+  checklistPreview: [],
 };
 const users = [{ id: 2, name: 'Somchai Jai', avatarUrl: '' }];
 const labels = [{ id: 1, name: 'Bug', color: 'red' as const }];

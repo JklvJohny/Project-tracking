@@ -2,6 +2,7 @@ package project_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
@@ -375,4 +376,98 @@ func TestRefreshUserCache_UpdatesOnlyStaleRows(t *testing.T) {
 		}
 		return nil
 	})
+}
+
+func TestList_IncludesOwnerMembersProgress(t *testing.T) {
+	e := newEnv(t)
+	p := e.mustCreate(t, manager, "Progress")
+	for _, uid := range []int64{regular, other} {
+		if _, err := e.svc.AddMember(e.ctx, manager, p.ID, uid, "member"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	empty := e.mustCreate(t, manager, "Empty")
+
+	// 3 active cards (1 done), plus an archived card and a card in an archived list that must not count.
+	if err := e.st.Update(e.ctx, func(r store.Repos) error {
+		b, err := r.Boards.ByProject(e.ctx, p.ID)
+		if err != nil {
+			return err
+		}
+		ls, err := r.Lists.ByBoard(e.ctx, b.ID)
+		if err != nil {
+			return err
+		}
+		mk := func(listID int64, pos string, done, archived bool) error {
+			c := store.Card{ListID: listID, Title: pos, Position: pos, CreatedBy: manager, CreatedAt: t0, UpdatedAt: t0}
+			if done {
+				c.CompletedAt = ptr(t0)
+			}
+			if archived {
+				c.ArchivedAt = ptr(t0)
+			}
+			_, err := r.Cards.Create(e.ctx, c)
+			return err
+		}
+		for _, c := range []struct {
+			l        int64
+			pos      string
+			done, ar bool
+		}{
+			{ls[0].ID, "a", false, false}, {ls[0].ID, "b", false, false}, {ls[3].ID, "c", true, false},
+			{ls[0].ID, "d", true, true},
+		} {
+			if err := mk(c.l, c.pos, c.done, c.ar); err != nil {
+				return err
+			}
+		}
+		l := ls[1]
+		l.ArchivedAt = ptr(t0)
+		if err := r.Lists.Save(e.ctx, l); err != nil {
+			return err
+		}
+		return mk(l.ID, "e", true, false)
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := e.svc.List(e.ctx, admin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	byID := map[int64]project.ProjectListItem{}
+	for _, it := range got {
+		byID[it.ID] = it
+	}
+	it := byID[p.ID]
+	if it.Owner.ID != manager || it.Owner.Name != "Napat K." {
+		t.Fatalf("owner = %+v", it.Owner)
+	}
+	// pm first, then by name: Napat K. (pm), Somsak P., วิภา รักงาน
+	var names []string
+	for _, m := range it.Members {
+		names = append(names, m.Name)
+	}
+	if strings.Join(names, "|") != "Napat K.|Somsak P.|วิภา รักงาน" {
+		t.Fatalf("members = %v", names)
+	}
+	if it.CardsTotal != 3 || it.CardsDone != 1 {
+		t.Fatalf("cards = %d/%d, want 1/3", it.CardsDone, it.CardsTotal)
+	}
+	e0 := byID[empty.ID]
+	if e0.CardsTotal != 0 || e0.CardsDone != 0 || len(e0.Members) != 1 {
+		t.Fatalf("empty project = %+v", e0)
+	}
+}
+
+func TestList_EmptyListIsNonNilJSON(t *testing.T) {
+	e := newEnv(t)
+	got, err := e.svc.List(e.ctx, regular)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := json.Marshal(got)
+	if string(b) != "[]" {
+		t.Fatalf("json = %s", b)
+	}
 }

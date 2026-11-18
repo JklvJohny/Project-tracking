@@ -13,7 +13,7 @@ const apiMock = vi.mocked(api);
 type S = components['schemas'];
 const summary: S['CardSummary'] = {
   id: 5, listId: 1, title: 'Old', priority: 'low', startDate: null, dueDate: null, position: 'a', completedAt: null,
-  updatedAt: 'x', labelIds: [1], assigneeIds: [], checklistTotal: 0, checklistDone: 0, commentCount: 4,
+  updatedAt: 'x', labelIds: [1], assigneeIds: [], checklistTotal: 0, checklistDone: 0, commentCount: 4, checklistPreview: [],
 };
 const detail: S['CardDetail'] = {
   ...summary, descriptionMd: '', createdAt: 'x', archivedAt: null, checklist: [],

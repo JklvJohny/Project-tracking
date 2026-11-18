@@ -35,6 +35,7 @@ const crd = (id: number, listId: number): B['cards'][number] => ({
   checklistTotal: 0,
   checklistDone: 0,
   commentCount: 0,
+  checklistPreview: [],
 });
 const snap = (myRole: B['myRole']): B => ({
   board: { id: 1, projectId: 1, updatedAt: 'x' },

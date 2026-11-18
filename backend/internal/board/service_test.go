@@ -570,3 +570,44 @@ func TestUpdateList_NonMemberLooksLikeMissing(t *testing.T) {
 		t.Fatalf("outsider %v, missing %v", a, b)
 	}
 }
+
+func TestSnapshot_ChecklistPreviewFirstThreeByPosition(t *testing.T) {
+	e := newEnv(t)
+	l := e.lists(t)[0].ID
+	with := e.card(t, l, "with", "a")
+	none := e.card(t, l, "none", "b")
+	e.update(t, func(r store.Repos) error {
+		// created out of position order; ids do not match position order
+		for _, it := range []struct {
+			text, pos string
+			done      bool
+		}{{"d", "d", false}, {"b", "b", true}, {"a", "a", false}, {"c", "c", false}} {
+			if _, err := r.Checklist.Create(e.ctx, store.ChecklistItem{CardID: with.ID, Text: it.text, IsDone: it.done, Position: it.pos, UpdatedAt: t0}); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	v, _, err := e.svc.Board(e.ctx, viewer, e.pid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	by := map[int64]board.CardSummaryView{}
+	for _, c := range v.Cards {
+		by[c.ID] = c
+	}
+	pv := by[with.ID].ChecklistPreview
+	if len(pv) != 3 || pv[0].Text != "a" || pv[1].Text != "b" || !pv[1].IsDone || pv[2].Text != "c" {
+		t.Fatalf("preview = %+v", pv)
+	}
+	if by[with.ID].ChecklistTotal != 4 {
+		t.Fatalf("total = %d", by[with.ID].ChecklistTotal)
+	}
+	if by[none.ID].ChecklistPreview == nil || len(by[none.ID].ChecklistPreview) != 0 {
+		t.Fatalf("empty preview must be non-nil empty, got %#v", by[none.ID].ChecklistPreview)
+	}
+	b, _ := json.Marshal(by[none.ID])
+	if !strings.Contains(string(b), `"checklistPreview":[]`) {
+		t.Fatalf("json = %s", b)
+	}
+}

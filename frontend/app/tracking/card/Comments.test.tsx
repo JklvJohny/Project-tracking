@@ -18,7 +18,7 @@ const board = (myRole: B['myRole']): B => ({
   project: { id: 1, name: 'P' } as B['project'],
   myRole,
   lists: [],
-  cards: [{ id: 5, listId: 1, title: 'T', priority: 'low', startDate: null, dueDate: null, position: 'a', completedAt: null, updatedAt: 'x', labelIds: [], assigneeIds: [], checklistTotal: 0, checklistDone: 0, commentCount: 2 }],
+  cards: [{ id: 5, listId: 1, title: 'T', priority: 'low', startDate: null, dueDate: null, position: 'a', completedAt: null, updatedAt: 'x', labelIds: [], assigneeIds: [], checklistTotal: 0, checklistDone: 0, commentCount: 2, checklistPreview: [] }],
   labels: [],
   members: [
     { userId: 2, name: 'Somchai', avatarUrl: '', role: 'member' },

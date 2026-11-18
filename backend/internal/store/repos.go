@@ -186,6 +186,18 @@ type ProjectRepo interface {
 	// SQL: SELECT EXISTS (SELECT 1 FROM projects WHERE lower(name) = lower($1)
 	// AND archived_at IS NULL AND id <> $2).
 	NameTaken(ctx context.Context, name string, exceptID int64) (bool, error)
+
+	// Summaries returns members and card progress for each listed project in
+	// one call; a project without members or cards still gets an entry (empty
+	// Members, zero counts). Active cards exclude archived cards and cards of
+	// archived lists; done means completed_at IS NOT NULL.
+	// SQL: no N+1, a constant number of queries for any len(projectIDs):
+	// SELECT project_id, user_id, role, added_at FROM project_members WHERE project_id = ANY($1);
+	// SELECT b.project_id, count(*) AS total, count(c.completed_at) AS done
+	// FROM boards b JOIN lists l ON l.board_id = b.id AND l.archived_at IS NULL
+	// JOIN cards c ON c.list_id = l.id AND c.archived_at IS NULL
+	// WHERE b.project_id = ANY($1) GROUP BY b.project_id (idx_cards_list).
+	Summaries(ctx context.Context, projectIDs []int64) (map[int64]ProjectSummary, error)
 }
 
 type MemberRepo interface {
@@ -228,11 +240,15 @@ type BoardRepo interface {
 	// snapshot. Lists and cards exclude archived rows (cards of an archived
 	// list too) and are ordered by position, then id. Users holds the cached
 	// profiles of the members and of every assignee. CardSummary counts
-	// exclude soft-deleted comments. ErrNotFound if the project has no board.
+	// exclude soft-deleted comments. Each card carries ChecklistPreview, its
+	// first 3 checklist items by position then id. ErrNotFound if the project
+	// has no board.
 	// SQL: one View, constant number of queries and no N+1: boards by
 	// project_id; lists WHERE board_id AND archived_at IS NULL; cards JOIN lists
 	// WHERE archived_at IS NULL on both, with checklist and comment counts via
 	// grouped subqueries (idx_cards_list, idx_checklist_card, idx_comments_card);
+	// the preview in one query, row_number() OVER (PARTITION BY card_id ORDER BY
+	// position COLLATE "C", id) <= 3 over checklist_items WHERE card_id = ANY(...);
 	// card_assignees and card_labels with card_id = ANY(...); labels, members
 	// and user_cache WHERE user_id = ANY(...). All ORDER BY position COLLATE "C".
 	Snapshot(ctx context.Context, projectID int64) (BoardSnapshot, error)

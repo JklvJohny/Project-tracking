@@ -13,7 +13,7 @@ const apiMock = vi.mocked(api);
 const list = { id: 1, boardId: 1, name: 'To do', position: 'a', isDone: false, wipLimit: null, archivedAt: null };
 const card: B['cards'][number] = {
   id: 5, listId: 1, title: 'Fix login', priority: 'low', startDate: null, dueDate: null, position: 'a',
-  completedAt: null, updatedAt: 'x', labelIds: [], assigneeIds: [], checklistTotal: 0, checklistDone: 0, commentCount: 0,
+  completedAt: null, updatedAt: 'x', labelIds: [], assigneeIds: [], checklistTotal: 0, checklistDone: 0, commentCount: 0, checklistPreview: [],
 };
 const snapshot: B = {
   board: { id: 1, projectId: 1, updatedAt: 'x' },

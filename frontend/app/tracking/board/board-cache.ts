@@ -111,6 +111,7 @@ export function detailToSummary(d: S['CardDetail'], prev?: CardSummary): CardSum
     checklistTotal: d.checklist.length,
     checklistDone: d.checklist.filter((i) => i.isDone).length,
     commentCount: prev?.commentCount ?? 0,
+    checklistPreview: d.checklist.slice(0, 3).map(({ id, text, isDone }) => ({ id, text, isDone })),
   };
 }
 

@@ -101,6 +101,17 @@ type CardSummary struct {
 	ChecklistTotal int
 	ChecklistDone  int
 	CommentCount   int
+	// ChecklistPreview is the card's first 3 checklist items by position, then
+	// id; never nil.
+	ChecklistPreview []ChecklistItem
+}
+
+// ProjectSummary is what the projects list shows beside each project: who is
+// in it and how far along it is.
+type ProjectSummary struct {
+	Members    []Member // every member, unordered; the service orders by role and name
+	CardsTotal int      // active cards: not archived and not in an archived list
+	CardsDone  int      // of those, completed_at IS NOT NULL
 }
 
 type CardAssignee struct {

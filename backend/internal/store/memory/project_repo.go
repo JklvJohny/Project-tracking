@@ -63,6 +63,38 @@ func (r *projectRepo) NameTaken(_ context.Context, name string, exceptID int64) 
 	return false, nil
 }
 
+func (r *projectRepo) Summaries(_ context.Context, projectIDs []int64) (map[int64]store.ProjectSummary, error) {
+	d := r.d
+	out := make(map[int64]store.ProjectSummary, len(projectIDs))
+	for _, id := range projectIDs {
+		out[id] = store.ProjectSummary{Members: []store.Member{}}
+	}
+	for _, m := range d.members {
+		if s, ok := out[m.ProjectID]; ok {
+			s.Members = append(s.Members, m)
+			out[m.ProjectID] = s
+		}
+	}
+	for _, c := range d.cards {
+		l, ok := d.lists[c.ListID]
+		if !ok || c.ArchivedAt != nil || l.ArchivedAt != nil {
+			continue
+		}
+		b, ok := d.boards[l.BoardID]
+		if !ok {
+			continue
+		}
+		if s, ok := out[b.ProjectID]; ok {
+			s.CardsTotal++
+			if c.CompletedAt != nil {
+				s.CardsDone++
+			}
+			out[b.ProjectID] = s
+		}
+	}
+	return out, nil
+}
+
 type memberRepo struct{ d *data }
 
 func (r *memberRepo) Get(_ context.Context, projectID, userID int64) (store.Member, error) {

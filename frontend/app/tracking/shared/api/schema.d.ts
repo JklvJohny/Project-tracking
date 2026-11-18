@@ -637,6 +637,15 @@ export interface components {
             archivedAt: string | null;
             myRole: components["schemas"]["MyRole"];
         };
+        /** @description A project as listed, with its owner, members (pm first, then by name) and active-card progress. */
+        ProjectListItem: components["schemas"]["Project"] & {
+            owner: components["schemas"]["User"];
+            members: components["schemas"]["User"][];
+            /** @description Active cards with completedAt set. */
+            cardsDone: number;
+            /** @description Cards not archived and not in an archived list. */
+            cardsTotal: number;
+        };
         CreateProjectInput: {
             name: string;
             description?: string;
@@ -758,6 +767,13 @@ export interface components {
             checklistDone: number;
             /** @description Excludes soft-deleted comments. */
             commentCount: number;
+            /** @description The first 3 checklist items by position; empty when none. */
+            checklistPreview: {
+                /** Format: int64 */
+                id: number;
+                text: string;
+                isDone: boolean;
+            }[];
         };
         BoardLabel: {
             /** Format: int64 */
@@ -960,7 +976,7 @@ export interface components {
                 "application/json": {
                     /** @constant */
                     success: true;
-                    data: components["schemas"]["Project"][];
+                    data: components["schemas"]["ProjectListItem"][];
                 };
             };
         };

@@ -71,6 +71,14 @@ type CardSummaryView struct {
 	ChecklistTotal int        `json:"checklistTotal"`
 	ChecklistDone  int        `json:"checklistDone"`
 	CommentCount   int        `json:"commentCount"`
+	// ChecklistPreview is the first 3 items by position, for the card face.
+	ChecklistPreview []ChecklistPreviewItem `json:"checklistPreview"`
+}
+
+type ChecklistPreviewItem struct {
+	ID     int64  `json:"id"`
+	Text   string `json:"text"`
+	IsDone bool   `json:"isDone"`
 }
 
 type LabelView struct {
@@ -128,7 +136,11 @@ func dateStr(d *store.Date) *string {
 }
 
 func cardView(c store.CardSummary) CardSummaryView {
-	return CardSummaryView{
+	pv := make([]ChecklistPreviewItem, len(c.ChecklistPreview))
+	for i, it := range c.ChecklistPreview {
+		pv[i] = ChecklistPreviewItem{ID: it.ID, Text: it.Text, IsDone: it.IsDone}
+	}
+	return CardSummaryView{ChecklistPreview: pv,
 		ID: c.ID, ListID: c.ListID, Title: c.Title, Priority: store.PriorityName(c.Priority),
 		StartDate: dateStr(c.StartDate), DueDate: dateStr(c.DueDate), Position: c.Position,
 		CompletedAt: c.CompletedAt, UpdatedAt: c.UpdatedAt,

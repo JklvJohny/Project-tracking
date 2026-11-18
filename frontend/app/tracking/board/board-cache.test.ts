@@ -19,6 +19,7 @@ const card = (id: number, listId: number, extra: Partial<Card> = {}): Card => ({
   checklistTotal: 0,
   checklistDone: 0,
   commentCount: 0,
+  checklistPreview: [],
   ...extra,
 });
 const list = (id: number) => ({ id, boardId: 1, name: `l${id}`, position: String(id), isDone: false, wipLimit: null, archivedAt: null });

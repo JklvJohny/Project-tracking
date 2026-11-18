@@ -69,6 +69,16 @@ type ProjectView struct {
 	MyRole      string     `json:"myRole"`
 }
 
+// ProjectListItem is a row of GET /projects: the project plus who is in it and
+// how far along it is.
+type ProjectListItem struct {
+	ProjectView
+	Owner      UserView   `json:"owner"`
+	Members    []UserView `json:"members"` // pm first, then by name
+	CardsDone  int        `json:"cardsDone"`
+	CardsTotal int        `json:"cardsTotal"`
+}
+
 type MemberView struct {
 	UserID    int64     `json:"userId"`
 	Name      string    `json:"name"`
@@ -201,8 +211,8 @@ func checkDescription(d string, fields map[string]string) {
 	}
 }
 
-func (s *Service) List(ctx context.Context, userID int64) ([]ProjectView, error) {
-	var out []ProjectView
+func (s *Service) List(ctx context.Context, userID int64) ([]ProjectListItem, error) {
+	var out []ProjectListItem
 	err := s.st.View(ctx, func(r store.Repos) error {
 		ur, err := r.UserRoles.Get(ctx, userID)
 		if err != nil {
@@ -218,7 +228,19 @@ func (s *Service) List(ctx context.Context, userID int64) ([]ProjectView, error)
 		if err != nil {
 			return err
 		}
-		out = make([]ProjectView, 0, len(ps))
+		ids := make([]int64, len(ps))
+		for i, p := range ps {
+			ids[i] = p.ID
+		}
+		sums, err := r.Projects.Summaries(ctx, ids)
+		if err != nil {
+			return err
+		}
+		profiles, err := cachedProfiles(ctx, r, ps, sums)
+		if err != nil {
+			return err
+		}
+		out = make([]ProjectListItem, 0, len(ps))
 		for _, p := range ps {
 			role := authz.Admin
 			if !isAdmin {
@@ -228,7 +250,11 @@ func (s *Service) List(ctx context.Context, userID int64) ([]ProjectView, error)
 				}
 				role = authz.Role(m.Role)
 			}
-			out = append(out, view(p, role))
+			sum := sums[p.ID]
+			out = append(out, ProjectListItem{
+				ProjectView: view(p, role), Owner: profiles.view(p.OwnerID),
+				Members: profiles.members(sum.Members), CardsDone: sum.CardsDone, CardsTotal: sum.CardsTotal,
+			})
 		}
 		// Active projects first, then the most recently changed.
 		sort.SliceStable(out, func(i, j int) bool {
@@ -241,6 +267,60 @@ func (s *Service) List(ctx context.Context, userID int64) ([]ProjectView, error)
 		return nil
 	})
 	return out, err
+}
+
+// profileSet maps user id to the cached profile; users missing from the cache
+// show with an empty name rather than disappearing from the list.
+type profileSet map[int64]store.CachedUser
+
+func cachedProfiles(ctx context.Context, r store.Repos, ps []store.Project, sums map[int64]store.ProjectSummary) (profileSet, error) {
+	seen := map[int64]bool{}
+	var ids []int64
+	add := func(id int64) {
+		if !seen[id] {
+			seen[id] = true
+			ids = append(ids, id)
+		}
+	}
+	for _, p := range ps {
+		add(p.OwnerID)
+		for _, m := range sums[p.ID].Members {
+			add(m.UserID)
+		}
+	}
+	us, err := r.Users.Get(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	out := make(profileSet, len(us))
+	for _, u := range us {
+		out[u.UserID] = u
+	}
+	return out, nil
+}
+
+func (ps profileSet) view(id int64) UserView {
+	u := ps[id]
+	return UserView{ID: id, Name: u.DisplayName, AvatarURL: u.AvatarURL}
+}
+
+func (ps profileSet) members(ms []store.Member) []UserView {
+	sorted := append([]store.Member(nil), ms...)
+	sort.Slice(sorted, func(i, j int) bool {
+		a, b := sorted[i], sorted[j]
+		if (a.Role == "pm") != (b.Role == "pm") {
+			return a.Role == "pm"
+		}
+		if an, bn := ps[a.UserID].DisplayName, ps[b.UserID].DisplayName; an != bn {
+			return an < bn
+		}
+		return a.UserID < b.UserID
+	})
+	out := make([]UserView, len(sorted))
+	for i, m := range sorted {
+		out[i] = ps.view(m.UserID)
+	}
+	return out
 }
 
 func (s *Service) Create(ctx context.Context, userID int64, in CreateProjectInput) (ProjectView, error) {

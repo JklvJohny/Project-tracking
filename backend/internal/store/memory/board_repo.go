@@ -102,6 +102,8 @@ func (r *boardRepo) Snapshot(ctx context.Context, projectID int64) (store.BoardS
 	return snap, nil
 }
 
+const checklistPreviewLen = 3
+
 // summary builds the board view of a card by scanning the child maps; fine for
 // the in-memory store, where there is no query cost to avoid.
 func (d *data) summary(c store.Card) store.CardSummary {
@@ -109,7 +111,7 @@ func (d *data) summary(c store.Card) store.CardSummary {
 		ID: c.ID, ListID: c.ListID, Title: c.Title, Priority: c.Priority,
 		StartDate: ptr(c.StartDate), DueDate: ptr(c.DueDate), Position: c.Position,
 		CompletedAt: ptr(c.CompletedAt), ArchivedAt: ptr(c.ArchivedAt), UpdatedAt: c.UpdatedAt,
-		LabelIDs: []int64{}, AssigneeIDs: []int64{},
+		LabelIDs: []int64{}, AssigneeIDs: []int64{}, ChecklistPreview: []store.ChecklistItem{},
 	}
 	for k := range d.cardAssignees {
 		if k.CardID == c.ID {
@@ -123,14 +125,26 @@ func (d *data) summary(c store.Card) store.CardSummary {
 	}
 	sortIDs(s.AssigneeIDs)
 	sortIDs(s.LabelIDs)
+	var items []store.ChecklistItem
 	for _, it := range d.checklist {
 		if it.CardID == c.ID {
 			s.ChecklistTotal++
 			if it.IsDone {
 				s.ChecklistDone++
 			}
+			items = append(items, it)
 		}
 	}
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].Position != items[j].Position {
+			return items[i].Position < items[j].Position
+		}
+		return items[i].ID < items[j].ID
+	})
+	if len(items) > checklistPreviewLen {
+		items = items[:checklistPreviewLen]
+	}
+	s.ChecklistPreview = append(s.ChecklistPreview, items...)
 	for _, cm := range d.comments {
 		if cm.CardID == c.ID && cm.DeletedAt == nil {
 			s.CommentCount++
