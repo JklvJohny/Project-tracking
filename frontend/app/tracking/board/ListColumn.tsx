@@ -38,14 +38,26 @@ const TEXT = {
   },
 };
 
-type ListCardsProps = Pick<ListColumnProps, 'projectId' | 'cards' | 'users' | 'labels' | 'members' | 'canAddCards'>;
+type ListCardsProps = Pick<
+  ListColumnProps,
+  'projectId' | 'cards' | 'users' | 'labels' | 'members' | 'canAddCards' | 'canTickAny' | 'meId'
+>;
 
 /**
  * The rows live in their own memoised component: ListColumn re-renders on every pointer move of a drag (its
  * sortable hooks subscribe to dnd-kit's context), and without this boundary each of those renders rebuilt every
  * row of the list.
  */
-const ListCards = memo(function ListCards({ projectId, cards, users, labels, members, canAddCards }: ListCardsProps) {
+const ListCards = memo(function ListCards({
+  projectId,
+  cards,
+  users,
+  labels,
+  members,
+  canAddCards,
+  canTickAny,
+  meId,
+}: ListCardsProps) {
   const t = useT(TEXT);
   const archiveCard = useArchiveCard(projectId);
   return (
@@ -61,6 +73,7 @@ const ListCards = memo(function ListCards({ projectId, cards, users, labels, mem
                 labels={labels}
                 members={members}
                 canEdit={canAddCards}
+                canTick={canAddCards && (canTickAny || (meId !== undefined && c.assigneeIds.includes(meId)))}
                 actionSpace={canAddCards}
               />
               {canAddCards && (
@@ -104,6 +117,9 @@ type ListColumnProps = {
   members: S['BoardMember'][];
   canManage: boolean;
   canAddCards: boolean;
+  /** Admin/PM on a live project: may tick any card's checklist. Members tick only cards assigned to them (`meId`). */
+  canTickAny: boolean;
+  meId: number | undefined;
 };
 
 export const ListColumn = memo(function ListColumn({
@@ -115,6 +131,8 @@ export const ListColumn = memo(function ListColumn({
   members,
   canManage,
   canAddCards,
+  canTickAny,
+  meId,
 }: ListColumnProps) {
   const t = useT(TEXT);
   const update = useUpdateList(projectId);
@@ -207,6 +225,8 @@ export const ListColumn = memo(function ListColumn({
           labels={labels}
           members={members}
           canAddCards={canAddCards}
+          canTickAny={canTickAny}
+          meId={meId}
         />
       </ol>
       {canAddCards && <AddCard projectId={projectId} listId={list.id} listName={list.name} />}

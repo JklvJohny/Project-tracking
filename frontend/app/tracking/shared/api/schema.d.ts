@@ -513,7 +513,10 @@ export interface paths {
         delete: operations["deleteChecklistItem"];
         options?: never;
         head?: never;
-        /** Edit text and/or tick the item. */
+        /**
+         * Edit text and/or tick the item.
+         * @description Editing the text needs edit rights on the card (admin, pm, member). Ticking or unticking (`isDone`) is allowed for admin and pm on any card, and for a member only on cards assigned to them; otherwise 403 forbidden.
+         */
         patch: operations["updateChecklistItem"];
         trace?: never;
     };

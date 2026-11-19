@@ -94,6 +94,10 @@ func TestToggle_UpdatesBoardCounts(t *testing.T) {
 	if d, n := counts(); d != 0 || n != 1 {
 		t.Fatalf("before = %d/%d", d, n)
 	}
+	// A member may tick only on cards assigned to them.
+	if _, err := e.svc.Assign(e.ctx, manager, c.ID, member); err != nil {
+		t.Fatal(err)
+	}
 	before := e.boardUpdatedAt(t)
 	*e.tick = 7
 	got, err := e.svc.UpdateItem(e.ctx, member, it.ID, card.ItemPatch{IsDone: ptr(true)})
@@ -205,6 +209,13 @@ func TestItemRoute_NonMemberNotFound(t *testing.T) {
 	if rec, body := do(h, member, "POST", "/cards/"+id(c.ID)+"/checklist", `{"text":"x"}`); rec.Code != 201 || body["data"] == nil {
 		t.Fatalf("add = %d %s", rec.Code, rec.Body)
 	}
+	// Ticking needs the member to be assigned; over HTTP the refusal is 403.
+	if rec, _ := do(h, member, "PATCH", "/checklist/"+id(it.ID), `{"isDone":true}`); rec.Code != 403 {
+		t.Fatalf("unassigned patch = %d %s", rec.Code, rec.Body)
+	}
+	if _, err := e.svc.Assign(e.ctx, manager, c.ID, member); err != nil {
+		t.Fatal(err)
+	}
 	if rec, _ := do(h, member, "PATCH", "/checklist/"+id(it.ID), `{"isDone":true}`); rec.Code != 200 {
 		t.Fatalf("patch = %d %s", rec.Code, rec.Body)
 	}
@@ -234,5 +245,44 @@ func TestItemWrites_ArchivedCardConflict(t *testing.T) {
 	}
 	if got := e.itemOrder(t, c.ID); len(got) != 2 || got[0] != a.ID {
 		t.Fatalf("items changed: %v", got)
+	}
+}
+
+func TestToggle_MemberOnlyOnAssignedCards(t *testing.T) {
+	e := newEnv(t)
+	c := e.mk(t, e.lists(t)[0].ID, "c")
+	it := e.addItem(t, c.ID, "a")
+	// Not assigned: a member cannot tick, even together with a text edit.
+	if _, err := e.svc.UpdateItem(e.ctx, member, it.ID, card.ItemPatch{IsDone: ptr(true)}); code(err) != "forbidden" {
+		t.Fatalf("unassigned member tick: %v", err)
+	}
+	if _, err := e.svc.UpdateItem(e.ctx, member, it.ID, card.ItemPatch{Text: ptr("b"), IsDone: ptr(true)}); code(err) != "forbidden" {
+		t.Fatalf("unassigned member tick+text: %v", err)
+	}
+	// Other checklist edits stay open to members.
+	if _, err := e.svc.UpdateItem(e.ctx, member, it.ID, card.ItemPatch{Text: ptr("b")}); err != nil {
+		t.Fatalf("member text edit: %v", err)
+	}
+	// PM and admin tick any card.
+	if _, err := e.svc.UpdateItem(e.ctx, manager, it.ID, card.ItemPatch{IsDone: ptr(true)}); err != nil {
+		t.Fatalf("pm tick: %v", err)
+	}
+	if _, err := e.svc.UpdateItem(e.ctx, admin, it.ID, card.ItemPatch{IsDone: ptr(false)}); err != nil {
+		t.Fatalf("admin tick: %v", err)
+	}
+	// Assigned: the member can tick.
+	if _, err := e.svc.Assign(e.ctx, manager, c.ID, member); err != nil {
+		t.Fatal(err)
+	}
+	got, err := e.svc.UpdateItem(e.ctx, member, it.ID, card.ItemPatch{IsDone: ptr(true)})
+	if err != nil || !got.IsDone {
+		t.Fatalf("assigned member tick: %+v %v", got, err)
+	}
+	// A viewer stays read-only even when assigned.
+	if _, err := e.svc.Assign(e.ctx, manager, c.ID, viewer); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.svc.UpdateItem(e.ctx, viewer, it.ID, card.ItemPatch{IsDone: ptr(false)}); code(err) != "forbidden" {
+		t.Fatalf("assigned viewer tick: %v", err)
 	}
 }

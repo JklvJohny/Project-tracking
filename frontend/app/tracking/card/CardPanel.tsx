@@ -6,8 +6,8 @@ import { Sheet, SheetClose, SheetContent, SheetTitle } from '@/components/ui/she
 import { Skeleton } from '@/components/ui/skeleton';
 import { useArchiveCard } from '../board/mutations';
 import { detailToSummary } from '../board/board-cache';
-import { boardAccess } from '../shared/access';
-import { useBoard, useCard } from '../shared/api/queries';
+import { boardAccess, canTickCard } from '../shared/access';
+import { useBoard, useCard, useMe } from '../shared/api/queries';
 import { ApiError } from '../shared/api/client';
 import { errorMessage } from '../shared/errors';
 import { priorityLabel } from '../shared/format';
@@ -79,6 +79,7 @@ export function CardPanel({
   const { lang } = useLang();
   const board = useBoard(projectId);
   const card = useCard(cardId);
+  const me = useMe();
   const archive = useArchiveCard(projectId);
   // An archived project is read-only for everyone, like a viewer.
   const { canEdit, canManage } = boardAccess(board.data);
@@ -86,6 +87,8 @@ export function CardPanel({
   // A deleted card or a stale ?card id answers not_found/forbidden for good: retrying cannot help.
   const gone = card.error instanceof ApiError && (card.error.code === 'not_found' || card.error.code === 'forbidden');
   const readOnly = !canEdit || !!d?.archivedAt;
+  // Admin/PM tick any card; a member only a card assigned to them.
+  const canTick = !readOnly && !!d && canTickCard(board.data, d.assigneeIds, me.data?.user?.id);
   // Names come from the board's user list (members and past assignees); anyone else shows as unknown.
   const creator = d && (board.data?.users.find((u) => u.id === d.createdBy) ?? { id: d.createdBy, name: `${t.unknown} #${d.createdBy}` });
 
@@ -196,6 +199,7 @@ export function CardPanel({
                 projectId={projectId}
                 cardId={cardId}
                 readOnly={readOnly}
+                canTick={canTick}
                 focusAdd={focusChecklist}
                 onFocusHandled={onFocusHandled}
               />

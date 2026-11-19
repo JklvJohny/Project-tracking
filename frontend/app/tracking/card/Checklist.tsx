@@ -56,6 +56,7 @@ function ItemRow({
   index,
   count,
   readOnly,
+  canTick,
   onToggle,
   onRename,
   onDelete,
@@ -65,6 +66,7 @@ function ItemRow({
   index: number;
   count: number;
   readOnly: boolean;
+  canTick: boolean;
   onToggle: (done: boolean) => void;
   onRename: (text: string) => Promise<boolean>;
   onDelete: () => void;
@@ -105,7 +107,7 @@ function ItemRow({
     <li data-item={item.id} className="flex items-center gap-2 py-1" onKeyDown={readOnly ? undefined : onKeyDown}>
       <Checkbox
         checked={item.isDone}
-        disabled={readOnly}
+        disabled={readOnly || !canTick}
         aria-label={item.text}
         onCheckedChange={(v) => onToggle(v === true)}
       />
@@ -158,12 +160,15 @@ export function Checklist({
   projectId,
   cardId,
   readOnly,
+  canTick = !readOnly,
   focusAdd = false,
   onFocusHandled,
 }: {
   projectId: number;
   cardId: number;
   readOnly: boolean;
+  /** May tick items (admin/PM, or a member assigned to the card). Text edits follow `readOnly` only. */
+  canTick?: boolean;
   /** Focus the add-item input once on mount (the card preview's "+" link). */
   focusAdd?: boolean;
   onFocusHandled?: () => void;
@@ -248,6 +253,7 @@ export function Checklist({
             index={i}
             count={items.length}
             readOnly={readOnly}
+            canTick={canTick}
             onToggle={(v) => void save(() => cl.update.mutateAsync({ id: item.id, isDone: v }))}
             onRename={(text) => save(() => cl.update.mutateAsync({ id: item.id, text }))}
             onDelete={() => void remove(i)}

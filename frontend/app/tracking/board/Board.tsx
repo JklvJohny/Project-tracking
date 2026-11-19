@@ -2,7 +2,7 @@
 import { useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { boardAccess } from '../shared/access';
-import { useBoard } from '../shared/api/queries';
+import { useBoard, useMe } from '../shared/api/queries';
 import { errorMessage } from '../shared/errors';
 import { useLang, useT } from '../shared/i18n';
 import { AddList, COLUMN_W } from './AddList';
@@ -58,6 +58,7 @@ export function Board({ projectId, fill = false }: { projectId: number; fill?: b
   const t = useT(TEXT);
   const { lang } = useLang();
   const board = useBoard(projectId);
+  const me = useMe();
   const panHandlers = usePanScroll();
   const data = board.data;
   const byList = useMemo(() => (data ? cardsByList(data) : null), [data]);
@@ -76,6 +77,8 @@ export function Board({ projectId, fill = false }: { projectId: number; fill?: b
 
   // Viewers get no controls; admin/pm manage lists; admin/pm/member add cards. An archived project is read-only.
   const { canManage, canEdit: canAddCards } = boardAccess(data);
+  // Admin/PM tick any card's checklist; a member only cards assigned to them (canTickCard has the rule).
+  const meId = me.data?.user?.id;
 
   return (
     <BoardDnd projectId={projectId} data={data} byList={byList} canDragCards={canAddCards} canDragLists={canManage}>
@@ -92,6 +95,8 @@ export function Board({ projectId, fill = false }: { projectId: number; fill?: b
               members={data.members}
               canManage={canManage}
               canAddCards={canAddCards}
+              canTickAny={canManage}
+              meId={meId}
             />
           ))}
           {canManage && <AddList projectId={projectId} />}

@@ -60,6 +60,7 @@ export const CardPreview = memo(function CardPreview({
   labels,
   members,
   canEdit,
+  canTick = canEdit,
   actionSpace = false,
 }: {
   projectId: number;
@@ -67,8 +68,10 @@ export const CardPreview = memo(function CardPreview({
   users: S['User'][];
   labels: S['BoardLabel'][];
   members: S['BoardMember'][];
-  /** Admin/PM/member on a live project: shows the "+" controls and enables the subtask checkboxes. */
+  /** Admin/PM/member on a live project: shows the "+" controls. */
   canEdit: boolean;
+  /** May tick the subtask checkboxes: admin/PM on any card, a member only on cards assigned to them. */
+  canTick?: boolean;
   /** Reserve the top-right corner for an overlaid action button. */
   actionSpace?: boolean;
 }) {
@@ -156,12 +159,12 @@ export const CardPreview = memo(function CardPreview({
                 <li key={i.id}>
                   <label
                     // A read-only row must let the click through to the card link underneath.
-                    className={`flex w-fit max-w-full items-center gap-2 py-0.5 text-[13px] ${canEdit ? 'pointer-events-auto cursor-pointer' : ''}`}
-                    {...(canEdit ? stopDrag : {})}
+                    className={`flex w-fit max-w-full items-center gap-2 py-0.5 text-[13px] ${canTick ? 'pointer-events-auto cursor-pointer' : ''}`}
+                    {...(canTick ? stopDrag : {})}
                   >
                     <Checkbox
                       checked={i.isDone}
-                      disabled={!canEdit}
+                      disabled={!canTick}
                       onCheckedChange={(v) => toggle.mutate({ cardId: card.id, itemId: i.id, isDone: v === true })}
                       className="size-3.5"
                     />
