@@ -24,7 +24,6 @@ const LEFT = '10rem';
 const TEXT = {
   th: {
     title: 'ไทม์ไลน์',
-    subtitle: 'ใครทำงานไหนเสร็จเมื่อไหร่',
     prev: 'สัปดาห์ก่อนหน้า',
     next: 'สัปดาห์ถัดไป',
     today: 'วันนี้',
@@ -40,7 +39,6 @@ const TEXT = {
   },
   en: {
     title: 'Timeline',
-    subtitle: 'Who finishes which task, by date',
     prev: 'Previous week',
     next: 'Next week',
     today: 'Today',
@@ -246,7 +244,6 @@ export function TimelineSection({
           <ChevronDown className={`size-4 transition-transform ${open ? '' : '-rotate-90'}`} aria-hidden />
           {t.title}
         </button>
-        <span className="hidden text-xs text-muted-foreground sm:inline">{t.subtitle}</span>
       </div>
       <div id="timeline-section-body" hidden={!open} className="min-h-0 overflow-auto">
         {open && <TimelineBody projectId={projectId} />}

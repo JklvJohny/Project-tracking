@@ -100,7 +100,7 @@ export function AddCard({ projectId, listId, listName }: { projectId: number; li
         <Button type="button" variant="ghost" size="icon-sm" aria-label={t.cancel} onClick={() => setOpen(false)}>
           <X aria-hidden />
         </Button>
-        <span className="ml-auto text-[11px] text-muted-foreground">{t.hint}</span>
+        <span className="sr-only">{t.hint}</span>
       </div>
     </form>
   );

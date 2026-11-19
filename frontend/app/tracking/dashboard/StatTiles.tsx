@@ -8,11 +8,8 @@ const TEXT = {
     open: 'งานที่ยังไม่เสร็จ',
     inProgress: (n: number) => `กำลังทำ ${n}`,
     overdue: 'เกินกำหนด',
-    overdueSub: 'เลยกำหนดและยังไม่เสร็จ',
     week: 'ครบกำหนดใน 7 วัน',
-    weekSub: 'งานที่ครบกำหนดในสัปดาห์นี้',
     unassigned: 'ยังไม่มอบหมาย',
-    unassignedSub: (n: number): string => (n === 0 ? 'ทุกงานมีผู้รับผิดชอบแล้ว' : 'งานที่ยังไม่มีผู้รับผิดชอบ'),
     completion: 'ความคืบหน้า',
     doneOf: (d: number, t: number) => `เสร็จ ${d} จาก ${t} งาน`,
   },
@@ -20,11 +17,8 @@ const TEXT = {
     open: 'Open tasks',
     inProgress: (n: number) => `${n} in progress`,
     overdue: 'Overdue',
-    overdueSub: 'Past due and not done',
     week: 'Due in 7 days',
-    weekSub: 'Open tasks due this week',
     unassigned: 'Unassigned',
-    unassignedSub: (n: number): string => (n === 0 ? 'Every task has an owner' : 'Open tasks with no owner'),
     completion: 'Completion',
     doneOf: (d: number, t: number) => `${d} of ${t} tasks done`,
   },
@@ -49,14 +43,9 @@ export function StatTiles({ totals }: { totals: Dashboard['totals'] }) {
   return (
     <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
       <Tile icon={Columns3} label={t.open} value={String(totals.open)} sub={t.inProgress(totals.inProgress)} />
-      <Tile icon={TriangleAlert} label={t.overdue} value={String(totals.overdue)} sub={t.overdueSub} />
-      <Tile icon={CalendarClock} label={t.week} value={String(totals.dueSoon)} sub={t.weekSub} />
-      <Tile
-        icon={Users}
-        label={t.unassigned}
-        value={String(totals.unassigned)}
-        sub={t.unassignedSub(totals.unassigned)}
-      />
+      <Tile icon={TriangleAlert} label={t.overdue} value={String(totals.overdue)} />
+      <Tile icon={CalendarClock} label={t.week} value={String(totals.dueSoon)} />
+      <Tile icon={Users} label={t.unassigned} value={String(totals.unassigned)} />
       <div role="group" aria-label={t.completion} className="col-span-2 rounded-xl border bg-card p-4 shadow-sm md:col-span-1">
         <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
           <CircleCheck className="h-4 w-4" aria-hidden="true" />

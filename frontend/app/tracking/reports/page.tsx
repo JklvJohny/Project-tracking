@@ -18,7 +18,6 @@ import { useDeleteDocument, useDocuments } from './queries';
 const TEXT = {
   th: {
     title: 'รายงาน',
-    sub: 'เอกสาร PDF ของแต่ละโปรเจกต์',
     select: 'เลือกโปรเจกต์',
     selectHint: 'เลือกโปรเจกต์ทางซ้ายเพื่อดูเอกสาร',
     docs: (n: number) => `${n} เอกสาร`,
@@ -32,7 +31,6 @@ const TEXT = {
   },
   en: {
     title: 'Reports',
-    sub: 'PDF documents for each project',
     select: 'Select a project',
     selectHint: 'Choose a project on the left to see its documents.',
     docs: (n: number) => `${n} document${n === 1 ? '' : 's'}`,
@@ -133,7 +131,6 @@ function ReportsView() {
     <div className="mx-auto max-w-6xl px-4 py-5 sm:px-6 sm:py-6">
       <div className="mb-5">
         <h1 className="text-2xl font-semibold tracking-tight">{t.title}</h1>
-        <p className="text-sm text-muted-foreground">{t.sub}</p>
       </div>
       {projects.isError ? (
         <div role="alert" className="flex flex-col items-start gap-3 rounded-lg border p-6">

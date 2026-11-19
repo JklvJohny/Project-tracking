@@ -63,7 +63,7 @@ export function ArchivedSheet({ projectId, canRestoreLists }: { projectId: numbe
         <SheetContent className="w-[min(26rem,100vw)] sm:max-w-md">
           <SheetHeader>
             <SheetTitle>{t.title}</SheetTitle>
-            <SheetDescription>{t.desc}</SheetDescription>
+            <SheetDescription className="sr-only">{t.desc}</SheetDescription>
           </SheetHeader>
           <div className="flex flex-col gap-5 overflow-y-auto px-4 pb-4">
             {archived.isPending && <Skeleton className="h-24 w-full" />}

@@ -274,7 +274,7 @@ export function Checklist({
               }
             }}
           />
-          <p className="text-xs text-muted-foreground">{t.hint}</p>
+          <p className="sr-only">{t.hint}</p>
           <SaveStatus state={state} />
         </>
       )}

@@ -10,11 +10,11 @@ import type { Doc } from './queries';
 const TEXT = {
   th: {
     name: 'ชื่อไฟล์', size: 'ขนาด', by: 'อัปโหลดโดย', date: 'วันที่', actions: 'การทำงาน', del: 'ลบ',
-    caption: 'เอกสารในโฟลเดอร์ ดับเบิลคลิกหรือกด Enter เพื่อเปิด', hint: 'ดับเบิลคลิกเอกสารเพื่อเปิด', unknown: 'ผู้ใช้ไม่ทราบชื่อ',
+    caption: 'เอกสารในโฟลเดอร์ ดับเบิลคลิกหรือกด Enter เพื่อเปิด', unknown: 'ผู้ใช้ไม่ทราบชื่อ',
   },
   en: {
     name: 'Name', size: 'Size', by: 'Uploaded by', date: 'Date', actions: 'Actions', del: 'Delete',
-    caption: 'Documents in this folder. Double-click or press Enter to open.', hint: 'Double-click a document to open it', unknown: 'Unknown user',
+    caption: 'Documents in this folder. Double-click or press Enter to open.', unknown: 'Unknown user',
   },
 };
 
@@ -111,7 +111,6 @@ export function DocumentTable({ docs, canDelete, onOpen, onDelete }: Props) {
           </tbody>
         </table>
       </div>
-      <p className="border-t px-4 py-2 text-xs text-muted-foreground">{t.hint}</p>
     </>
   );
 }

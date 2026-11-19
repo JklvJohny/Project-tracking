@@ -30,15 +30,12 @@ const TEXT = {
     emptyOpenHint: 'งานทั้งหมดเสร็จแล้ว หรือยังไม่มีงานในโปรเจกต์',
     retry: 'ลองอีกครั้ง',
     byProject: 'งานแยกตามโปรเจกต์',
-    byProjectSub: 'จำนวนการ์ดแยกตามสถานะ',
     byProjectCaption: 'งานแยกตามโปรเจกต์และสถานะ',
     workload: 'ภาระงานรายบุคคล',
-    workloadSub: 'งานที่ยังไม่เสร็จของสมาชิกแต่ละคน',
     workloadCaption: 'งานที่ยังไม่เสร็จของแต่ละคนแยกตามสถานะ',
     priority: 'งานที่ยังไม่เสร็จตามความสำคัญ',
     prioritySub: (n: number) => `${n} งานที่ยังไม่เสร็จ`,
     deadlines: 'กำหนดส่ง',
-    deadlinesSub: 'เกินกำหนดและครบกำหนดใน 14 วันข้างหน้า',
   },
   en: {
     title: 'Dashboard',
@@ -54,23 +51,20 @@ const TEXT = {
     emptyOpenHint: 'Every task is done, or the projects have no tasks yet.',
     retry: 'Retry',
     byProject: 'Tasks by project',
-    byProjectSub: 'Count of cards by status',
     byProjectCaption: 'Tasks by project and status',
     workload: 'Workload by person',
-    workloadSub: 'Open tasks assigned to each member',
     workloadCaption: 'Open tasks per person by status',
     priority: 'Open tasks by priority',
     prioritySub: (n: number) => `${n} open tasks`,
     deadlines: 'Deadlines',
-    deadlinesSub: 'Overdue and due in the next 14 days',
   },
 };
 
-function Panel({ title, sub, children }: { title: string; sub: string; children: ReactNode }) {
+function Panel({ title, sub, children }: { title: string; sub?: string; children: ReactNode }) {
   return (
     <section className="min-w-0 rounded-xl border bg-card p-4 shadow-sm sm:p-5">
-      <h2 className="text-base font-semibold">{title}</h2>
-      <p className="mb-4 text-xs text-muted-foreground">{sub}</p>
+      <h2 className={`text-base font-semibold ${sub ? '' : 'mb-4'}`}>{title}</h2>
+      {sub && <p className="mb-4 text-xs text-muted-foreground">{sub}</p>}
       {children}
     </section>
   );
@@ -157,10 +151,10 @@ function DashboardView() {
         ) : (
           <>
             <div className="mt-4 grid gap-4 lg:grid-cols-2">
-              <Panel title={t.byProject} sub={t.byProjectSub}>
+              <Panel title={t.byProject}>
                 <StackedBars items={projectItems} keys={['done', 'inProgress', 'notStarted', 'overdue']} caption={t.byProjectCaption} />
               </Panel>
-              <Panel title={t.workload} sub={t.workloadSub}>
+              <Panel title={t.workload}>
                 <StackedBars items={workItems} keys={['inProgress', 'notStarted', 'overdue']} caption={t.workloadCaption} />
               </Panel>
             </div>
@@ -168,7 +162,7 @@ function DashboardView() {
               <Panel title={t.priority} sub={t.prioritySub(d.totals.open)}>
                 <PriorityBars rows={d.byPriority} />
               </Panel>
-              <Panel title={t.deadlines} sub={t.deadlinesSub}>
+              <Panel title={t.deadlines}>
                 <Deadlines rows={d.deadlines} />
               </Panel>
             </div>
