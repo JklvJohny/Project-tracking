@@ -143,32 +143,80 @@ function BoardPage() {
   const [boardOpen, setBoardOpen] = useStoredOpen(BOARD_OPEN_KEY, true);
   const [timelineOpen, setTimelineOpen] = useStoredOpen(TIMELINE_OPEN_KEY, false);
   const [split, setSplit] = useSplit();
+  // Which section the splitter folded, if any. While set, the handle stays so it can be dragged back out.
+  // Toggling a section header is an explicit choice, so it drops the handle.
+  const [folded, setFolded] = useState<'board' | 'timeline' | null>(null);
   const collapse = useCallback(
-    (section: 'board' | 'timeline') => (section === 'board' ? setBoardOpen(false) : setTimelineOpen(false)),
+    (section: 'board' | 'timeline') => {
+      setFolded(section);
+      if (section === 'board') setBoardOpen(false);
+      else setTimelineOpen(false);
+    },
     [setBoardOpen, setTimelineOpen],
+  );
+  const expand = useCallback(
+    (section: 'board' | 'timeline', ratio: number) => {
+      setSplit(ratio);
+      setFolded(null);
+      if (section === 'board') setBoardOpen(true);
+      else setTimelineOpen(true);
+    },
+    [setSplit, setBoardOpen, setTimelineOpen],
+  );
+  const toggleBoard = useCallback(
+    (o: boolean) => {
+      setFolded(null);
+      setBoardOpen(o);
+    },
+    [setBoardOpen],
+  );
+  const toggleTimeline = useCallback(
+    (o: boolean) => {
+      setFolded(null);
+      setTimelineOpen(o);
+    },
+    [setTimelineOpen],
   );
   const stack = useRef<HTMLDivElement>(null);
   const both = boardOpen && timelineOpen;
+  const foldedNow = both ? null : folded === 'board' && timelineOpen ? 'board' : folded === 'timeline' && boardOpen ? 'timeline' : null;
+  const split3 = both || foldedNow !== null;
+  // Board region: a share of the stack when both are open, just its header when folded, the rest when Timeline is folded.
+  const boardBox = both
+    ? 'sm:min-h-0 sm:shrink-0 sm:basis-[calc(var(--split)*100%)] sm:overflow-auto'
+    : foldedNow === 'board'
+      ? 'sm:shrink-0'
+      : foldedNow === 'timeline'
+        ? 'sm:min-h-0 sm:flex-1 sm:overflow-auto'
+        : undefined;
   if (!Number.isInteger(projectId) || projectId <= 0) return <p className="p-6 text-sm">{t.invalid}</p>;
   return (
     <div className="flex flex-col">
       <Header projectId={projectId} />
       <ArchivedBanner projectId={projectId} />
-      {/* Both open on sm+: a fixed-height stack that the splitter divides. Below sm everything flows and scrolls with the page. */}
+      {/* With the splitter (both open, or one folded by it) on sm+: a fixed-height stack the handle divides.
+          Below sm everything flows and scrolls with the page. */}
       <div
         ref={stack}
         style={both ? ({ '--split': split } as CSSProperties) : undefined}
-        className={both ? 'flex flex-col sm:h-[max(32rem,calc(100dvh-12.5rem))]' : 'flex flex-col'}
+        className={split3 ? 'flex flex-col sm:h-[max(32rem,calc(100dvh-12.5rem))]' : 'flex flex-col'}
       >
-        <div className={both ? 'sm:min-h-0 sm:shrink-0 sm:basis-[calc(var(--split)*100%)] sm:overflow-auto' : undefined}>
-          <BoardSection projectId={projectId} open={boardOpen} onOpenChange={setBoardOpen} />
+        <div className={boardBox}>
+          <BoardSection projectId={projectId} open={boardOpen} onOpenChange={toggleBoard} />
         </div>
-        {both && (
+        {split3 && (
           <div className="max-sm:hidden">
-            <Splitter value={split} onChange={setSplit} onCollapse={collapse} containerRef={stack} />
+            <Splitter
+              value={split}
+              collapsed={foldedNow}
+              onChange={setSplit}
+              onCollapse={collapse}
+              onExpand={expand}
+              containerRef={stack}
+            />
           </div>
         )}
-        <TimelineSection projectId={projectId} open={timelineOpen} onOpenChange={setTimelineOpen} />
+        <TimelineSection projectId={projectId} open={timelineOpen} onOpenChange={toggleTimeline} />
       </div>
       {cardId !== undefined && (
         <CardPanel

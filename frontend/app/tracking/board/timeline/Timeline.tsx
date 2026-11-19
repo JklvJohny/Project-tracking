@@ -234,7 +234,7 @@ export function TimelineSection({
   const t = useT(TEXT);
   const flip = () => onOpenChange(!open);
   return (
-    <section className="flex min-h-0 flex-1 flex-col border-t bg-muted/40 pt-3">
+    <section className={`flex flex-col border-t bg-muted/40 pt-3 ${open ? 'min-h-0 flex-1' : 'shrink-0'}`}>
       <div className="mx-4 mb-3 flex flex-wrap items-center gap-x-3 gap-y-1">
         <button
           type="button"

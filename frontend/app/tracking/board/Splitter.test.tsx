@@ -4,14 +4,24 @@ import { TrackingProvider } from '../shared/provider';
 import { Splitter, useSplit } from './Splitter';
 
 const onCollapse = vi.fn();
-function Harness({ box }: { box?: HTMLDivElement }) {
+const onExpand = vi.fn();
+function Harness({ box, collapsed }: { box?: HTMLDivElement; collapsed?: 'board' | 'timeline' }) {
   const [ratio, setRatio] = useSplit();
-  return <Splitter value={ratio} onChange={setRatio} onCollapse={onCollapse} containerRef={{ current: box ?? null }} />;
+  return (
+    <Splitter
+      value={ratio}
+      collapsed={collapsed}
+      onChange={setRatio}
+      onCollapse={onCollapse}
+      onExpand={onExpand}
+      containerRef={{ current: box ?? null }}
+    />
+  );
 }
-const mount = (box?: HTMLDivElement) =>
+const mount = (box?: HTMLDivElement, collapsed?: 'board' | 'timeline') =>
   render(
     <TrackingProvider lang="en">
-      <Harness box={box} />
+      <Harness box={box} collapsed={collapsed} />
     </TrackingProvider>,
   );
 // A 1000px-tall container at the top of the page, so clientY maps straight to the ratio.
@@ -31,6 +41,7 @@ function drag(s: HTMLElement, clientY: number) {
 beforeEach(() => {
   localStorage.clear();
   onCollapse.mockClear();
+  onExpand.mockClear();
 });
 afterEach(cleanup);
 
@@ -97,5 +108,33 @@ describe('Splitter', () => {
     mount();
     fireEvent.keyDown(screen.getByRole('separator'), { key: 'ArrowDown' });
     expect(onCollapse).toHaveBeenLastCalledWith('timeline');
+  });
+  it('after folding the Board, dragging the handle back down reopens it at the dragged share', () => {
+    mount(fakeBox(), 'board');
+    const s = screen.getByRole('separator');
+    expect(s.getAttribute('aria-valuenow')).toBe('0');
+    drag(s, 40);
+    expect(onExpand).not.toHaveBeenCalled();
+    fireEvent.pointerMove(s, { pointerId: 1, clientY: 450 });
+    expect(onExpand).toHaveBeenCalledWith('board', 0.45);
+  });
+  it('after folding the Timeline, dragging the handle back up reopens it', () => {
+    mount(fakeBox(), 'timeline');
+    const s = screen.getByRole('separator');
+    expect(s.getAttribute('aria-valuenow')).toBe('100');
+    drag(s, 600);
+    expect(onExpand).toHaveBeenCalledWith('timeline', 0.6);
+  });
+  it('keyboard unfolds: ArrowDown reopens a folded Board, ArrowUp a folded Timeline; double-click restores half', () => {
+    mount(undefined, 'board');
+    fireEvent.keyDown(screen.getByRole('separator'), { key: 'ArrowDown' });
+    expect(onExpand).toHaveBeenLastCalledWith('board', 0.2);
+    cleanup();
+    mount(undefined, 'timeline');
+    const s = screen.getByRole('separator');
+    fireEvent.keyDown(s, { key: 'ArrowUp' });
+    expect(onExpand).toHaveBeenLastCalledWith('timeline', 0.8);
+    fireEvent.doubleClick(s);
+    expect(onExpand).toHaveBeenLastCalledWith('timeline', 0.5);
   });
 });
