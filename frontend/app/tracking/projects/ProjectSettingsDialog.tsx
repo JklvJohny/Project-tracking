@@ -145,7 +145,13 @@ function SettingsForm({ projectId, onOpenChange }: { projectId: number; onOpenCh
 
   async function onArchive() {
     setFormError(null);
-    const ok = await confirm({ title: t.archiveTitle, description: t.archiveDesc, confirmLabel: t.archive, destructive: true });
+    const ok = await confirm({
+      title: t.archiveTitle,
+      description: t.archiveDesc,
+      confirmLabel: t.archive,
+      destructive: true,
+      typeToConfirm: project?.name,
+    });
     if (!ok) return;
     try {
       await archive.mutateAsync(false);

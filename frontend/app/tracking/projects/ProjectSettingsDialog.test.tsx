@@ -62,8 +62,15 @@ describe('ProjectSettingsDialog', () => {
     renderDialog();
     fireEvent.click(await screen.findByRole('button', { name: 'Archive project' }));
     const confirm = await screen.findByRole('alertdialog');
+    // The confirm button stays disabled until the project name is typed exactly.
+    const ok = within(confirm).getByRole('button', { name: 'Archive project' });
+    expect(ok.hasAttribute('disabled')).toBe(true);
+    fireEvent.change(within(confirm).getByLabelText('Type "Alpha" to confirm'), { target: { value: 'alpha' } });
+    expect(ok.hasAttribute('disabled')).toBe(true);
+    fireEvent.change(within(confirm).getByLabelText('Type "Alpha" to confirm'), { target: { value: ' Alpha ' } });
+    expect(ok.hasAttribute('disabled')).toBe(false);
     expect(apiMock).not.toHaveBeenCalledWith('/projects/1/archive', expect.anything());
-    fireEvent.click(within(confirm).getByRole('button', { name: 'Archive project' }));
+    fireEvent.click(ok);
     await waitFor(() => expect(replace).toHaveBeenCalledWith('/tracking'));
     expect(apiMock).toHaveBeenCalledWith('/projects/1/archive', { method: 'POST' });
   });
@@ -71,7 +78,9 @@ describe('ProjectSettingsDialog', () => {
   async function archiveThenUndo() {
     renderDialog();
     fireEvent.click(await screen.findByRole('button', { name: 'Archive project' }));
-    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Archive project' }));
+    const dialog = await screen.findByRole('alertdialog');
+    fireEvent.change(within(dialog).getByLabelText('Type "Alpha" to confirm'), { target: { value: 'Alpha' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Archive project' }));
     await waitFor(() => expect(toastMock).toHaveBeenCalled());
     // The settings form is gone by now (dialog closed), as in the real app.
     cleanup();

@@ -205,7 +205,12 @@ describe('ProjectsPage', () => {
     // Asks first: nothing is sent until confirmed.
     const dialog = await screen.findByRole('alertdialog');
     expect(posts).toEqual([]);
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Archive' }));
+    // Typing the project name enables the button; Enter confirms too.
+    const input = within(dialog).getByLabelText('Type "Live A" to confirm');
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(posts).toEqual([]);
+    fireEvent.change(input, { target: { value: 'Live A' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
     await waitFor(() => expect(posts).toEqual(['/projects/1/archive']));
     // The archived project leaves the live list.
     await waitFor(() => expect(screen.queryByText('Live A')).toBeNull());

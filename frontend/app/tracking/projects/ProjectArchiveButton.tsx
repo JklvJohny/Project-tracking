@@ -63,6 +63,7 @@ export function ProjectArchiveButton({ project }: { project: ProjectRow }) {
       description: t.confirmBody,
       confirmLabel: t.confirm,
       destructive: true,
+      typeToConfirm: project.name,
     });
     if (ok) await run(false);
   };
