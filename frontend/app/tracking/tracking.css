@@ -49,6 +49,9 @@
 }
 .tracking-root ::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, var(--muted-foreground) 70%, transparent); }
 .tracking-root ::-webkit-scrollbar-corner { background: transparent; }
+/* Scrollable without a visible bar (the board lists scroller pans by wheel and drag instead). */
+.tracking-root .no-scrollbar { scrollbar-width: none; }
+.tracking-root .no-scrollbar::-webkit-scrollbar { display: none; }
 
 /* Off-screen card rows skip style, layout and paint: a 2,000-card board otherwise spends its drag frames in
    the browser's rendering work, not in React. `auto` remembers each row's real height once it has been seen. */

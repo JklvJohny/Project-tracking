@@ -7,6 +7,9 @@ function Scroller() {
   return (
     <div data-testid="scroller" {...pan}>
       <button type="button">card</button>
+      <ol data-testid="list" style={{ overflowY: 'auto' }}>
+        <li>item</li>
+      </ol>
     </div>
   );
 }
@@ -45,6 +48,25 @@ describe('usePanScroll', () => {
     fireEvent.pointerMove(el, { pointerId: 2, pointerType: 'touch', clientX: 300 });
     fireEvent.pointerDown(el, { pointerId: 3, pointerType: 'mouse', button: 2, clientX: 500 });
     fireEvent.pointerMove(el, { pointerId: 3, pointerType: 'mouse', clientX: 300 });
+    expect(el.scrollLeft).toBe(100);
+  });
+
+  it('a vertical wheel scrolls sideways, but not over a list that scrolls on its own', () => {
+    const el = mount();
+    fireEvent.wheel(el, { deltaY: 120 });
+    expect(el.scrollLeft).toBe(220);
+    const list = screen.getByTestId('list');
+    Object.defineProperty(list, 'scrollHeight', { value: 900 });
+    Object.defineProperty(list, 'clientHeight', { value: 300 });
+    fireEvent.wheel(list, { deltaY: 120 });
+    expect(el.scrollLeft).toBe(220);
+  });
+
+  it('leaves Shift+wheel, Ctrl+wheel (zoom) and trackpad sideways swipes to the browser', () => {
+    const el = mount();
+    fireEvent.wheel(el, { deltaY: 120, shiftKey: true });
+    fireEvent.wheel(el, { deltaY: 120, ctrlKey: true });
+    fireEvent.wheel(el, { deltaX: 80, deltaY: 10 });
     expect(el.scrollLeft).toBe(100);
   });
 });

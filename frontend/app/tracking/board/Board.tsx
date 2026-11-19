@@ -23,8 +23,10 @@ const SKELETON_CARDS = [3, 2, 4, 2];
  * on its own (Trello style): it fills the region when the page gives the board a fixed share (`fill`), otherwise
  * it is sized to the viewport. Phones keep the flowing layout and scroll with the page.
  */
+// The sideways scrollbar is hidden: the board pans with the mouse wheel and by dragging empty space
+// (usePanScroll), trackpads and touch swipe natively, and keyboard focus scrolls the focused list into view.
 const scrollerClass = (fill: boolean) =>
-  `relative flex items-start gap-3 overflow-x-auto px-4 pb-4 cursor-default data-[panning=true]:cursor-grabbing ${
+  `relative flex items-start gap-3 overflow-x-auto px-4 pb-4 cursor-default data-[panning=true]:cursor-grabbing no-scrollbar ${
     fill ? 'min-h-0 flex-1' : 'min-h-[28rem] sm:h-[max(24rem,calc(100dvh-19rem))]'
   }`;
 
