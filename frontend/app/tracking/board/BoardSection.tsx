@@ -26,10 +26,13 @@ export function BoardSection({
   projectId,
   open,
   onOpenChange,
+  fill = false,
 }: {
   projectId: number;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** The page gave the board a fixed-height region: stretch to it so the lists scroller fills the rest. */
+  fill?: boolean;
 }) {
   const t = useT(TEXT);
   const board = useBoard(projectId);
@@ -37,7 +40,7 @@ export function BoardSection({
   const title = board.data ? t.title(board.data.lists.length, board.data.cards.length) : t.board;
 
   return (
-    <section className="flex flex-col border-t bg-muted/40 pt-3">
+    <section className={`flex flex-col border-t bg-muted/40 pt-3 ${fill ? 'min-h-0 flex-1' : ''}`}>
       <button
         type="button"
         aria-expanded={open}
@@ -48,11 +51,11 @@ export function BoardSection({
         <ChevronDown className={`size-4 transition-transform ${open ? '' : '-rotate-90'}`} aria-hidden />
         {title}
       </button>
-      <div id="board-section-body" hidden={!open}>
+      <div id="board-section-body" hidden={!open} className={fill ? 'flex min-h-0 flex-1 flex-col' : undefined}>
         {open && (
           <>
             <BoardFilters />
-            <Board projectId={projectId} />
+            <Board projectId={projectId} fill={fill} />
           </>
         )}
       </div>

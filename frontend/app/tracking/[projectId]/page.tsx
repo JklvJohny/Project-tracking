@@ -182,12 +182,15 @@ function BoardPage() {
   const foldedNow = both ? null : folded === 'board' && timelineOpen ? 'board' : folded === 'timeline' && boardOpen ? 'timeline' : null;
   const split3 = both || foldedNow !== null;
   // Board region: a share of the stack when both are open, just its header when folded, the rest when Timeline is folded.
+  // A fixed-height board region (both open, or Timeline folded) lets the lists scroller fill it, so its horizontal
+  // scrollbar stays on screen.
+  const boardFills = both || foldedNow === 'timeline';
   const boardBox = both
-    ? 'sm:min-h-0 sm:shrink-0 sm:basis-[calc(var(--split)*100%)] sm:overflow-auto'
+    ? 'sm:flex sm:min-h-0 sm:shrink-0 sm:basis-[calc(var(--split)*100%)] sm:flex-col'
     : foldedNow === 'board'
       ? 'sm:shrink-0'
       : foldedNow === 'timeline'
-        ? 'sm:min-h-0 sm:flex-1 sm:overflow-auto'
+        ? 'sm:flex sm:min-h-0 sm:flex-1 sm:flex-col'
         : undefined;
   if (!Number.isInteger(projectId) || projectId <= 0) return <p className="p-6 text-sm">{t.invalid}</p>;
   return (
@@ -202,7 +205,7 @@ function BoardPage() {
         className={split3 ? 'flex flex-col sm:h-[max(32rem,calc(100dvh-12.5rem))]' : 'flex flex-col'}
       >
         <div className={boardBox}>
-          <BoardSection projectId={projectId} open={boardOpen} onOpenChange={toggleBoard} />
+          <BoardSection projectId={projectId} open={boardOpen} onOpenChange={toggleBoard} fill={boardFills} />
         </div>
         {split3 && (
           <div className="max-sm:hidden">

@@ -9,6 +9,7 @@ import { AddList, COLUMN_W } from './AddList';
 import { cardsByList } from './board-cache';
 import { BoardDnd } from './dnd';
 import { ListColumn } from './ListColumn';
+import { usePanScroll } from './usePanScroll';
 
 const TEXT = {
   th: { lists: 'ลิสต์', retry: 'ลองอีกครั้ง', loading: 'กำลังโหลดบอร์ด' },
@@ -17,12 +18,22 @@ const TEXT = {
 
 const SKELETON_CARDS = [3, 2, 4, 2];
 
+/**
+ * The lists scroller. On sm+ it has a fixed height so the horizontal scrollbar stays on screen and each list scrolls
+ * on its own (Trello style): it fills the region when the page gives the board a fixed share (`fill`), otherwise
+ * it is sized to the viewport. Phones keep the flowing layout and scroll with the page.
+ */
+const scrollerClass = (fill: boolean) =>
+  `relative flex items-start gap-3 overflow-x-auto px-4 pb-4 cursor-default data-[panning=true]:cursor-grabbing ${
+    fill ? 'min-h-0 flex-1' : 'min-h-[28rem] sm:h-[max(24rem,calc(100dvh-19rem))]'
+  }`;
+
 /** Same column width and paddings as ListColumn, fixed heights: the swap to real data does not shift layout. */
-export function BoardSkeleton() {
+export function BoardSkeleton({ fill = false }: { fill?: boolean }) {
   const t = useT(TEXT);
   return (
     <div
-      className="relative flex min-h-[28rem] items-start gap-3 overflow-x-auto px-4 pb-4"
+      className={scrollerClass(fill)}
       role="status"
       aria-label={t.loading}
     >
@@ -41,14 +52,15 @@ export function BoardSkeleton() {
   );
 }
 
-export function Board({ projectId }: { projectId: number }) {
+export function Board({ projectId, fill = false }: { projectId: number; fill?: boolean }) {
   const t = useT(TEXT);
   const { lang } = useLang();
   const board = useBoard(projectId);
+  const panHandlers = usePanScroll();
   const data = board.data;
   const byList = useMemo(() => (data ? cardsByList(data) : null), [data]);
 
-  if (board.isPending) return <BoardSkeleton />;
+  if (board.isPending) return <BoardSkeleton fill={fill} />;
   // A failed background refetch (for example right after a failed move) must not hide a board we already have.
   if (!data || !byList)
     return (
@@ -66,11 +78,7 @@ export function Board({ projectId }: { projectId: number }) {
   return (
     <BoardDnd projectId={projectId} data={data} byList={byList} canDragCards={canAddCards} canDragLists={canManage}>
       {(cardsOf) => (
-        <div
-          role="group"
-          aria-label={t.lists}
-          className="relative flex min-h-[28rem] items-start gap-3 overflow-x-auto px-4 pb-4"
-        >
+        <div role="group" aria-label={t.lists} className={scrollerClass(fill)} {...panHandlers}>
           {data.lists.map((l) => (
             <ListColumn
               key={l.id}
