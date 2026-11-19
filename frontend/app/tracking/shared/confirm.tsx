@@ -97,7 +97,8 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
           <AlertDialogFooter>
             <AlertDialogCancel>{t.cancel}</AlertDialogCancel>
             <AlertDialogAction
-              className={opts?.destructive ? 'bg-destructive text-white hover:bg-destructive/90' : undefined}
+              // The variant, not a className: asChild concatenates classes, so bg-primary would win over bg-destructive.
+              variant={opts?.destructive ? 'destructive' : 'default'}
               disabled={blocked}
               onClick={() => settle(true)}
             >
