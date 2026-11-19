@@ -4,6 +4,7 @@ const BASE = '/tracking';
 
 export const routes = {
   projects: BASE,
+  archived: `${BASE}/archived`,
   dashboard: `${BASE}/dashboard`,
   reports: `${BASE}/reports`,
   board: (projectId: number | string) => `${BASE}/${projectId}`,

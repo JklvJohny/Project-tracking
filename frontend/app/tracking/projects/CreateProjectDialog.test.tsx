@@ -1,8 +1,9 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, api } from '../shared/api/client';
 import { TrackingProvider } from '../shared/provider';
+import ArchivedProjectsPage from '../archived/page';
 import ProjectsPage from '../page';
 import { CreateProjectDialog } from './CreateProjectDialog';
 
@@ -175,9 +176,53 @@ describe('ProjectsPage', () => {
     expect(screen.queryByText('Held B')).toBeNull();
     expect(screen.queryByText('Old C')).toBeNull();
     cleanup();
-    searchStatus = 'archived';
-    renderPage();
+    searchStatus = '';
+    // Archived projects have their own page (sidebar), not a status filter.
+    render(
+      <TrackingProvider lang="en">
+        <ArchivedProjectsPage />
+      </TrackingProvider>,
+    );
     await screen.findByText('Old C');
+    expect(screen.getByRole('heading', { name: 'Archived projects' })).toBeTruthy();
     expect(screen.queryByText('Live A')).toBeNull();
+    expect(screen.queryByRole('link', { name: /Archived/ })).toBeNull();
+  });
+
+  it('PM archives a project from the list after confirming; Undo restores it', async () => {
+    const posts: string[] = [];
+    apiMock.mockImplementation(async (path: string, init?: { method?: string }) => {
+      if (path === '/me') return { user: { id: 1 }, isAdmin: false, canCreateProject: true };
+      if (path === '/projects') return [proj(1, 'Live A', 'active', null)];
+      if (init?.method === 'POST') {
+        posts.push(path);
+        return proj(1, 'Live A', 'active', path.endsWith('/archive') ? '2026-11-19T00:00:00Z' : null);
+      }
+      throw new Error('unexpected ' + path);
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Archive Live A' }));
+    // Asks first: nothing is sent until confirmed.
+    const dialog = await screen.findByRole('alertdialog');
+    expect(posts).toEqual([]);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Archive' }));
+    await waitFor(() => expect(posts).toEqual(['/projects/1/archive']));
+    // The archived project leaves the live list.
+    await waitFor(() => expect(screen.queryByText('Live A')).toBeNull());
+  });
+
+  it('members and viewers get no archive button; archived page offers Restore to a PM', async () => {
+    mockApi(false, [{ ...proj(1, 'Live A', 'active', null), myRole: 'member' }]);
+    renderPage();
+    await screen.findByText('Live A');
+    expect(screen.queryByRole('button', { name: /Archive Live A/ })).toBeNull();
+    cleanup();
+    mockApi(false, [proj(3, 'Old C', 'active', '2026-02-01T00:00:00Z')]);
+    render(
+      <TrackingProvider lang="en">
+        <ArchivedProjectsPage />
+      </TrackingProvider>,
+    );
+    expect(await screen.findByRole('button', { name: 'Restore Old C' })).toBeTruthy();
   });
 });
