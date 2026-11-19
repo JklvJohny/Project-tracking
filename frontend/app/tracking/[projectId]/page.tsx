@@ -14,9 +14,10 @@ import { StatusPill } from '../shared/StatusPill';
 import { routes } from '../shared/routes';
 import { ArchivedBanner } from '../board/ArchivedBanner';
 import { ArchivedSheet } from '../board/ArchivedSheet';
-import { BoardSection } from '../board/BoardSection';
+import { BOARD_OPEN_KEY, BoardSection } from '../board/BoardSection';
 import { Splitter, useSplit } from '../board/Splitter';
-import { TimelineSection } from '../board/timeline/Timeline';
+import { TIMELINE_OPEN_KEY, TimelineSection } from '../board/timeline/Timeline';
+import { useStoredOpen } from '../board/useStoredOpen';
 
 // Loaded on demand: keeps markdown, the pickers and the member forms out of the board's first load.
 const CardPanel = dynamic(() => import('../card/CardPanel').then((m) => m.CardPanel));
@@ -139,9 +140,13 @@ function BoardPage() {
     const qs = next.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }, [router, pathname, search]);
-  const [boardOpen, setBoardOpen] = useState(true);
-  const [timelineOpen, setTimelineOpen] = useState(false);
+  const [boardOpen, setBoardOpen] = useStoredOpen(BOARD_OPEN_KEY, true);
+  const [timelineOpen, setTimelineOpen] = useStoredOpen(TIMELINE_OPEN_KEY, false);
   const [split, setSplit] = useSplit();
+  const collapse = useCallback(
+    (section: 'board' | 'timeline') => (section === 'board' ? setBoardOpen(false) : setTimelineOpen(false)),
+    [setBoardOpen, setTimelineOpen],
+  );
   const stack = useRef<HTMLDivElement>(null);
   const both = boardOpen && timelineOpen;
   if (!Number.isInteger(projectId) || projectId <= 0) return <p className="p-6 text-sm">{t.invalid}</p>;
@@ -156,14 +161,14 @@ function BoardPage() {
         className={both ? 'flex flex-col sm:h-[max(32rem,calc(100dvh-12.5rem))]' : 'flex flex-col'}
       >
         <div className={both ? 'sm:min-h-0 sm:shrink-0 sm:basis-[calc(var(--split)*100%)] sm:overflow-auto' : undefined}>
-          <BoardSection projectId={projectId} onOpenChange={setBoardOpen} />
+          <BoardSection projectId={projectId} open={boardOpen} onOpenChange={setBoardOpen} />
         </div>
         {both && (
           <div className="max-sm:hidden">
-            <Splitter value={split} onChange={setSplit} containerRef={stack} />
+            <Splitter value={split} onChange={setSplit} onCollapse={collapse} containerRef={stack} />
           </div>
         )}
-        <TimelineSection projectId={projectId} onOpenChange={setTimelineOpen} />
+        <TimelineSection projectId={projectId} open={timelineOpen} onOpenChange={setTimelineOpen} />
       </div>
       {cardId !== undefined && (
         <CardPanel

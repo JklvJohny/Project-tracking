@@ -3,7 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../shared/api/client';
 import type { components } from '../shared/api/schema';
 import { TrackingProvider } from '../shared/provider';
-import { BoardSection } from './BoardSection';
+import { BOARD_OPEN_KEY, BoardSection } from './BoardSection';
+import { useStoredOpen } from './useStoredOpen';
+
+function Section() {
+  const [open, setOpen] = useStoredOpen(BOARD_OPEN_KEY, true);
+  return <BoardSection projectId={1} open={open} onOpenChange={setOpen} />;
+}
 
 vi.mock('../shared/api/client', async (orig) => ({ ...(await orig<object>()), api: vi.fn() }));
 vi.mock('next/navigation', () => ({ usePathname: () => '/tracking/1' }));
@@ -24,7 +30,7 @@ function mount(lang: 'en' | 'th' = 'en') {
   vi.mocked(api).mockResolvedValue(snap);
   render(
     <TrackingProvider lang={lang}>
-      <BoardSection projectId={1} />
+      <Section />
     </TrackingProvider>,
   );
 }

@@ -1,12 +1,11 @@
 'use client';
 import { ChevronDown } from 'lucide-react';
-import { useEffect, useState } from 'react';
 import { useBoard } from '../shared/api/queries';
 import { useT } from '../shared/i18n';
 import { Board } from './Board';
 import { BoardFilters } from './BoardFilters';
 
-const OPEN_KEY = 'pt-board-open';
+export const BOARD_OPEN_KEY = 'pt-board-open';
 
 const TEXT = {
   th: {
@@ -19,38 +18,22 @@ const TEXT = {
   },
 };
 
-// Per-viewer convenience only: any storage failure just leaves the section open.
-function readOpen() {
-  try {
-    return localStorage.getItem(OPEN_KEY) !== '0';
-  } catch {
-    return true;
-  }
-}
-
-/** The collapsible board region of the project page; the Timeline section sits below it. */
+/**
+ * The collapsible board region of the project page; the Timeline section sits below it.
+ * Open state is owned by the page (`useStoredOpen(BOARD_OPEN_KEY, true)`) because the splitter can collapse it too.
+ */
 export function BoardSection({
   projectId,
+  open,
   onOpenChange,
 }: {
   projectId: number;
-  onOpenChange?: (open: boolean) => void;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }) {
   const t = useT(TEXT);
   const board = useBoard(projectId);
-  // Open on the server and first paint (no hydration mismatch); the saved choice applies right after mount.
-  const [open, setOpen] = useState(true);
-  useEffect(() => setOpen(readOpen()), []);
-  useEffect(() => onOpenChange?.(open), [open, onOpenChange]);
-  const flip = () => {
-    const next = !open;
-    setOpen(next);
-    try {
-      localStorage.setItem(OPEN_KEY, next ? '1' : '0');
-    } catch {
-      /* storage unavailable: the choice lasts for this visit only */
-    }
-  };
+  const flip = () => onOpenChange(!open);
   const title = board.data ? t.title(board.data.lists.length, board.data.cards.length) : t.board;
 
   return (

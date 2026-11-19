@@ -1,20 +1,37 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { createRef } from 'react';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TrackingProvider } from '../shared/provider';
 import { Splitter, useSplit } from './Splitter';
 
-function Harness() {
+const onCollapse = vi.fn();
+function Harness({ box }: { box?: HTMLDivElement }) {
   const [ratio, setRatio] = useSplit();
-  return <Splitter value={ratio} onChange={setRatio} containerRef={createRef<HTMLDivElement>()} />;
+  return <Splitter value={ratio} onChange={setRatio} onCollapse={onCollapse} containerRef={{ current: box ?? null }} />;
 }
-const mount = () =>
+const mount = (box?: HTMLDivElement) =>
   render(
     <TrackingProvider lang="en">
-      <Harness />
+      <Harness box={box} />
     </TrackingProvider>,
   );
-beforeEach(() => localStorage.clear());
+// A 1000px-tall container at the top of the page, so clientY maps straight to the ratio.
+function fakeBox() {
+  const el = document.createElement('div');
+  el.getBoundingClientRect = () => ({ top: 0, height: 1000, left: 0, width: 800, right: 800, bottom: 1000, x: 0, y: 0, toJSON: () => ({}) });
+  return el;
+}
+// jsdom has no pointer capture; pretend the handle captured the pointer on pointerdown.
+function drag(s: HTMLElement, clientY: number) {
+  s.hasPointerCapture = () => true;
+  s.setPointerCapture = () => {};
+  s.releasePointerCapture = () => {};
+  fireEvent.pointerDown(s, { pointerId: 1, clientY: 550 });
+  fireEvent.pointerMove(s, { pointerId: 1, clientY });
+}
+beforeEach(() => {
+  localStorage.clear();
+  onCollapse.mockClear();
+});
 afterEach(cleanup);
 
 describe('Splitter', () => {
@@ -49,5 +66,36 @@ describe('Splitter', () => {
     localStorage.setItem('pt-split', 'abc');
     mount();
     expect(screen.getByRole('separator').getAttribute('aria-valuenow')).toBe('55');
+  });
+  it('dragging to the top edge collapses the Board and keeps the stored split', () => {
+    localStorage.setItem('pt-split', '0.4');
+    mount(fakeBox());
+    drag(screen.getByRole('separator'), 30);
+    expect(onCollapse).toHaveBeenCalledWith('board');
+    expect(localStorage.getItem('pt-split')).toBe('0.4');
+  });
+  it('dragging to the bottom edge collapses the Timeline', () => {
+    mount(fakeBox());
+    drag(screen.getByRole('separator'), 970);
+    expect(onCollapse).toHaveBeenCalledWith('timeline');
+  });
+  it('a drag inside the range only resizes', () => {
+    mount(fakeBox());
+    const s = screen.getByRole('separator');
+    drag(s, 300);
+    expect(onCollapse).not.toHaveBeenCalled();
+    expect(s.getAttribute('aria-valuenow')).toBe('30');
+  });
+  it('ArrowUp at the minimum collapses the Board; ArrowDown at the maximum collapses the Timeline', () => {
+    localStorage.setItem('pt-split', '0.2');
+    mount();
+    const s = screen.getByRole('separator');
+    fireEvent.keyDown(s, { key: 'ArrowUp' });
+    expect(onCollapse).toHaveBeenLastCalledWith('board');
+    cleanup();
+    localStorage.setItem('pt-split', '0.8');
+    mount();
+    fireEvent.keyDown(screen.getByRole('separator'), { key: 'ArrowDown' });
+    expect(onCollapse).toHaveBeenLastCalledWith('timeline');
   });
 });
