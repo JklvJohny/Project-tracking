@@ -11,9 +11,17 @@ import (
 	"tracking-service/internal/httpx"
 )
 
-// Mount registers GET /dashboard on r, which must sit behind the auth
-// middleware.
+// Mount registers GET /dashboard and GET /me/tasks on r, which must sit behind
+// the auth middleware.
 func Mount(r chi.Router, s *Service) {
+	r.Get("/me/tasks", func(w http.ResponseWriter, req *http.Request) {
+		v, err := s.MyTasks(req.Context(), auth.UserID(req.Context()))
+		if err != nil {
+			httpx.Fail(w, req, err)
+			return
+		}
+		httpx.OK(w, http.StatusOK, v)
+	})
 	r.Get("/dashboard", func(w http.ResponseWriter, req *http.Request) {
 		var projectID *int64
 		if raw := req.URL.Query().Get("projectId"); raw != "" {

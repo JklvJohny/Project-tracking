@@ -48,6 +48,14 @@ paths:
       responses:
         '200': { $ref: '#/components/responses/Me' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+  /me/tasks:
+    get:
+      tags: [me]
+      operationId: getMyTasks
+      summary: The caller's open cards (completedAt not set) across the non-archived projects they can see. Active cards in active lists only. Earliest dueDate first, cards without a dueDate last. Today is the Asia/Bangkok date.
+      responses:
+        '200': { $ref: '#/components/responses/MyTasks' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
   /users:
     get:
       tags: [me]
@@ -937,6 +945,16 @@ components:
             properties:
               success: { const: true }
               data: { $ref: '#/components/schemas/Dashboard' }
+    MyTasks:
+      description: The caller's open tasks.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [success, data]
+            properties:
+              success: { const: true }
+              data: { $ref: '#/components/schemas/MyTasks' }
     DocumentList:
       description: Non-deleted documents, newest first.
       content:
@@ -1386,6 +1404,29 @@ components:
               dueDate: { type: string, format: date }
               daysLeft: { type: integer, description: Days from today to dueDate; negative when overdue. }
               assignees: { type: array, items: { $ref: '#/components/schemas/User' } }
+    MyTasks:
+      type: object
+      required: [asOf, tasks]
+      properties:
+        asOf: { type: string, format: date, description: Today in Asia/Bangkok. }
+        tasks:
+          type: array
+          items:
+            type: object
+            required: [cardId, projectId, projectName, listName, title, priority, startDate, dueDate, daysLeft, checklistTotal, checklistDone, assignees]
+            properties:
+              cardId: { type: integer, format: int64 }
+              projectId: { type: integer, format: int64 }
+              projectName: { type: string }
+              listName: { type: string }
+              title: { type: string }
+              priority: { $ref: '#/components/schemas/Priority' }
+              startDate: { type: [string, 'null'], format: date }
+              dueDate: { type: [string, 'null'], format: date }
+              daysLeft: { type: [integer, 'null'], description: Days from today to dueDate; negative when overdue; null without a dueDate. }
+              checklistTotal: { type: integer }
+              checklistDone: { type: integer }
+              assignees: { type: array, description: Everyone on the card, the caller included, by user id., items: { $ref: '#/components/schemas/User' } }
     Document:
       type: object
       description: A project report. The storage key is never sent.

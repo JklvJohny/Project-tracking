@@ -38,6 +38,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's open cards (completedAt not set) across the non-archived projects they can see. Active cards in active lists only. Earliest dueDate first, cards without a dueDate last. Today is the Asia/Bangkok date. */
+        get: operations["getMyTasks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/users": {
         parameters: {
             query?: never;
@@ -1056,6 +1073,33 @@ export interface components {
                 assignees: components["schemas"]["User"][];
             }[];
         };
+        MyTasks: {
+            /**
+             * Format: date
+             * @description Today in Asia/Bangkok.
+             */
+            asOf: string;
+            tasks: {
+                /** Format: int64 */
+                cardId: number;
+                /** Format: int64 */
+                projectId: number;
+                projectName: string;
+                listName: string;
+                title: string;
+                priority: components["schemas"]["Priority"];
+                /** Format: date */
+                startDate: string | null;
+                /** Format: date */
+                dueDate: string | null;
+                /** @description Days from today to dueDate; negative when overdue; null without a dueDate. */
+                daysLeft: number | null;
+                checklistTotal: number;
+                checklistDone: number;
+                /** @description Everyone on the card */
+                assignees: components["schemas"]["User"][];
+            }[];
+        };
         /** @description A project report. The storage key is never sent. */
         Document: {
             /** Format: int64 */
@@ -1304,6 +1348,19 @@ export interface components {
                 };
             };
         };
+        /** @description The caller's open tasks. */
+        MyTasks: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    /** @constant */
+                    success: true;
+                    data: components["schemas"]["MyTasks"];
+                };
+            };
+        };
         /** @description Non-deleted documents, newest first. */
         DocumentList: {
             headers: {
@@ -1447,6 +1504,19 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["Me"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    getMyTasks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["MyTasks"];
             401: components["responses"]["Unauthorized"];
         };
     };

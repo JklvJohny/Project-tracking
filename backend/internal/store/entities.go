@@ -208,3 +208,10 @@ type DashboardRow struct {
 	CompletedAt *time.Time
 	AssigneeIDs []int64
 }
+
+// TaskRow is one open card assigned to the caller, as My Tasks reads it.
+type TaskRow struct {
+	DashboardRow
+	ChecklistTotal int
+	ChecklistDone  int
+}

@@ -88,7 +88,7 @@ export function ListTableDialog({ projectId, listId, onClose }: { projectId: num
           )}
         </div>
         {b && list && (
-          <div className="min-h-0 overflow-auto rounded-lg border bg-card">
+          <div className="relative min-h-0 overflow-auto rounded-lg border bg-card">
             <table className="w-full text-sm">
               <caption className="sr-only">{t.title(list.name)}</caption>
               <thead className="sticky top-0 z-10 border-b bg-muted text-left text-xs text-muted-foreground">

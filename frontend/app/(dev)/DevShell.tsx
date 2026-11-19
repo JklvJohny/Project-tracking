@@ -54,13 +54,13 @@ const TEXT = {
     nav: 'เมนูหลัก', app: 'แอปหลัก', section: 'ติดตามงาน', other: 'อื่นๆ', dashboard: 'แดชบอร์ด', projects: 'โปรเจกต์',
     archived: 'โปรเจกต์ที่เก็บถาวร',
     import: 'นำเข้า', reports: 'รายงาน', settings: 'ตั้งค่า', soon: 'เร็ว ๆ นี้', lang: 'ภาษา', theme: 'สลับธีม',
-    user: 'ผู้ใช้ (dev)', mobileNav: 'ไปที่',
+    user: 'ผู้ใช้ (dev)', mobileNav: 'ไปที่', myTasks: 'งานของฉัน',
   },
   en: {
     nav: 'Main menu', app: 'Host App', section: 'Tracking', other: 'Other', dashboard: 'Dashboard', projects: 'Projects',
     archived: 'Archived projects',
     import: 'Import', reports: 'Reports', settings: 'Settings', soon: 'Soon', lang: 'Language', theme: 'Toggle theme',
-    user: 'User (dev)', mobileNav: 'Go to',
+    user: 'User (dev)', mobileNav: 'Go to', myTasks: 'My tasks',
   },
 };
 
@@ -138,6 +138,7 @@ function Chrome({ children }: { children: ReactNode }) {
   const onReports = path === routes.reports || path.startsWith(`${routes.reports}/`);
   const onDashboard = path === routes.dashboard || path.startsWith(`${routes.dashboard}/`);
   const onArchived = path === routes.archived;
+  const onMyTasks = path === routes.myTasks;
   const me = DEV_USERS.find((u) => String(u.id) === userId) ?? DEV_USERS[1];
   const dark = resolvedTheme === 'dark';
 
@@ -158,7 +159,7 @@ function Chrome({ children }: { children: ReactNode }) {
           ? onDashboard
           : key === 'archived'
             ? onArchived
-            : path.startsWith(routes.projects) && !onReports && !onDashboard && !onArchived;
+            : path.startsWith(routes.projects) && !onReports && !onDashboard && !onArchived && !onMyTasks;
     return (
       <Link
         key={key}
@@ -231,7 +232,15 @@ function Chrome({ children }: { children: ReactNode }) {
           >
             {dark ? <Sun className="h-4 w-4" aria-hidden="true" /> : <Moon className="h-4 w-4" aria-hidden="true" />}
           </button>
-          <Avatar user={me} size="md" />
+          <Link
+            href={routes.myTasks}
+            aria-label={t.myTasks}
+            title={t.myTasks}
+            aria-current={onMyTasks ? 'page' : undefined}
+            className={`rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${onMyTasks ? 'outline-2 outline-offset-2 outline-primary' : 'hover:opacity-90'}`}
+          >
+            <Avatar user={me} size="md" />
+          </Link>
         </div>
       </header>
       <div className="flex min-h-0 flex-1">

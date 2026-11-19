@@ -177,6 +177,7 @@ const BASE = '/tracking';
 export const routes = {
   projects: BASE,                                       // projects list
   archived: `${BASE}/archived`,                         // archived projects (Restore lives here)
+  myTasks: `${BASE}/my-tasks`,                          // the caller's open cards across projects
   dashboard: `${BASE}/dashboard`,                       // Dashboard page (?project=<id> scopes it to one project)
   reports: `${BASE}/reports`,                           // Reports page (?project=<id> opens a folder)
   board: (projectId) => `${BASE}/${projectId}`,         // board
@@ -191,6 +192,10 @@ them. Mark Dashboard as current for `/tracking/dashboard`, Projects for `/tracki
 the tracking pages are built from the same file, so changing `BASE` there moves the whole feature to another mount
 point (and the route folder `app/tracking/` must move with it). Navigation inside tracking uses `<Link>`, never
 `router.push`.
+
+My tasks has no sidebar item: make the signed-in user's avatar in the host header a link to `routes.myTasks`
+(label "My tasks" / "งานของฉัน" as `aria-label`), marked `aria-current="page"` on `/tracking/my-tasks`. Do not mark
+Projects as current there, although the path starts with `/tracking`.
 
 ## 7. What not to copy
 

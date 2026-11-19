@@ -53,3 +53,34 @@ func (r *dashboardRepo) Rows(_ context.Context, projectIDs []int64) ([]store.Das
 	})
 	return out, nil
 }
+
+func (r *dashboardRepo) AssignedTo(ctx context.Context, userID int64, projectIDs []int64) ([]store.TaskRow, error) {
+	rows, err := r.Rows(ctx, projectIDs)
+	if err != nil {
+		return nil, err
+	}
+	total, done := map[int64]int{}, map[int64]int{}
+	for _, it := range r.d.checklist {
+		total[it.CardID]++
+		if it.IsDone {
+			done[it.CardID]++
+		}
+	}
+	out := []store.TaskRow{}
+	for _, row := range rows {
+		if row.CompletedAt == nil && slices.Contains(row.AssigneeIDs, userID) {
+			out = append(out, store.TaskRow{DashboardRow: row, ChecklistTotal: total[row.CardID], ChecklistDone: done[row.CardID]})
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		a, b := out[i].DueDate, out[j].DueDate
+		if (a == nil) != (b == nil) {
+			return b == nil
+		}
+		if a != nil && *a != *b {
+			return *a < *b
+		}
+		return out[i].CardID < out[j].CardID
+	})
+	return out, nil
+}

@@ -214,11 +214,15 @@ func (headerAuth) Authenticate(r *http.Request) (int64, error) {
 }
 
 func get(f fixture, user int64, query string) (*httptest.ResponseRecorder, map[string]any) {
+	return getPath(f, user, "/dashboard"+query)
+}
+
+func getPath(f fixture, user int64, path string) (*httptest.ResponseRecorder, map[string]any) {
 	h := httpx.NewRouter(func(r chi.Router) {
 		r.Use(auth.Middleware(headerAuth{}))
 		dashboard.Mount(r, f.svc)
 	})
-	req := httptest.NewRequest("GET", "/api/tracking/v1/dashboard"+query, nil)
+	req := httptest.NewRequest("GET", "/api/tracking/v1"+path, nil)
 	req.Header.Set("X-User-ID", strconv.FormatInt(user, 10))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)

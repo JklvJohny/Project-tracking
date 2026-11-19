@@ -441,4 +441,23 @@ type DashboardRepo interface {
 	// WHERE p.id = ANY($1) AND c.archived_at IS NULL
 	// GROUP BY c.id, p.id, l.id ORDER BY p.id, c.id (idx_cards_list).
 	Rows(ctx context.Context, projectIDs []int64) ([]DashboardRow, error)
+
+	// AssignedTo returns the open cards of the listed projects assigned to
+	// userID: same "active" rules as Rows, plus completed_at IS NULL. Rows are
+	// ordered by due date (none last), then card id; AssigneeIDs ascending,
+	// never nil, and include the other assignees.
+	// SQL: one query driven by the card_assignees (user_id) index:
+	// SELECT c.id, p.id, p.name, l.name, c.title, c.priority, c.start_date,
+	// c.due_date, c.completed_at,
+	// (SELECT array_agg(user_id ORDER BY user_id) FROM card_assignees WHERE card_id = c.id),
+	// (SELECT count(*) FROM checklist_items WHERE card_id = c.id),
+	// (SELECT count(*) FILTER (WHERE is_done) FROM checklist_items WHERE card_id = c.id)
+	// FROM card_assignees me JOIN cards c ON c.id = me.card_id
+	// JOIN lists l ON l.id = c.list_id AND l.archived_at IS NULL
+	// JOIN boards b ON b.id = l.board_id
+	// JOIN projects p ON p.id = b.project_id AND p.archived_at IS NULL
+	// WHERE me.user_id = $1 AND p.id = ANY($2) AND c.archived_at IS NULL
+	// AND c.completed_at IS NULL ORDER BY c.due_date NULLS LAST, c.id
+	// (idx_checklist_card for the counts).
+	AssignedTo(ctx context.Context, userID int64, projectIDs []int64) ([]TaskRow, error)
 }
