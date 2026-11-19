@@ -56,9 +56,13 @@ const TEXT = {
   },
 };
 
-/** Hands focus back to the card that opened the panel (its link survives the close; Radix has no trigger to restore). */
+/**
+ * Hands focus back to the card that opened the panel (its link survives the close; Radix has no trigger to restore).
+ * The last match wins: a list table opened over the board renders after it and holds the `&card=` link.
+ */
 function focusOpener(cardId: number) {
-  document.querySelector<HTMLElement>(`a[href$="?card=${cardId}"]`)?.focus();
+  const links = document.querySelectorAll<HTMLElement>(`a[href$="?card=${cardId}"], a[href$="&card=${cardId}"]`);
+  links[links.length - 1]?.focus();
 }
 
 export function CardPanel({

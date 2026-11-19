@@ -21,6 +21,7 @@ import { useStoredOpen } from '../board/useStoredOpen';
 
 // Loaded on demand: keeps markdown, the pickers and the member forms out of the board's first load.
 const CardPanel = dynamic(() => import('../card/CardPanel').then((m) => m.CardPanel));
+const ListTableDialog = dynamic(() => import('../board/ListTableDialog').then((m) => m.ListTableDialog));
 const MembersDialog = dynamic(() => import('../projects/MembersDialog').then((m) => m.MembersDialog));
 const ProjectSettingsDialog = dynamic(() =>
   import('../projects/ProjectSettingsDialog').then((m) => m.ProjectSettingsDialog),
@@ -132,6 +133,14 @@ function BoardPage() {
     const qs = next.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }, [router, pathname, search]);
+  const listParam = Number(search.get('list'));
+  const listId = Number.isInteger(listParam) && listParam > 0 ? listParam : undefined;
+  const closeList = useCallback(() => {
+    const next = new URLSearchParams(search.toString());
+    next.delete('list');
+    const qs = next.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }, [router, pathname, search]);
   const focusChecklist = search.get('focus') === 'checklist';
   // One-shot hint from the card preview's "+": drop only `focus` so a reload or Back does not re-focus.
   const focusHandled = useCallback(() => {
@@ -221,6 +230,7 @@ function BoardPage() {
         )}
         <TimelineSection projectId={projectId} open={timelineOpen} onOpenChange={toggleTimeline} />
       </div>
+      {listId !== undefined && <ListTableDialog key={`list-${listId}`}projectId={projectId} listId={listId} onClose={closeList} />}
       {cardId !== undefined && (
         <CardPanel
           key={cardId}
