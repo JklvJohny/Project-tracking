@@ -86,6 +86,8 @@ function Root({ lang: langProp, theme: themeProp, getAuthHeaders, children }: Tr
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', resolvedTheme === 'dark');
+    // Native controls and the page scrollbar follow the theme (no white scrollbar track in dark mode).
+    document.documentElement.style.colorScheme = resolvedTheme;
     document.documentElement.lang = lang;
   }, [resolvedTheme, lang]);
 

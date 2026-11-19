@@ -32,6 +32,24 @@
 /* Compact type scale: tracking pages are dense (body 13px in index.html). */
 .tracking-root { font-size: 13px; }
 
+/* Scrollbars follow the theme: color-scheme makes the native bar dark in dark mode (no white track), and the thin
+   bar uses the theme tokens. Firefox reads scrollbar-*; Chromium/Edge read both (::-webkit-* wins where it applies). */
+.tracking-root { color-scheme: light; }
+.dark .tracking-root, .tracking-root.dark { color-scheme: dark; }
+.tracking-root, .tracking-root * {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--muted-foreground) 45%, transparent) transparent;
+}
+.tracking-root ::-webkit-scrollbar { width: 10px; height: 10px; }
+.tracking-root ::-webkit-scrollbar-track { background: transparent; }
+.tracking-root ::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 9999px;
+  background: color-mix(in oklab, var(--muted-foreground) 45%, transparent) padding-box;
+}
+.tracking-root ::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, var(--muted-foreground) 70%, transparent); }
+.tracking-root ::-webkit-scrollbar-corner { background: transparent; }
+
 /* Off-screen card rows skip style, layout and paint: a 2,000-card board otherwise spends its drag frames in
    the browser's rendering work, not in React. `auto` remembers each row's real height once it has been seen. */
 .tracking-root .card-row { content-visibility: auto; contain-intrinsic-size: auto 6rem; }
