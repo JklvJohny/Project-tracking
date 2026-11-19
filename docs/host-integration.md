@@ -193,9 +193,10 @@ the tracking pages are built from the same file, so changing `BASE` there moves 
 point (and the route folder `app/tracking/` must move with it). Navigation inside tracking uses `<Link>`, never
 `router.push`.
 
-My tasks has no sidebar item: make the signed-in user's avatar in the host header a link to `routes.myTasks`
-(label "My tasks" / "งานของฉัน" as `aria-label`), marked `aria-current="page"` on `/tracking/my-tasks`. Do not mark
-Projects as current there, although the path starts with `/tracking`.
+My tasks has no sidebar item. The signed-in user's avatar in the host header opens the account menu (a dropdown);
+add an item "My tasks" / "งานของฉัน" linking to `routes.myTasks`, with `aria-current="page"` on `/tracking/my-tasks`.
+Keep the host's own items (profile, sign out) in the same menu. Do not mark Projects as current on that page, although
+the path starts with `/tracking`. `app/(dev)/DevShell.tsx` (`UserMenu`) shows the intended shape.
 
 ## 7. What not to copy
 

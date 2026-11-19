@@ -1,10 +1,18 @@
 'use client';
 // Local-only stand-in for the host app's sidebar, header and login. Never copied to the host.
 import { useQueryClient } from '@tanstack/react-query';
-import { Archive, BarChart3, FileText, FolderOpen, Moon, Settings, Sun, Upload, type LucideIcon } from 'lucide-react';
+import { Archive, BarChart3, FileText, FolderOpen, ListChecks, Moon, Settings, Sun, Upload, type LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Avatar } from '../tracking/shared/Avatar';
 import { useLang, useT, useTheme } from '../tracking/shared/i18n';
 import { TrackingProvider } from '../tracking/shared/provider';
@@ -54,13 +62,15 @@ const TEXT = {
     nav: 'เมนูหลัก', app: 'แอปหลัก', section: 'ติดตามงาน', other: 'อื่นๆ', dashboard: 'แดชบอร์ด', projects: 'โปรเจกต์',
     archived: 'โปรเจกต์ที่เก็บถาวร',
     import: 'นำเข้า', reports: 'รายงาน', settings: 'ตั้งค่า', soon: 'เร็ว ๆ นี้', lang: 'ภาษา', theme: 'สลับธีม',
-    user: 'ผู้ใช้ (dev)', mobileNav: 'ไปที่', myTasks: 'งานของฉัน',
+    user: 'ผู้ใช้ (dev)', mobileNav: 'ไปที่', myTasks: 'งานของฉัน', account: 'บัญชีของฉัน',
+    roles: { admin: 'ผู้ดูแลระบบ', manager: 'ผู้จัดการ', member: 'สมาชิก', viewer: 'ผู้ชม', 'no role': 'ผู้ใช้ทั่วไป' } as Record<string, string>,
   },
   en: {
     nav: 'Main menu', app: 'Host App', section: 'Tracking', other: 'Other', dashboard: 'Dashboard', projects: 'Projects',
     archived: 'Archived projects',
     import: 'Import', reports: 'Reports', settings: 'Settings', soon: 'Soon', lang: 'Language', theme: 'Toggle theme',
-    user: 'User (dev)', mobileNav: 'Go to', myTasks: 'My tasks',
+    user: 'User (dev)', mobileNav: 'Go to', myTasks: 'My tasks', account: 'My account',
+    roles: { admin: 'Admin', manager: 'Manager', member: 'Member', viewer: 'Viewer', 'no role': 'User' } as Record<string, string>,
   },
 };
 
@@ -232,15 +242,7 @@ function Chrome({ children }: { children: ReactNode }) {
           >
             {dark ? <Sun className="h-4 w-4" aria-hidden="true" /> : <Moon className="h-4 w-4" aria-hidden="true" />}
           </button>
-          <Link
-            href={routes.myTasks}
-            aria-label={t.myTasks}
-            title={t.myTasks}
-            aria-current={onMyTasks ? 'page' : undefined}
-            className={`rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${onMyTasks ? 'outline-2 outline-offset-2 outline-primary' : 'hover:opacity-90'}`}
-          >
-            <Avatar user={me} size="md" />
-          </Link>
+          <UserMenu me={me} current={onMyTasks} />
         </div>
       </header>
       <div className="flex min-h-0 flex-1">
@@ -255,5 +257,42 @@ function Chrome({ children }: { children: ReactNode }) {
         <main className="min-w-0 flex-1">{children}</main>
       </div>
     </div>
+  );
+}
+
+/** The avatar opens the account menu, as the host app's header does; My tasks lives here, not in the sidebar. */
+function UserMenu({ me, current }: { me: (typeof DEV_USERS)[number]; current: boolean }) {
+  const t = useT(TEXT);
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        aria-label={t.account}
+        title={t.account}
+        className={`rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${current ? 'outline-2 outline-offset-2 outline-primary' : 'hover:opacity-90'}`}
+      >
+        <Avatar user={me} size="md" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuLabel className="flex items-center gap-2.5 py-2 font-normal">
+          <Avatar user={me} size="md" />
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-medium text-foreground">{me.name}</span>
+            <span className="block truncate text-xs text-muted-foreground">{t.roles[me.role] ?? me.role}</span>
+          </span>
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link href={routes.myTasks} aria-current={current ? 'page' : undefined}>
+            <ListChecks aria-hidden />
+            {t.myTasks}
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem disabled>
+          <Settings aria-hidden />
+          {t.settings}
+          <span className="ml-auto rounded-full bg-muted px-1.5 py-0.5 text-[10px]">{t.soon}</span>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
