@@ -123,6 +123,28 @@ describe('Assigning with impact', () => {
     await waitFor(() => expect(apiMock).toHaveBeenCalledWith('/cards/30/assignees/4', { method: 'PUT' }));
   });
 
+  it('an assignee opens their page for a PM, your own chip opens your profile, and a member sees plain names', async () => {
+    const card = { ...detail, assigneeIds: [4, 2] };
+    const users = [
+      { id: 4, name: 'Kai W.', avatarUrl: '' },
+      { id: 2, name: 'Napat K.', avatarUrl: '' },
+    ] as S['User'][];
+    const view = () =>
+      render(
+        <TrackingProvider lang="en">
+          <AssigneePicker projectId={1} card={card} members={members} users={users} readOnly={false} />
+        </TrackingProvider>,
+      );
+    view();
+    expect((await screen.findByRole('link', { name: 'Kai W.' })).getAttribute('href')).toBe('/tracking/people/4');
+    expect(screen.getByRole('link', { name: 'Napat K.' }).getAttribute('href')).toBe('/tracking/profile');
+    cleanup();
+    canViewPeople = false;
+    view();
+    expect((await screen.findByRole('link', { name: 'Napat K.' })).getAttribute('href')).toBe('/tracking/profile');
+    expect(screen.queryByRole('link', { name: 'Kai W.' })).toBeNull();
+  });
+
   it('without access to people, or for a card without dates, a pick assigns at once', async () => {
     canViewPeople = false;
     renderPicker();

@@ -12,6 +12,7 @@ import { ApiError } from '../shared/api/client';
 import { errorMessage } from '../shared/errors';
 import { priorityLabel } from '../shared/format';
 import { useLang, useT } from '../shared/i18n';
+import { PersonLink } from '../people/PersonLink';
 import { Avatar } from '../shared/Avatar';
 import { AssigneePicker } from './AssigneePicker';
 import { Checklist } from './Checklist';
@@ -236,8 +237,12 @@ export function CardPanel({
               {creator && (
                 <div className="flex items-center gap-2 border-t pt-3 text-xs text-muted-foreground">
                   <span>{t.createdBy}</span>
-                  <Avatar user={creator} size="xs" />
-                  <span className="min-w-0 truncate text-foreground">{creator.name}</span>
+                  <PersonLink userId={creator.id} className="flex min-w-0 items-center gap-2">
+                    <Avatar user={creator} size="xs" />
+                    <span className="min-w-0 truncate text-foreground" aria-hidden>
+                      {creator.name}
+                    </span>
+                  </PersonLink>
                 </div>
               )}
               <p className="text-xs text-muted-foreground">

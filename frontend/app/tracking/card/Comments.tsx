@@ -3,6 +3,7 @@ import { Pencil, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { PersonLink } from '../people/PersonLink';
 import { Avatar } from '../shared/Avatar';
 import { boardAccess } from '../shared/access';
 import { useBoard, useComments, useMe } from '../shared/api/queries';
@@ -104,10 +105,12 @@ export function Comments({ projectId, cardId, readOnly = false }: { projectId: n
             return (
               <li key={c.id} data-comment={c.id} className="flex flex-col gap-1 rounded-lg border p-3">
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Avatar user={users.get(c.authorId) ?? { id: c.authorId, name }} size="xs" />
-                  <span className="font-medium text-foreground" aria-hidden>
-                    {name}
-                  </span>
+                  <PersonLink userId={c.authorId} className="flex min-w-0 items-center gap-2">
+                    <Avatar user={users.get(c.authorId) ?? { id: c.authorId, name }} size="xs" />
+                    <span className="font-medium text-foreground" aria-hidden>
+                      {name}
+                    </span>
+                  </PersonLink>
                   <time dateTime={c.createdAt}>{fmtDate(c.createdAt, lang)}</time>
                   {c.editedAt && <span>({t.edited})</span>}
                   <span className="ml-auto" />

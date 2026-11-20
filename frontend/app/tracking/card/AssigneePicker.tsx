@@ -8,6 +8,7 @@ import { useMe } from '../shared/api/queries';
 import type { components } from '../shared/api/schema';
 import { spanOf } from '../people/impact';
 import { ImpactPanel } from '../people/ImpactPanel';
+import { PersonLink } from '../people/PersonLink';
 import { Avatar } from '../shared/Avatar';
 import { useT } from '../shared/i18n';
 import { SaveStatus, useInlineSave } from './inline';
@@ -24,7 +25,10 @@ function Person({ id, name, avatarUrl }: { id: number; name: string; avatarUrl: 
   return (
     <>
       <Avatar user={{ id, name, avatarUrl }} size="sm" />
-      <span className="truncate">{name}</span>
+      {/* The avatar already names them for screen readers. */}
+      <span className="truncate" aria-hidden>
+        {name}
+      </span>
     </>
   );
 }
@@ -61,8 +65,10 @@ export function AssigneePicker({
         {assigned.length === 0 && <span className="text-sm text-muted-foreground">{t.none}</span>}
         <ul className="contents">
           {assigned.map((u) => (
-            <li key={u.id} className="flex max-w-48 items-center gap-1.5 rounded-full bg-muted py-0.5 pr-2.5 pl-0.5 text-sm">
-              <Person id={u.id} name={u.name} avatarUrl={u.avatarUrl} />
+            <li key={u.id} className="flex max-w-48 rounded-full bg-muted text-sm">
+              <PersonLink userId={u.id} className="flex min-w-0 items-center gap-1.5 rounded-full py-0.5 pr-2.5 pl-0.5">
+                <Person id={u.id} name={u.name} avatarUrl={u.avatarUrl} />
+              </PersonLink>
             </li>
           ))}
         </ul>
