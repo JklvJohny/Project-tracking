@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { DateInput } from '../shared/DateInput';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { ApiError } from '../shared/api/client';
@@ -230,12 +231,12 @@ function SettingsForm({ projectId, onOpenChange }: { projectId: number; onOpenCh
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <label htmlFor="ps-startDate" className={label}>{t.startDate}</label>
-            <Input {...field('startDate')} type="date" defaultValue={project.startDate ?? ''} />
+            <DateInput {...field('startDate')} defaultValue={project.startDate ?? ''} />
             {err('startDate')}
           </div>
           <div>
             <label htmlFor="ps-endDate" className={label}>{t.endDate}</label>
-            <Input {...field('endDate')} type="date" defaultValue={project.endDate ?? ''} />
+            <DateInput {...field('endDate')} defaultValue={project.endDate ?? ''} />
             {err('endDate')}
           </div>
         </div>

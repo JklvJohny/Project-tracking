@@ -93,7 +93,7 @@ describe('Report templates', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Delete Q1 plan' }));
     await waitFor(() => expect(screen.queryByText('Q1 plan')).toBeNull());
     expect(apiMock).toHaveBeenCalledWith('/report-templates/2', { method: 'DELETE' });
-    const [, opts] = vi.mocked(toast).mock.calls.at(-1)! as [string, { action: { label: string } }];
+    const [, opts] = vi.mocked(toast).mock.calls.at(-1)! as unknown as [string, { action: { label: string } }];
     expect(opts.action.label).toBe('Undo');
   });
 });

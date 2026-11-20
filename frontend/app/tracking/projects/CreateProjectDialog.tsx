@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { DateInput } from '../shared/DateInput';
 import { Textarea } from '@/components/ui/textarea';
 import { api, ApiError } from '../shared/api/client';
 import { qk } from '../shared/api/queries';
@@ -149,12 +150,12 @@ function CreateProjectForm({ onOpenChange }: { onOpenChange: (o: boolean) => voi
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label htmlFor="cp-startDate" className="mb-1.5 block text-sm font-medium">{t.startDate}</label>
-              <Input {...field('startDate')} type="date" />
+              <DateInput {...field('startDate')} />
               {err('startDate')}
             </div>
             <div>
               <label htmlFor="cp-endDate" className="mb-1.5 block text-sm font-medium">{t.endDate}</label>
-              <Input {...field('endDate')} type="date" />
+              <DateInput {...field('endDate')} />
               {err('endDate')}
             </div>
           </div>
