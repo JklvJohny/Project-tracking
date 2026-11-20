@@ -26,7 +26,12 @@ let list: T[];
 
 type Init = { method?: string; body?: FormData };
 beforeEach(() => {
-  list = [tpl(1, 'Weekly', 'Status update', 'status.docx'), tpl(2, 'Budget', 'Q1 plan', 'q1.xlsx'), tpl(3, 'Weekly', 'Risks', 'risks.pdf')];
+  list = [
+    tpl(1, 'Weekly', 'Status update', 'status.docx'),
+    tpl(2, 'Budget', 'Q1 plan', 'q1.xlsx'),
+    tpl(3, 'Weekly', 'Risks', 'risks.pdf'),
+    tpl(4, 'Budget', 'Old form', 'form.DOC'),
+  ];
   apiMock.mockReset();
   vi.mocked(toast).mockReset();
   apiMock.mockImplementation((async (path: string, init?: Init) => {
@@ -49,8 +54,10 @@ describe('Report templates', () => {
     const table = await screen.findByRole('table', { name: 'Report templates by type' });
     const groups = within(table).getAllByRole('columnheader').map((h) => h.textContent);
     expect(groups).toContain('Weekly (2)');
-    expect(groups).toContain('Budget (1)');
+    expect(groups).toContain('Budget (2)');
     expect(within(table).getByText('DOCX')).toBeTruthy();
+    // A legacy Word file says DOC, not DOCX.
+    expect(within(table).getByText('DOC')).toBeTruthy();
     expect(within(table).getByText('XLSX')).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Report templates' }).getAttribute('aria-current')).toBe('page');
   });
@@ -72,7 +79,10 @@ describe('Report templates', () => {
     const input = dialog.ownerDocument.querySelector('input[type=file]') as HTMLInputElement;
     const bad = new File(['x'], 'tool.exe');
     fireEvent.change(input, { target: { files: [bad] } });
-    expect(within(dialog).getByText(/Only Word \(\.docx\)/)).toBeTruthy();
+    expect(within(dialog).getByText(/Only Word \(\.docx, \.doc\)/)).toBeTruthy();
+    // A legacy .doc is accepted.
+    fireEvent.change(input, { target: { files: [new File(['x'], 'form.doc')] } });
+    expect(within(dialog).queryByText(/Only Word/)).toBeNull();
 
     const file = new File(['PK'], 'Weekly status.pptx');
     fireEvent.change(input, { target: { files: [file] } });

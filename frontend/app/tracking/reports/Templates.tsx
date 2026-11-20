@@ -9,7 +9,7 @@ import { fmtDate } from '../shared/format';
 import { useLang, useT } from '../shared/i18n';
 import { fmtSize } from './DocumentTable';
 import { TemplateDialog } from './TemplateDialog';
-import { downloadTemplate, kindOf, useDeleteTemplate, useTemplates, type Template, type TemplateKind } from './template-queries';
+import { downloadTemplate, extLabel, kindOf, useDeleteTemplate, useTemplates, type Template, type TemplateKind } from './template-queries';
 
 const TEXT = {
   th: {
@@ -59,11 +59,11 @@ const TEXT = {
 };
 
 // The file type is spelled out next to the icon, so colour is never the only cue.
-const KIND: Record<TemplateKind, { icon: LucideIcon; label: string; cls: string }> = {
-  docx: { icon: FileText, label: 'DOCX', cls: 'bg-sky-100 text-sky-800 dark:bg-sky-400/15 dark:text-sky-200' },
-  xlsx: { icon: FileSpreadsheet, label: 'XLSX', cls: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-400/15 dark:text-emerald-200' },
-  pptx: { icon: Presentation, label: 'PPTX', cls: 'bg-orange-100 text-orange-800 dark:bg-orange-400/15 dark:text-orange-200' },
-  pdf: { icon: FileText, label: 'PDF', cls: 'bg-red-100 text-red-800 dark:bg-red-400/15 dark:text-red-200' },
+const KIND: Record<TemplateKind, { icon: LucideIcon; cls: string }> = {
+  docx: { icon: FileText, cls: 'bg-sky-100 text-sky-800 dark:bg-sky-400/15 dark:text-sky-200' },
+  xlsx: { icon: FileSpreadsheet, cls: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-400/15 dark:text-emerald-200' },
+  pptx: { icon: Presentation, cls: 'bg-orange-100 text-orange-800 dark:bg-orange-400/15 dark:text-orange-200' },
+  pdf: { icon: FileText, cls: 'bg-red-100 text-red-800 dark:bg-red-400/15 dark:text-red-200' },
 };
 
 const TH = 'px-3 py-2 font-medium whitespace-nowrap';
@@ -179,7 +179,7 @@ export function Templates() {
                         </div>
                       </td>
                       <td className={TD}>
-                        <span className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${k.cls}`}>{k.label}</span>
+                        <span className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${k.cls}`}>{extLabel(x)}</span>
                       </td>
                       <td className={`${TD} text-right whitespace-nowrap text-muted-foreground tabular-nums`}>{fmtSize(x.sizeBytes)}</td>
                       <td className={`${TD} whitespace-nowrap text-muted-foreground`}>{x.uploadedByName || t.unknown}</td>

@@ -94,6 +94,7 @@ func TestTemplates_RejectsBadInput(t *testing.T) {
 	}{
 		{"exe", "x.exe", "file", "unsupported_type", map[string]string{"category": "A"}, []byte("MZ")},
 		{"doc renamed pdf", "x.pdf", "file", "unsupported_type", map[string]string{"category": "A"}, zip("x")},
+		{"zip renamed doc", "x.doc", "file", "unsupported_type", map[string]string{"category": "A"}, zip("x")},
 		{"no category", "x.pdf", "category", "required", map[string]string{}, pdf("x")},
 		{"blank category", "x.pdf", "category", "required", map[string]string{"category": "  "}, pdf("x")},
 		{"long name", "x.pdf", "name", "too_long", map[string]string{"category": "A", "name": strings.Repeat("ก", 121)}, pdf("x")},
@@ -145,5 +146,18 @@ func TestTemplates_EditDeleteRestore(t *testing.T) {
 	}
 	if rec, _ := e.call(member, "DELETE", "/report-templates/999", nil, ""); rec.Code != 404 {
 		t.Fatalf("missing = %d", rec.Code)
+	}
+}
+
+func TestTemplates_LegacyOfficeFormats(t *testing.T) {
+	e := newEnv(t)
+	ole := func(extra string) []byte { return []byte("\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1" + extra) }
+	for file, mime := range map[string]string{
+		"form.doc": "application/msword", "sheet.XLS": "application/vnd.ms-excel", "deck.ppt": "application/vnd.ms-powerpoint",
+	} {
+		code, body := e.uploadTemplate(member, map[string]string{"category": "Old"}, file, ole(file))
+		if code != 201 || data(body)["mimeType"] != mime {
+			t.Errorf("%s = %d %v", file, code, body)
+		}
 	}
 }

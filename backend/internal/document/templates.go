@@ -29,8 +29,14 @@ const (
 	maxDescription = 500
 )
 
+// ole2 starts every legacy Office file (.doc, .xls, .ppt): the OLE2 compound
+// file signature.
+var ole2 = []byte("\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1")
+
 // templateTypes maps an allowed extension to the MIME type served and the
-// magic bytes the content must start with. Office files are ZIP containers.
+// magic bytes the content must start with. Office files are ZIP containers;
+// the pre-2007 Office formats are OLE2 containers, kept because departments
+// still hold forms in them.
 var templateTypes = map[string]struct {
 	mime  string
 	magic []byte
@@ -39,6 +45,9 @@ var templateTypes = map[string]struct {
 	".docx": {"application/vnd.openxmlformats-officedocument.wordprocessingml.document", []byte("PK\x03\x04")},
 	".xlsx": {"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", []byte("PK\x03\x04")},
 	".pptx": {"application/vnd.openxmlformats-officedocument.presentationml.presentation", []byte("PK\x03\x04")},
+	".doc":  {"application/msword", ole2},
+	".xls":  {"application/vnd.ms-excel", ole2},
+	".ppt":  {"application/vnd.ms-powerpoint", ole2},
 }
 
 // TemplateView is a template as the client sees it. The storage key stays server-side.

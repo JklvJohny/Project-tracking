@@ -206,7 +206,7 @@ erDiagram
         text description "0-500 chars"
         text storage_key
         text filename
-        text mime_type "docx | xlsx | pptx | pdf"
+        text mime_type "docx | xlsx | pptx | doc | xls | ppt | pdf"
         bigint size_bytes
         bigint uploaded_by "user_id"
         timestamptz created_at

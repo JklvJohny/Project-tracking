@@ -791,7 +791,7 @@ export interface paths {
         /** Every non-deleted report template, ordered by category, then name (case-insensitive). Templates are department-wide, not per project; any signed-in user may read them. */
         get: operations["listReportTemplates"];
         put?: never;
-        /** Upload a template (any signed-in user). `.docx`, `.xlsx`, `.pptx` or `.pdf`, max 20 MiB; the content must match the extension (`PK` zip header for Office, `%PDF-` for PDF), else `file` = `unsupported_type`. Send the text fields BEFORE `file`; parts after the file are not read. An empty `name` defaults to the file name without its extension. */
+        /** Upload a template (any signed-in user). `.docx`, `.xlsx`, `.pptx`, the legacy `.doc`, `.xls`, `.ppt`, or `.pdf`, max 20 MiB; the content must match the extension (`PK` zip header for Office, the OLE2 header `D0 CF 11 E0` for legacy Office, `%PDF-` for PDF), else `file` = `unsupported_type`. Send the text fields BEFORE `file`; parts after the file are not read. An empty `name` defaults to the file name without its extension. */
         post: operations["uploadReportTemplate"];
         delete?: never;
         options?: never;

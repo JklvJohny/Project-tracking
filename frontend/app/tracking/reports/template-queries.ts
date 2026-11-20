@@ -11,7 +11,8 @@ type S = components['schemas'];
 export type Template = S['ReportTemplate'];
 export type TemplatePatch = S['ReportTemplatePatch'];
 
-export const TEMPLATE_EXTS = ['.docx', '.xlsx', '.pptx', '.pdf'] as const;
+// The pre-2007 Office formats (.doc, .xls, .ppt) are accepted too: departments still keep forms in them.
+export const TEMPLATE_EXTS = ['.docx', '.doc', '.xlsx', '.xls', '.pptx', '.ppt', '.pdf'] as const;
 export type TemplateKind = 'docx' | 'xlsx' | 'pptx' | 'pdf';
 
 export const tk = ['report-templates'] as const;
@@ -26,9 +27,17 @@ const sortTemplates = (ts: Template[]) =>
 
 export const useTemplates = () => useQuery({ queryKey: tk, queryFn: () => api<Template[]>('/report-templates') });
 
+const FAMILY: Record<string, TemplateKind> = { docx: 'docx', doc: 'docx', xlsx: 'xlsx', xls: 'xlsx', pptx: 'pptx', ppt: 'pptx' };
+
+/** The app family (icon and colour); .doc shares Word's with .docx. */
 export function kindOf(t: Pick<Template, 'filename'>): TemplateKind {
-  const ext = t.filename.toLowerCase().split('.').pop();
-  return ext === 'docx' || ext === 'xlsx' || ext === 'pptx' ? ext : 'pdf';
+  return FAMILY[t.filename.toLowerCase().split('.').pop() ?? ''] ?? 'pdf';
+}
+
+/** The badge text: the file's own extension (DOC vs DOCX), PDF for anything unexpected. */
+export function extLabel(t: Pick<Template, 'filename'>): string {
+  const ext = t.filename.toLowerCase().split('.').pop() ?? '';
+  return TEMPLATE_EXTS.includes(`.${ext}` as (typeof TEMPLATE_EXTS)[number]) ? ext.toUpperCase() : 'PDF';
 }
 
 /** Quick client check; the server repeats it (422 fields.file). */

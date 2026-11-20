@@ -901,7 +901,7 @@ paths:
     post:
       tags: [templates]
       operationId: uploadReportTemplate
-      summary: Upload a template (any signed-in user). `.docx`, `.xlsx`, `.pptx` or `.pdf`, max 20 MiB; the content must match the extension (`PK` zip header for Office, `%PDF-` for PDF), else `file` = `unsupported_type`. Send the text fields BEFORE `file`; parts after the file are not read. An empty `name` defaults to the file name without its extension.
+      summary: Upload a template (any signed-in user). `.docx`, `.xlsx`, `.pptx`, the legacy `.doc`, `.xls`, `.ppt`, or `.pdf`, max 20 MiB; the content must match the extension (`PK` zip header for Office, the OLE2 header `D0 CF 11 E0` for legacy Office, `%PDF-` for PDF), else `file` = `unsupported_type`. Send the text fields BEFORE `file`; parts after the file are not read. An empty `name` defaults to the file name without its extension.
       requestBody:
         required: true
         content:
