@@ -1,25 +1,25 @@
 'use client';
+import { Check, UserPlus } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useMembers } from '../projects/project-mutations';
+import { useTeam } from '../team/queries';
 import { Avatar } from '../shared/Avatar';
 import { useConfirm } from '../shared/confirm';
 import { errorMessage } from '../shared/errors';
 import { useLang, useT } from '../shared/i18n';
-import { useUserSearch } from '../shared/useUserSearch';
 import { useShare, useShares, useUnshare, type Folder } from './queries';
 
 const TEXT = {
   th: {
     title: (n: string) => `แชร์โฟลเดอร์ ${n}`,
     desc: 'คนนอกโปรเจกต์จะเห็นโฟลเดอร์นี้เมื่อแชร์ให้เท่านั้น เขาดู ดาวน์โหลด และอัปโหลดรายงานได้ ลบได้เฉพาะไฟล์ของตัวเอง และไม่เห็นบอร์ดของโปรเจกต์',
-    search: 'ค้นหาคน',
-    searchPlaceholder: 'พิมพ์ชื่อเพื่อค้นหา',
+    pick: 'เลือกคนที่จะแชร์ให้',
+    search: 'ค้นหาชื่อ',
     noResults: 'ไม่พบคน',
-    share: 'แชร์',
-    shareWith: (n: string) => `แชร์กับ ${n}`,
     member: 'สมาชิกโปรเจกต์',
     shared: 'แชร์แล้ว',
     list: 'แชร์กับ',
@@ -34,11 +34,9 @@ const TEXT = {
   en: {
     title: (n: string) => `Share the ${n} folder`,
     desc: "People outside the project see this folder only once it is shared with them. They can view, download and upload reports and delete their own, but not see the project's board.",
-    search: 'Search people',
-    searchPlaceholder: 'Type a name to search',
+    pick: 'Choose people to share with',
+    search: 'Search names',
     noResults: 'No one found',
-    share: 'Share',
-    shareWith: (n: string) => `Share with ${n}`,
     member: 'Project member',
     shared: 'Shared',
     list: 'Shared with',
@@ -75,10 +73,10 @@ function ShareBody({ projectId }: { projectId: number }) {
   const members = useMembers(projectId, true);
   const share = useShare(projectId);
   const unshare = useUnshare(projectId);
-  const [q, setQ] = useState('');
+  const team = useTeam();
+  const [picking, setPicking] = useState(false);
   // The error itself, not its text: the message is resolved at render so it follows a language switch.
   const [error, setError] = useState<unknown>(null);
-  const found = useUserSearch(q);
   const list = shares.data ?? [];
   const isMember = (id: number) => members.data?.some((m) => m.userId === id) ?? false;
   const isShared = (id: number) => list.some((s) => s.userId === id);
@@ -91,38 +89,59 @@ function ShareBody({ projectId }: { projectId: number }) {
 
   return (
     <div className="space-y-4">
-      <Input type="search" aria-label={t.search} placeholder={t.searchPlaceholder} value={q} onChange={(e) => setQ(e.target.value)} />
-      {found && (
-        <ul className="max-h-48 divide-y overflow-y-auto rounded-md border">
-          {found.length === 0 && <li className="px-3 py-2 text-sm text-muted-foreground">{t.noResults}</li>}
-          {found.map((u) => (
-            <li key={u.id} className="flex items-center gap-2 px-3 py-1.5 text-sm">
-              <Avatar user={u} size="xs" />
-              <span className="min-w-0 flex-1 truncate" aria-hidden>
-                {u.name}
-              </span>
-              {isMember(u.id) ? (
-                <span className="shrink-0 text-xs text-muted-foreground">{t.member}</span>
-              ) : isShared(u.id) ? (
-                <span className="shrink-0 text-xs text-muted-foreground">{t.shared}</span>
+      {/* A pop-up list of the whole department: pick one or several without typing a name first. */}
+      <Popover open={picking} onOpenChange={setPicking}>
+        <PopoverTrigger asChild>
+          <Button variant="outline" className="w-full justify-start text-muted-foreground">
+            <UserPlus aria-hidden />
+            {t.pick}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-(--radix-popover-trigger-width) min-w-64 p-0">
+          <Command>
+            <CommandInput placeholder={t.search} aria-label={t.search} />
+            <CommandList>
+              {team.isPending || members.isPending ? (
+                <p className="px-3 py-2 text-sm text-muted-foreground">{t.loading}</p>
               ) : (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  aria-label={t.shareWith(u.name)}
-                  disabled={share.isPending || members.isPending}
-                  onClick={() => {
-                    setError(null);
-                    share.mutate(u.id, { onSuccess: () => setQ(''), onError: setError });
-                  }}
-                >
-                  {t.share}
-                </Button>
+                <>
+                  <CommandEmpty>{t.noResults}</CommandEmpty>
+                  <CommandGroup>
+                    {(team.data?.people ?? []).map((p) => {
+                      const member = isMember(p.userId);
+                      const shared = isShared(p.userId);
+                      return (
+                        <CommandItem
+                          key={p.userId}
+                          value={`${p.name} ${p.userId}`}
+                          disabled={member || shared || share.isPending}
+                          onSelect={() => {
+                            setError(null);
+                            share.mutate(p.userId, { onError: setError });
+                          }}
+                        >
+                          <Avatar user={{ id: p.userId, name: p.name, avatarUrl: p.avatarUrl }} size="xs" />
+                          <span className="min-w-0 flex-1 truncate" aria-hidden>
+                            {p.name}
+                          </span>
+                          {member ? (
+                            <span className="shrink-0 text-xs text-muted-foreground">{t.member}</span>
+                          ) : shared ? (
+                            <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+                              <Check className="size-3.5" aria-hidden />
+                              {t.shared}
+                            </span>
+                          ) : null}
+                        </CommandItem>
+                      );
+                    })}
+                  </CommandGroup>
+                </>
               )}
-            </li>
-          ))}
-        </ul>
-      )}
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
       {error != null && (
         <p role="alert" className="text-sm font-medium text-destructive">
           {errorMessage(error, lang)}

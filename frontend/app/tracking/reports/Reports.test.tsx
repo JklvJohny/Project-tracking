@@ -41,7 +41,10 @@ function impl() {
     if (path === '/report-folders') return [folder(1, 'Website redesign', 3), folder(2, 'Mobile app', 5)];
     if (path === '/projects/1/folder-shares') return shares;
     if (path === '/projects/1/members') return [{ userId: 7, name: 'Somchai Dee', avatarUrl: '', role: 'pm', addedAt: '' }];
-    if (path.startsWith('/users?q=')) return [user(7, 'Somchai Dee'), user(5, 'Ploy Outsider')];
+    if (path === '/team') {
+      const person = (userId: number, name: string) => ({ userId, name, avatarUrl: '', skills: [], open: 0, overdue: 0, dueSoon: 0 });
+      return { asOf: '2026-11-21', people: [person(7, 'Somchai Dee'), person(6, 'Niran Guest'), person(5, 'Ploy Outsider')], catalog: [], categories: [] };
+    }
     if (path === '/projects/1/folder-shares/5' && init?.method === 'PUT') return share(5, 'Ploy Outsider');
     if (path === '/projects/1/documents' && init?.method === 'POST') return doc(9, 'new.pdf', 8);
     if (path === '/projects/1/documents') return docs;
@@ -69,6 +72,13 @@ beforeEach(() => {
   role = 'pm';
   archived = null;
   shares = [share(6, 'Niran Guest')];
+  // cmdk (the share picker) measures its list and scrolls the active option into view.
+  Element.prototype.scrollIntoView = vi.fn();
+  globalThis.ResizeObserver ??= class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver;
   docs = [doc(1, 'Kickoff.pdf'), doc(2, 'Weekly.pdf', 8), doc(3, 'Scope.pdf')];
   blobMock.mockResolvedValue(new Blob(['%PDF-']));
   n = 0;
@@ -260,12 +270,19 @@ describe('Reports page', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Share the Website redesign folder' });
     const list = within(dialog).getByRole('region', { name: 'Shared with' });
     expect(await within(list).findByRole('button', { name: 'Stop sharing with Niran Guest' })).toBeTruthy();
-    fireEvent.change(within(dialog).getByRole('searchbox', { name: 'Search people' }), { target: { value: 'o' } });
-    // A project member cannot be shared with: they already see the folder.
-    expect(await within(dialog).findByText('Project member')).toBeTruthy();
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Share with Ploy Outsider' }));
+    // The pop-up lists the whole department; a member and someone already shared with cannot be picked.
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Choose people to share with' }));
+    const member = await screen.findByRole('option', { name: /Somchai Dee/ });
+    expect(member.getAttribute('aria-disabled')).toBe('true');
+    expect(within(member).getByText('Project member')).toBeTruthy();
+    expect(screen.getByRole('option', { name: /Niran Guest/ }).getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(screen.getByRole('option', { name: /Ploy Outsider/ }));
     await waitFor(() => expect(apiMock).toHaveBeenCalledWith('/projects/1/folder-shares/5', { method: 'PUT' }));
     expect(await within(list).findByRole('button', { name: 'Stop sharing with Ploy Outsider' })).toBeTruthy();
+    // It stays open for the next pick, now showing Ploy as shared.
+    await waitFor(() => expect(screen.getByRole('option', { name: /Ploy Outsider/ }).getAttribute('aria-disabled')).toBe('true'));
+    fireEvent.keyDown(screen.getByPlaceholderText('Search names'), { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('option')).toBeNull());
     fireEvent.click(within(list).getByRole('button', { name: 'Stop sharing with Niran Guest' }));
     const confirm = await screen.findByRole('alertdialog');
     fireEvent.click(within(confirm).getByRole('button', { name: 'Stop sharing' }));
