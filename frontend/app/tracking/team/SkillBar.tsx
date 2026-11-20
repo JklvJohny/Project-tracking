@@ -33,7 +33,6 @@ const TEXT = {
     list: 'กรองตามทักษะ',
     chosen: 'ทักษะที่เลือก',
     unchoose: (s: string) => `เลิกกรองด้วย ${s}`,
-    add: 'ทักษะใหม่',
     addIn: (c: string) => `เพิ่มทักษะในหมวด ${c}`,
     categories: 'หมวดหมู่',
     uncategorised: 'ไม่มีหมวดหมู่',
@@ -59,7 +58,6 @@ const TEXT = {
     list: 'Filter by skill',
     chosen: 'Chosen skills',
     unchoose: (s: string) => `Stop filtering by ${s}`,
-    add: 'New skill',
     addIn: (c: string) => `Add a skill to ${c}`,
     categories: 'Categories',
     uncategorised: 'Uncategorised',
@@ -92,7 +90,7 @@ type Props = {
   onToggle: (s: string) => void;
 };
 
-/** The team's skills as filter chips grouped by category, folded away by default; also where skills and categories are added. */
+/** The team's skills as filter chips grouped by category, folded away by default; also where skills (the + by each category) and categories are added. */
 export function SkillBar({ skills, categories, chosen, people, onToggle }: Props) {
   const t = useT(TEXT);
   const [open, setOpen] = useStoredOpen(SKILLS_OPEN_KEY, false);
@@ -130,13 +128,10 @@ export function SkillBar({ skills, categories, chosen, people, onToggle }: Props
             ))}
           </ul>
         )}
-        <div className="ml-auto flex gap-2">
-          <Button variant="outline" size="sm" className="h-8" onClick={() => setManaging(true)}>
-            <FolderTree aria-hidden />
-            {t.categories}
-          </Button>
-          <AddSkill skills={skills} categories={categories} people={people} />
-        </div>
+        <Button variant="outline" size="sm" className="ml-auto h-8" onClick={() => setManaging(true)}>
+          <FolderTree aria-hidden />
+          {t.categories}
+        </Button>
       </div>
       <div id={`${ids}-skills`} hidden={!open}>
         {open && <SkillGroups skills={skills} categories={categories} chosen={chosen} people={people} onToggle={onToggle} />}
@@ -207,33 +202,26 @@ function SkillGroups({ skills, categories, chosen, people, onToggle }: Props) {
   );
 }
 
-type AddProps = { skills: SkillCount[]; categories: Category[]; people: Person[]; preset?: Category };
+type AddProps = { skills: SkillCount[]; categories: Category[]; people: Person[]; preset: Category };
 
-/** "New skill" in the toolbar, or, with preset, the small "+" beside a category that starts the form in it. */
+/** The small "+" beside a category: the new-skill form, starting in that category. */
 function AddSkill({ skills, categories, people, preset }: AddProps) {
   const t = useT(TEXT);
   const [open, setOpen] = useState(false);
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        {preset ? (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-6 shrink-0 text-muted-foreground"
-            aria-label={t.addIn(preset.name)}
-            title={t.addIn(preset.name)}
-          >
-            <Plus aria-hidden />
-          </Button>
-        ) : (
-          <Button variant="outline" size="sm" className="h-8">
-            <Plus aria-hidden />
-            {t.add}
-          </Button>
-        )}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-6 shrink-0 text-muted-foreground"
+          aria-label={t.addIn(preset.name)}
+          title={t.addIn(preset.name)}
+        >
+          <Plus aria-hidden />
+        </Button>
       </PopoverTrigger>
-      <PopoverContent align={preset ? 'start' : 'end'} className="w-80 p-3">
+      <PopoverContent align="start" className="w-80 p-3">
         {/* Remounted on every open, so a cancelled draft does not come back. */}
         {open && (
           <AddSkillForm skills={skills} categories={categories} people={people} preset={preset} onDone={() => setOpen(false)} />
@@ -249,7 +237,7 @@ function AddSkillForm({ skills, categories, people, preset, onDone }: AddProps &
   const add = useAddSkill();
   const [name, setName] = useState('');
   const [who, setWho] = useState<number[]>([]);
-  const [category, setCategory] = useState<string>(preset ? String(preset.id) : NONE);
+  const [category, setCategory] = useState<string>(String(preset.id));
   const [error, setError] = useState<string | null>(null);
   const field = useRef<HTMLInputElement>(null);
   const ids = useId();

@@ -183,20 +183,24 @@ describe('Skill list', () => {
 
   it('adds a new skill and gives it to the people ticked', async () => {
     await screen.findByRole('list', { name: 'Team members' });
-    fireEvent.click(screen.getByRole('button', { name: 'New skill' }));
+    // Only the + beside a category adds; there is no toolbar button.
+    expect(screen.queryByRole('button', { name: 'New skill' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /All skills/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add a skill to Programming' }));
     const field = await screen.findByLabelText('Skill name');
     fireEvent.change(field, { target: { value: '  Rust  ' } });
     fireEvent.click(screen.getByRole('checkbox', { name: /Napat K\./ }));
     fireEvent.click(screen.getByRole('button', { name: 'Add' }));
     await waitFor(() =>
-      expect(apiMock).toHaveBeenCalledWith('/team/skills', { method: 'POST', json: { name: 'Rust', userIds: [2], categoryId: null } }),
+      expect(apiMock).toHaveBeenCalledWith('/team/skills', { method: 'POST', json: { name: 'Rust', userIds: [2], categoryId: 1 } }),
     );
     expect(await within(card('Napat')).findByRole('button', { name: 'Rust' })).toBeTruthy();
   });
 
-  it('refuses an existing name with nobody ticked, without calling the server', async () => {
+  it('refuses an existing name with nobody ticked and no category change, without calling the server', async () => {
     await screen.findByRole('list', { name: 'Team members' });
-    fireEvent.click(screen.getByRole('button', { name: 'New skill' }));
+    fireEvent.click(screen.getByRole('button', { name: /All skills/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add a skill to Programming' }));
     fireEvent.change(await screen.findByLabelText('Skill name'), { target: { value: 'go' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add' }));
     expect(screen.getByRole('alert').textContent).toMatch(/already listed/);
