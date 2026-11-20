@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { toast } from 'sonner';
-import { api } from '../shared/api/client';
+import { api, apiBlob } from '../shared/api/client';
 import type { components } from '../shared/api/schema';
 import { TrackingProvider } from '../shared/provider';
 import ReportsPage from './page';
@@ -105,5 +105,71 @@ describe('Report templates', () => {
     expect(apiMock).toHaveBeenCalledWith('/report-templates/2', { method: 'DELETE' });
     const [, opts] = vi.mocked(toast).mock.calls.at(-1)! as unknown as [string, { action: { label: string } }];
     expect(opts.action.label).toBe('Undo');
+  });
+});
+
+describe('Template preview', () => {
+  const blobMock = vi.mocked(apiBlob);
+  beforeEach(() => {
+    blobMock.mockReset();
+    URL.createObjectURL = vi.fn(() => 'blob:preview');
+    URL.revokeObjectURL = vi.fn();
+  });
+
+  it('a PDF opens in the viewer from the eye button or its name', async () => {
+    blobMock.mockResolvedValue(new Blob(['%PDF-1.4'], { type: 'application/pdf' }));
+    await screen.findByRole('table');
+    fireEvent.click(screen.getByRole('button', { name: 'Preview Risks' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Risks' });
+    expect(blobMock).toHaveBeenCalledWith('/report-templates/3/file', expect.anything());
+    expect((await within(dialog).findByTitle('Risks')).getAttribute('src')).toBe('blob:preview');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:preview');
+    fireEvent.click(screen.getByRole('button', { name: 'Risks' }));
+    expect(await screen.findByRole('dialog', { name: 'Risks' })).toBeTruthy();
+  });
+
+  it('formats the browser cannot show (.doc) have no preview; the name downloads', async () => {
+    blobMock.mockResolvedValue(new Blob(['x']));
+    // jsdom cannot follow the download link the save makes.
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    await screen.findByRole('table');
+    expect(screen.queryByRole('button', { name: 'Preview Old form' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Old form' }));
+    await waitFor(() => expect(blobMock).toHaveBeenCalledWith('/report-templates/4/file'));
+    await waitFor(() => expect(click).toHaveBeenCalled());
+    expect(screen.queryByRole('dialog')).toBeNull();
+    click.mockRestore();
+  });
+
+  it('an .xlsx shows as a table with its sheets, merges and text', async () => {
+    const { default: ExcelJS } = await import('exceljs');
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Plan');
+    ws.getCell('A1').value = 'Quarter plan';
+    ws.mergeCells('A1:C1');
+    ws.getCell('A2').value = 'Item';
+    ws.getCell('B2').value = 42;
+    wb.addWorksheet('Notes').getCell('A1').value = 'see attached';
+    const buf = await wb.xlsx.writeBuffer();
+    blobMock.mockResolvedValue(new Blob([buf]));
+    await screen.findByRole('table');
+    fireEvent.click(screen.getByRole('button', { name: 'Preview Q1 plan' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Q1 plan' });
+    const title = await within(dialog).findByText('Quarter plan', {}, { timeout: 5000 });
+    expect(title.closest('td')!.getAttribute('colspan')).toBe('3');
+    expect(within(dialog).getByText('42')).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole('tab', { name: 'Notes' }));
+    expect(within(dialog).getByText('see attached')).toBeTruthy();
+  });
+
+  it('a file that will not open says so and offers the download', async () => {
+    blobMock.mockResolvedValue(new Blob(['not a zip']));
+    await screen.findByRole('table');
+    fireEvent.click(screen.getByRole('button', { name: 'Preview Q1 plan' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Q1 plan' });
+    expect((await within(dialog).findByRole('alert', {}, { timeout: 5000 })).textContent).toMatch(/could not be previewed/);
+    expect(within(dialog).getAllByRole('button', { name: /Download/ }).length).toBeGreaterThan(0);
   });
 });

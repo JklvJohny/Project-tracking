@@ -1,5 +1,5 @@
 'use client';
-import { Download, FileSpreadsheet, FileText, LayoutTemplate, Pencil, Plus, Presentation, Search, Trash2, type LucideIcon } from 'lucide-react';
+import { Download, Eye, FileSpreadsheet, FileText, LayoutTemplate, Pencil, Plus, Presentation, Search, Trash2, type LucideIcon } from 'lucide-react';
 import { Fragment, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,7 @@ import { fmtDate } from '../shared/format';
 import { useLang, useT } from '../shared/i18n';
 import { fmtSize } from './DocumentTable';
 import { TemplateDialog } from './TemplateDialog';
+import { previewKind, TemplatePreview } from './TemplatePreview';
 import { downloadTemplate, extLabel, kindOf, useDeleteTemplate, useTemplates, type Template, type TemplateKind } from './template-queries';
 
 const TEXT = {
@@ -24,6 +25,7 @@ const TEXT = {
     updated: 'อัปเดต',
     actions: 'การทำงาน',
     download: (n: string) => `ดาวน์โหลด ${n}`,
+    preview: (n: string) => `ดูตัวอย่าง ${n}`,
     edit: (n: string) => `แก้ไข ${n}`,
     del: (n: string) => `ลบ ${n}`,
     addTo: (c: string) => `เพิ่มแม่แบบใน ${c}`,
@@ -46,6 +48,7 @@ const TEXT = {
     updated: 'Updated',
     actions: 'Actions',
     download: (n: string) => `Download ${n}`,
+    preview: (n: string) => `Preview ${n}`,
     edit: (n: string) => `Edit ${n}`,
     del: (n: string) => `Delete ${n}`,
     addTo: (c: string) => `Add a template to ${c}`,
@@ -78,6 +81,7 @@ export function Templates() {
   const [search, setSearch] = useState('');
   // null = closed; { } = new; { template } = edit; { category } = new, prefilled from a group's "+".
   const [dialog, setDialog] = useState<{ template?: Template; category?: string } | null>(null);
+  const [previewing, setPreviewing] = useState<Template | null>(null);
   const list = useMemo(() => q.data ?? [], [q.data]);
   const categories = useMemo(() => [...new Set(list.map((x) => x.category))], [list]);
 
@@ -160,17 +164,19 @@ export function Templates() {
                 </tr>
                 {rows.map((x) => {
                   const k = KIND[kindOf(x)];
+                  const canPreview = previewKind(x) !== null;
                   return (
                     <tr key={x.id} className="border-b last:border-0 hover:bg-accent/50">
                       <td className={`${TD} max-w-96 min-w-56`}>
                         <div className="flex items-start gap-2.5">
                           <k.icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
                           <div className="min-w-0">
+                            {/* The name previews what the browser can show and downloads the rest. */}
                             <button
                               type="button"
-                              onClick={() => void download(x)}
+                              onClick={() => (canPreview ? setPreviewing(x) : void download(x))}
                               className="text-left font-medium break-words hover:underline"
-                              title={t.download(x.filename)}
+                              title={canPreview ? t.preview(x.name) : t.download(x.filename)}
                             >
                               {x.name}
                             </button>
@@ -186,6 +192,14 @@ export function Templates() {
                       <td className={`${TD} whitespace-nowrap text-muted-foreground`}>{fmtDate(x.updatedAt, lang)}</td>
                       <td className={`${TD} w-px pr-2`}>
                         <div className="flex items-center gap-0.5">
+                          {canPreview ? (
+                            <Button variant="ghost" size="icon-sm" aria-label={t.preview(x.name)} title={t.preview(x.name)} onClick={() => setPreviewing(x)}>
+                              <Eye aria-hidden />
+                            </Button>
+                          ) : (
+                            // Keeps the other buttons lined up with the rows that can preview.
+                            <span aria-hidden className="size-7 shrink-0" />
+                          )}
                           <Button variant="ghost" size="icon-sm" aria-label={t.download(x.name)} title={t.download(x.name)} onClick={() => void download(x)}>
                             <Download aria-hidden />
                           </Button>
@@ -238,6 +252,7 @@ export function Templates() {
           onClose={() => setDialog(null)}
         />
       )}
+      {previewing && <TemplatePreview template={previewing} onDownload={() => void download(previewing)} onClose={() => setPreviewing(null)} />}
     </section>
   );
 }
