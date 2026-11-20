@@ -155,6 +155,7 @@ erDiagram
     cards |o--o{ activity_events : "about (optional)"
     cards ||--o{ attachments : "P2"
     projects ||--o{ documents : "P3 Reports"
+    projects ||--o{ folder_shares : "report folder shared outside the project"
     projects ||--o{ import_jobs : "P3"
     import_jobs ||--o{ import_rows : drafts
     import_jobs |o--o{ cards : "created from"
@@ -203,6 +204,12 @@ erDiagram
         bigint uploaded_by "user_id"
         timestamptz created_at
         timestamptz deleted_at
+    }
+    folder_shares {
+        bigint project_id PK,FK
+        bigint user_id PK "user-service id; never a member of the project; INDEX (user_id)"
+        bigint shared_by "user_id"
+        timestamptz created_at
     }
     report_templates {
         bigint id PK "identity"

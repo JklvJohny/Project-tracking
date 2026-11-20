@@ -837,6 +837,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/report-folders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The report folders the caller may open, by project id: every project's for an admin; otherwise the caller's projects and the folders shared with them. */
+        get: operations["listReportFolders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{projectID}/folder-shares": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectID: components["parameters"]["projectID"];
+            };
+            cookie?: never;
+        };
+        /** Who outside the project the report folder is shared with, oldest first. Admin, pm or member; a viewer or a shared user gets 403, anyone else 404. */
+        get: operations["listFolderShares"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{projectID}/folder-shares/{userID}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectID: components["parameters"]["projectID"];
+                userID: components["parameters"]["userID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Share the report folder with someone outside the project: they may list, download and upload reports and delete their own, nothing else in the project. Admin, pm or member. Sharing again returns the existing share. A project member is 422 (userId: already_member); an unknown user is 404; an archived project is 409. */
+        put: operations["shareFolder"];
+        post?: never;
+        /** Stop sharing the folder with that user (their uploads stay). Same permission as sharing; removing a share that does not exist is a no-op. */
+        delete: operations["unshareFolder"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/report-templates": {
         parameters: {
             query?: never;
@@ -1443,6 +1500,41 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
         };
+        /** @description A project's report folder as the caller sees it. */
+        Folder: {
+            /**
+             * Format: int64
+             * @description The project id.
+             */
+            id: number;
+            name: string;
+            /** Format: date-time */
+            archivedAt: string | null;
+            /** @description Reports not deleted. */
+            documentCount: number;
+            /**
+             * @description The caller's project role, or shared when they are outside the project and the folder is shared with them.
+             * @enum {string}
+             */
+            access: "admin" | "pm" | "member" | "viewer" | "shared";
+            /** @description False in an archived project. */
+            canUpload: boolean;
+            /** @description Admin */
+            canShare: boolean;
+            /** @description Delete anyone's report (admin or pm); whoever can upload deletes their own. */
+            canManage: boolean;
+        };
+        FolderShare: {
+            /** Format: int64 */
+            userId: number;
+            /** @description Empty when user-service does not know the user any more. */
+            name: string;
+            avatarUrl: string;
+            /** Format: int64 */
+            sharedBy: number;
+            /** Format: date-time */
+            createdAt: string;
+        };
         CommentInput: {
             body: string;
         };
@@ -1766,6 +1858,45 @@ export interface components {
                     /** @constant */
                     success: true;
                     data: components["schemas"]["Document"];
+                };
+            };
+        };
+        /** @description Report folders by project id. */
+        FolderList: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    /** @constant */
+                    success: true;
+                    data: components["schemas"]["Folder"][];
+                };
+            };
+        };
+        /** @description The folder's shares, oldest first. */
+        FolderShareList: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    /** @constant */
+                    success: true;
+                    data: components["schemas"]["FolderShare"][];
+                };
+            };
+        };
+        /** @description The share. */
+        FolderShare: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    /** @constant */
+                    success: true;
+                    data: components["schemas"]["FolderShare"];
                 };
             };
         };
@@ -3130,6 +3261,78 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["Document"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    listReportFolders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["FolderList"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    listFolderShares: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectID: components["parameters"]["projectID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["FolderShareList"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    shareFolder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectID: components["parameters"]["projectID"];
+                userID: components["parameters"]["userID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["FolderShare"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
+    unshareFolder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectID: components["parameters"]["projectID"];
+                userID: components["parameters"]["userID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Empty"];
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];

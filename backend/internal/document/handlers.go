@@ -166,9 +166,42 @@ func Mount(r chi.Router, s *Service) {
 		return struct{}{}, http.StatusOK, s.Delete(req.Context(), uid, id)
 	}))
 	mountTemplates(r, s)
+	mountShares(r, s)
 	r.Post("/documents/{documentID}/restore", with("documentID", func(_ http.ResponseWriter, req *http.Request, uid, id int64) (any, int, error) {
 		v, err := s.Restore(req.Context(), uid, id)
 		return v, http.StatusOK, err
+	}))
+}
+
+func mountShares(r chi.Router, s *Service) {
+	r.Get("/report-folders", func(w http.ResponseWriter, req *http.Request) {
+		v, err := s.Folders(req.Context(), auth.UserID(req.Context()))
+		if err != nil {
+			httpx.Fail(w, req, err)
+			return
+		}
+		httpx.OK(w, http.StatusOK, v)
+	})
+	r.Get("/projects/{projectID}/folder-shares", with("projectID", func(_ http.ResponseWriter, req *http.Request, uid, id int64) (any, int, error) {
+		v, err := s.Shares(req.Context(), uid, id)
+		return v, http.StatusOK, err
+	}))
+	// target parses the second id of a share route.
+	target := func(h func(req *http.Request, uid, pid, target int64) (any, error)) http.HandlerFunc {
+		return with("projectID", func(_ http.ResponseWriter, req *http.Request, uid, pid int64) (any, int, error) {
+			t, err := idParam(req, "userID")
+			if err != nil {
+				return nil, 0, err
+			}
+			v, err := h(req, uid, pid, t)
+			return v, http.StatusOK, err
+		})
+	}
+	r.Put("/projects/{projectID}/folder-shares/{userID}", target(func(req *http.Request, uid, pid, t int64) (any, error) {
+		return s.ShareWith(req.Context(), uid, pid, t)
+	}))
+	r.Delete("/projects/{projectID}/folder-shares/{userID}", target(func(req *http.Request, uid, pid, t int64) (any, error) {
+		return struct{}{}, s.Unshare(req.Context(), uid, pid, t)
 	}))
 }
 

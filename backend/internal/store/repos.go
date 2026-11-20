@@ -26,6 +26,7 @@ type Repos struct {
 	Dashboard DashboardRepo
 	Team      TeamRepo
 	Avatars   AvatarRepo
+	Shares    FolderShareRepo
 }
 
 type CommentRepo interface {
@@ -589,4 +590,32 @@ type AvatarRepo interface {
 	// Delete removes userID's avatar; ErrNotFound if there was none.
 	// SQL: DELETE FROM user_avatars WHERE user_id = $1.
 	Delete(ctx context.Context, userID int64) error
+}
+
+// Table folder_shares (project_id bigint REFERENCES projects(id), user_id bigint,
+// shared_by bigint NOT NULL, created_at timestamptz NOT NULL,
+// PRIMARY KEY (project_id, user_id)), plus INDEX (user_id) for the caller's
+// folder list. user_id has no foreign key: people live in user-service.
+type FolderShareRepo interface {
+	// Get returns the share of projectID's report folder with userID;
+	// ErrNotFound if there is none.
+	// SQL: SELECT ... FROM folder_shares WHERE project_id = $1 AND user_id = $2.
+	Get(ctx context.Context, projectID, userID int64) (FolderShare, error)
+
+	// ByProject returns the folder's shares, oldest first.
+	// SQL: SELECT ... FROM folder_shares WHERE project_id = $1 ORDER BY created_at, user_id.
+	ByProject(ctx context.Context, projectID int64) ([]FolderShare, error)
+
+	// ByUser returns every share with userID, by project id.
+	// SQL: SELECT ... FROM folder_shares WHERE user_id = $1 ORDER BY project_id.
+	ByUser(ctx context.Context, userID int64) ([]FolderShare, error)
+
+	// Create stores s; ErrDuplicate if the folder is already shared with that user.
+	// SQL: INSERT INTO folder_shares (project_id, user_id, shared_by, created_at) VALUES ($1, $2, $3, $4)
+	// (a unique violation on the primary key is ErrDuplicate).
+	Create(ctx context.Context, s FolderShare) error
+
+	// Delete removes the share; ErrNotFound if there was none.
+	// SQL: DELETE FROM folder_shares WHERE project_id = $1 AND user_id = $2.
+	Delete(ctx context.Context, projectID, userID int64) error
 }

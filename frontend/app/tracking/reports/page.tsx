@@ -1,12 +1,11 @@
 'use client';
-import { FileText, Folder, FolderOpen, LayoutTemplate } from 'lucide-react';
+import { FileText, Folder as FolderIcon, FolderOpen, LayoutTemplate, Share2 } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useMe, useProjects } from '../shared/api/queries';
-import { boardAccess } from '../shared/access';
+import { useMe } from '../shared/api/queries';
 import { useConfirm } from '../shared/confirm';
 import { errorMessage } from '../shared/errors';
 import { useLang, useT } from '../shared/i18n';
@@ -14,7 +13,8 @@ import { DocViewer } from './DocViewer';
 import { DocumentTable } from './DocumentTable';
 import { FolderList } from './FolderList';
 import { UploadZone } from './UploadZone';
-import { useDeleteDocument, useDocuments } from './queries';
+import { ShareDialog } from './ShareDialog';
+import { useDeleteDocument, useDocuments, useFolders, useShares, type Folder } from './queries';
 import { Templates } from './Templates';
 import { routes } from '../shared/routes';
 
@@ -34,6 +34,9 @@ const TEXT = {
     delTitle: 'ลบเอกสารนี้?',
     delDesc: (n: string) => `"${n}" จะถูกลบ แต่เลิกทำได้ภายหลัง`,
     del: 'ลบ',
+    share: 'แชร์',
+    shareCount: (n: number) => `แชร์ (${n})`,
+    sharedNote: 'โฟลเดอร์นี้มีคนแชร์ให้คุณ คุณไม่ได้อยู่ในโปรเจกต์นี้',
   },
   en: {
     title: 'Reports',
@@ -50,26 +53,29 @@ const TEXT = {
     delTitle: 'Delete this document?',
     delDesc: (n: string) => `"${n}" will be deleted. You can undo this afterwards.`,
     del: 'Delete',
+    share: 'Share',
+    shareCount: (n: number) => `Share (${n})`,
+    sharedNote: 'This folder is shared with you. You are not in this project.',
   },
 };
 
-type Project = NonNullable<ReturnType<typeof useProjects>['data']>[number];
-
-function FolderPanel({ project }: { project: Project }) {
-  const { id: projectId, name } = project;
+function FolderPanel({ folder }: { folder: Folder }) {
+  const { id: projectId, name } = folder;
   const t = useT(TEXT);
   const { lang } = useLang();
   const confirm = useConfirm();
   const me = useMe();
   const docs = useDocuments(projectId);
-  const access = boardAccess({ myRole: project.myRole, project });
   const del = useDeleteDocument(projectId);
+  const shares = useShares(projectId, folder.canShare);
+  const [sharing, setSharing] = useState(false);
   // The open document is tracked by id: a refetch that reorders the list must not switch the viewed file.
   const [openId, setOpenId] = useState<number | null>(null);
 
   const myId = me.data?.user.id;
-  // Uploader (still an editor), PM or admin. Archived projects are read-only for everyone.
-  const canDelete = (d: { uploadedBy: number }) => access.canManage || (access.canEdit && d.uploadedBy === myId);
+  // The server decides each flag (an archived project is read-only for everyone): PM or admin delete anything, and
+  // whoever may upload, a shared user too, deletes their own.
+  const canDelete = (d: { uploadedBy: number }) => folder.canManage || (folder.canUpload && d.uploadedBy === myId);
 
   if (docs.isPending) return <Skeleton className="h-72 rounded-xl" />;
   if (docs.isError)
@@ -89,7 +95,7 @@ function FolderPanel({ project }: { project: Project }) {
       <div className="flex flex-col items-center px-6 py-14 text-center">
         <FileText className="mb-3 h-8 w-8 text-muted-foreground" aria-hidden="true" />
         <p className="font-semibold">{t.empty}</p>
-        <p className="mt-1 text-sm text-muted-foreground">{access.canEdit ? t.emptyHint : t.emptyRo}</p>
+        <p className="mt-1 text-sm text-muted-foreground">{folder.canUpload ? t.emptyHint : t.emptyRo}</p>
       </div>
     ) : (
       <DocumentTable
@@ -105,11 +111,21 @@ function FolderPanel({ project }: { project: Project }) {
   return (
     <section className="min-w-0 rounded-xl border bg-card shadow-sm">
       <div className="flex items-center gap-2 border-b p-3">
-        <Folder className="h-4 w-4 text-primary" aria-hidden="true" />
+        <FolderIcon className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
         <h2 className="truncate text-sm font-semibold">{name}</h2>
-        <span className="text-xs text-muted-foreground">{t.docs(list.length)}</span>
+        <span className="shrink-0 text-xs text-muted-foreground">{t.docs(list.length)}</span>
+        {folder.canShare && (
+          <>
+            <Button variant="outline" size="sm" className="ml-auto shrink-0" onClick={() => setSharing(true)}>
+              <Share2 aria-hidden />
+              {shares.data?.length ? t.shareCount(shares.data.length) : t.share}
+            </Button>
+            <ShareDialog folder={folder} open={sharing} onOpenChange={setSharing} />
+          </>
+        )}
       </div>
-      {access.canEdit ? <UploadZone projectId={projectId}>{body}</UploadZone> : body}
+      {folder.access === 'shared' && <p className="border-b bg-muted/40 px-3 py-2 text-xs text-muted-foreground">{t.sharedNote}</p>}
+      {folder.canUpload ? <UploadZone projectId={projectId}>{body}</UploadZone> : body}
       {openIndex >= 0 && (
         <DocViewer docs={list} index={openIndex} onIndex={(i) => setOpenId(list[i]?.id ?? null)} onClose={() => setOpenId(null)} />
       )}
@@ -120,7 +136,7 @@ function FolderPanel({ project }: { project: Project }) {
 function ReportsView() {
   const t = useT(TEXT);
   const { lang } = useLang();
-  const projects = useProjects();
+  const projects = useFolders();
   const params = useSearchParams();
   const raw = Number(params.get('project'));
   const onTemplates = params.get('tab') === 'templates';
@@ -128,11 +144,11 @@ function ReportsView() {
   const cur = list.find((p) => p.id === raw);
 
   let panel;
-  if (cur) panel = <FolderPanel key={cur.id} project={cur} />;
+  if (cur) panel = <FolderPanel key={cur.id} folder={cur} />;
   else
     panel = (
       <div className="flex flex-col items-center justify-center rounded-xl border border-dashed px-6 py-16 text-center">
-        <Folder className="mb-3 h-8 w-8 text-muted-foreground" aria-hidden="true" />
+        <FolderIcon className="mb-3 h-8 w-8 text-muted-foreground" aria-hidden="true" />
         <p className="font-semibold">{t.select}</p>
         <p className="mt-1 text-sm text-muted-foreground">{t.selectHint}</p>
       </div>

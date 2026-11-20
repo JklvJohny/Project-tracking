@@ -8,10 +8,39 @@ import { useLang, useT } from '../shared/i18n';
 
 type S = components['schemas'];
 export type Doc = S['Document'];
+export type Folder = S['Folder'];
+export type Share = S['FolderShare'];
 
 export const MAX_BYTES = 20 * 1024 * 1024;
 
-export const dk = { docs: (projectId: number) => ['documents', projectId] as const };
+export const dk = {
+  docs: (projectId: number) => ['documents', projectId] as const,
+  folders: ['report-folders'] as const,
+  shares: (projectId: number) => ['folder-shares', projectId] as const,
+};
+
+/** The folders this person may open: their projects', and those shared with them (every one for an admin). */
+export const useFolders = () => useQuery({ queryKey: dk.folders, queryFn: () => api<Folder[]>('/report-folders') });
+
+export const useShares = (projectId: number, enabled: boolean) =>
+  useQuery({ queryKey: dk.shares(projectId), queryFn: () => api<Share[]>(`/projects/${projectId}/folder-shares`), enabled });
+
+export function useShare(projectId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: number) => api<Share>(`/projects/${projectId}/folder-shares/${userId}`, { method: 'PUT' }),
+    onSuccess: (sh) =>
+      qc.setQueryData<Share[]>(dk.shares(projectId), (old) => (old?.some((x) => x.userId === sh.userId) ? old : [...(old ?? []), sh])),
+  });
+}
+
+export function useUnshare(projectId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: number) => api<unknown>(`/projects/${projectId}/folder-shares/${userId}`, { method: 'DELETE' }),
+    onSuccess: (_, userId) => qc.setQueryData<Share[]>(dk.shares(projectId), (old) => old?.filter((x) => x.userId !== userId)),
+  });
+}
 
 const fetchDocs = (projectId: number) => api<Doc[]>(`/projects/${projectId}/documents`);
 
@@ -20,7 +49,7 @@ export const useDocuments = (projectId: number) =>
 
 /**
  * An opened folder's live count: this subscribes to the cache only (enabled: false), so the sidebar follows uploads
- * and deletes without a request. Folders not yet opened use ProjectListItem.documentCount.
+ * and deletes without a request. Folders not yet opened use Folder.documentCount.
  */
 export const useCachedDocCount = (projectId: number) =>
   useQuery({ queryKey: dk.docs(projectId), queryFn: () => fetchDocs(projectId), enabled: false }).data?.length;

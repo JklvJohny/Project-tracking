@@ -259,6 +259,15 @@ type SkillCategory struct {
 	CreatedAt time.Time
 }
 
+// FolderShare lets someone who is not a member of a project use its report
+// folder: see, download and upload reports. It gives nothing else in the project.
+type FolderShare struct {
+	ProjectID int64
+	UserID    int64
+	SharedBy  int64
+	CreatedAt time.Time
+}
+
 // UserAvatar is a profile picture uploaded in tracking. It replaces the
 // user-service avatar on every tracking page; the bytes live in the blob store.
 type UserAvatar struct {

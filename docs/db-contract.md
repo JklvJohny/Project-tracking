@@ -865,6 +865,25 @@ Services call `users.Provider` inside `Store.Update`, so the provider wrapper th
 **`Delete`**
 - SQL obligation: DELETE FROM user_avatars WHERE user_id = $1; ErrNotFound when no row.
 
+### FolderShareRepo
+
+Backs sharing a project's report folder with someone outside the project (`internal/document`). Table `folder_shares (project_id bigint REFERENCES projects(id), user_id bigint, shared_by bigint NOT NULL, created_at timestamptz NOT NULL, PRIMARY KEY (project_id, user_id))` plus `INDEX (user_id)` for the caller's folder list. No foreign key on `user_id`: people live in user-service. A share opens the report folder only (list, download, upload, delete own uploads), never the board. Admin, pm and member share; a project member is refused (`already_member`), so a share always means "outside the project". Adding the person as a member later leaves the row: the folder then lists once, under their role, and the share is what keeps their access if they are removed again. Share and unshare append `folder.shared` / `folder.unshared` to `activity_events` (payload `{"userId": n}`) in the same transaction.
+
+**`Get`**
+- SQL obligation: SELECT project_id, user_id, shared_by, created_at FROM folder_shares WHERE project_id = $1 AND user_id = $2; ErrNotFound when no row.
+
+**`ByProject`**
+- SQL obligation: SELECT ... FROM folder_shares WHERE project_id = $1 ORDER BY created_at, user_id.
+
+**`ByUser`**
+- SQL obligation: SELECT ... FROM folder_shares WHERE user_id = $1 ORDER BY project_id.
+
+**`Create`**
+- SQL obligation: INSERT INTO folder_shares (project_id, user_id, shared_by, created_at) VALUES ($1, $2, $3, $4); a primary-key unique violation is ErrDuplicate.
+
+**`Delete`**
+- SQL obligation: DELETE FROM folder_shares WHERE project_id = $1 AND user_id = $2; ErrNotFound when no row.
+
 ### Blob store contract (`internal/blob`)
 
 Uploaded files are bytes in a `blob.Store`, never in the database and never in a public folder. The service writes the blob first and the row second inside `Store.Update`; if the row write fails it deletes the blob. Delete is soft: only `deleted_at` is set, the blob stays so restore works.

@@ -30,6 +30,7 @@ func (d *data) clone() *data {
 		catalog:       cloneMap(d.catalog, cloneCatalogSkill),
 		categories:    maps.Clone(d.categories),
 		avatars:       maps.Clone(d.avatars),
+		shares:        maps.Clone(d.shares),
 		activity:      cloneEvents(d.activity),
 		seq:           maps.Clone(d.seq),
 	}

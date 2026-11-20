@@ -16,14 +16,20 @@ const apiMock = vi.mocked(api);
 const blobMock = vi.mocked(apiBlob);
 
 const user = (id: number, name: string) => ({ id, name, avatarUrl: '' });
-const project = (id: number, name: string, documentCount = 0) => ({
-  id, name, description: '', ownerId: 7, status: 'active', startDate: null, endDate: null, createdAt: '', updatedAt: '',
-  archivedAt: id === 1 ? archived : null, myRole: role, owner: user(7, 'Somchai Dee'), members: [user(7, 'Somchai Dee'), user(8, 'Mali Rak')], cardsDone: 0, cardsTotal: 0,
-  documentCount,
-});
+// The server's flags for the role, as document.folderOf sets them.
+const folder = (id: number, name: string, documentCount = 0) => {
+  const live = (id === 1 ? archived : null) === null;
+  const editor = role !== 'viewer';
+  return {
+    id, name, archivedAt: id === 1 ? archived : null, documentCount, access: role,
+    canUpload: live && editor, canShare: live && editor && role !== 'shared', canManage: live && (role === 'pm' || role === 'admin'),
+  };
+};
 const doc = (id: number, filename: string, uploadedBy = 7) => ({
   id, projectId: 1, filename, mimeType: 'application/pdf', sizeBytes: 2048 * id, uploadedBy, uploadedByName: uploadedBy === 8 ? 'Mali Rak' : uploadedBy === 7 ? 'Somchai Dee' : '', createdAt: '2026-11-10T03:00:00Z',
 });
+const share = (userId: number, name: string) => ({ userId, name, avatarUrl: '', sharedBy: 8, createdAt: '2026-11-20T03:00:00Z' });
+let shares: ReturnType<typeof share>[];
 let docs: ReturnType<typeof doc>[];
 let role = 'pm';
 let archived: string | null = null;
@@ -32,7 +38,11 @@ type Init = { method?: string };
 function impl() {
   return (async (path: string, init?: Init) => {
     if (path === '/me') return { user: user(8, 'Mali Rak'), isAdmin: false, canCreateProject: false };
-    if (path === '/projects') return [project(1, 'Website redesign', 3), project(2, 'Mobile app', 5)];
+    if (path === '/report-folders') return [folder(1, 'Website redesign', 3), folder(2, 'Mobile app', 5)];
+    if (path === '/projects/1/folder-shares') return shares;
+    if (path === '/projects/1/members') return [{ userId: 7, name: 'Somchai Dee', avatarUrl: '', role: 'pm', addedAt: '' }];
+    if (path.startsWith('/users?q=')) return [user(7, 'Somchai Dee'), user(5, 'Ploy Outsider')];
+    if (path === '/projects/1/folder-shares/5' && init?.method === 'PUT') return share(5, 'Ploy Outsider');
     if (path === '/projects/1/documents' && init?.method === 'POST') return doc(9, 'new.pdf', 8);
     if (path === '/projects/1/documents') return docs;
     if (path === '/projects/2/documents') return [];
@@ -58,6 +68,7 @@ beforeEach(() => {
   search = 'project=1';
   role = 'pm';
   archived = null;
+  shares = [share(6, 'Niran Guest')];
   docs = [doc(1, 'Kickoff.pdf'), doc(2, 'Weekly.pdf', 8), doc(3, 'Scope.pdf')];
   blobMock.mockResolvedValue(new Blob(['%PDF-']));
   n = 0;
@@ -226,5 +237,39 @@ describe('Reports page', () => {
     await screen.findByRole('grid');
     expect(screen.queryByTestId('upload-input')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Share/ })).toBeNull();
+  });
+
+  it('someone the folder is shared with uploads and deletes only their own, and cannot share it on', async () => {
+    role = 'shared';
+    setup();
+    await screen.findByRole('grid');
+    expect(within(screen.getByRole('link', { name: /Website redesign/ })).getByText('Shared with you')).toBeTruthy();
+    expect(screen.getByText('This folder is shared with you. You are not in this project.')).toBeTruthy();
+    expect(screen.getByTestId('upload-input')).toBeTruthy();
+    expect(within(screen.getByRole('row', { name: /Weekly/ })).getByRole('button', { name: 'Delete' })).toBeTruthy();
+    expect(within(screen.getByRole('row', { name: /Kickoff/ })).queryByRole('button', { name: 'Delete' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Share/ })).toBeNull();
+    expect(apiMock.mock.calls.some(([p]) => p.includes('folder-shares'))).toBe(false);
+  });
+
+  it('a member shares the folder with someone outside the project and can stop sharing', async () => {
+    role = 'member';
+    setup();
+    fireEvent.click(await screen.findByRole('button', { name: 'Share (1)' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Share the Website redesign folder' });
+    const list = within(dialog).getByRole('region', { name: 'Shared with' });
+    expect(await within(list).findByRole('button', { name: 'Stop sharing with Niran Guest' })).toBeTruthy();
+    fireEvent.change(within(dialog).getByRole('searchbox', { name: 'Search people' }), { target: { value: 'o' } });
+    // A project member cannot be shared with: they already see the folder.
+    expect(await within(dialog).findByText('Project member')).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Share with Ploy Outsider' }));
+    await waitFor(() => expect(apiMock).toHaveBeenCalledWith('/projects/1/folder-shares/5', { method: 'PUT' }));
+    expect(await within(list).findByRole('button', { name: 'Stop sharing with Ploy Outsider' })).toBeTruthy();
+    fireEvent.click(within(list).getByRole('button', { name: 'Stop sharing with Niran Guest' }));
+    const confirm = await screen.findByRole('alertdialog');
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Stop sharing' }));
+    await waitFor(() => expect(apiMock).toHaveBeenCalledWith('/projects/1/folder-shares/6', { method: 'DELETE' }));
+    await waitFor(() => expect(within(list).queryByRole('button', { name: 'Stop sharing with Niran Guest' })).toBeNull());
   });
 });

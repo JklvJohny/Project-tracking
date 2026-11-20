@@ -952,6 +952,54 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+  /report-folders:
+    get:
+      tags: [documents]
+      operationId: listReportFolders
+      summary: "The report folders the caller may open, by project id: every project's for an admin; otherwise the caller's projects and the folders shared with them."
+      responses:
+        '200': { $ref: '#/components/responses/FolderList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /projects/{projectID}/folder-shares:
+    parameters:
+      - $ref: '#/components/parameters/projectID'
+    get:
+      tags: [documents]
+      operationId: listFolderShares
+      summary: Who outside the project the report folder is shared with, oldest first. Admin, pm or member; a viewer or a shared user gets 403, anyone else 404.
+      responses:
+        '200': { $ref: '#/components/responses/FolderShareList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /projects/{projectID}/folder-shares/{userID}:
+    parameters:
+      - $ref: '#/components/parameters/projectID'
+      - $ref: '#/components/parameters/userID'
+    put:
+      tags: [documents]
+      operationId: shareFolder
+      summary: "Share the report folder with someone outside the project: they may list, download and upload reports and delete their own, nothing else in the project. Admin, pm or member. Sharing again returns the existing share. A project member is 422 (userId: already_member); an unknown user is 404; an archived project is 409."
+      responses:
+        '200': { $ref: '#/components/responses/FolderShare' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    delete:
+      tags: [documents]
+      operationId: unshareFolder
+      summary: Stop sharing the folder with that user (their uploads stay). Same permission as sharing; removing a share that does not exist is a no-op.
+      responses:
+        '200': { $ref: '#/components/responses/Empty' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
   /report-templates:
     get:
       tags: [templates]
@@ -1300,6 +1348,36 @@ components:
             properties:
               success: { const: true }
               data: { $ref: '#/components/schemas/Document' }
+    FolderList:
+      description: Report folders by project id.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [success, data]
+            properties:
+              success: { const: true }
+              data: { type: array, items: { $ref: '#/components/schemas/Folder' } }
+    FolderShareList:
+      description: The folder's shares, oldest first.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [success, data]
+            properties:
+              success: { const: true }
+              data: { type: array, items: { $ref: '#/components/schemas/FolderShare' } }
+    FolderShare:
+      description: The share.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [success, data]
+            properties:
+              success: { const: true }
+              data: { $ref: '#/components/schemas/FolderShare' }
     ReportTemplateList:
       description: Non-deleted templates by category, then name.
       content:
@@ -1890,6 +1968,28 @@ components:
         sizeBytes: { type: integer, format: int64 }
         uploadedBy: { type: integer, format: int64 }
         uploadedByName: { type: string, description: Display name from the user cache; empty when the uploader is not cached. }
+        createdAt: { type: string, format: date-time }
+    Folder:
+      type: object
+      description: A project's report folder as the caller sees it.
+      required: [id, name, archivedAt, documentCount, access, canUpload, canShare, canManage]
+      properties:
+        id: { type: integer, format: int64, description: The project id. }
+        name: { type: string }
+        archivedAt: { type: [string, 'null'], format: date-time }
+        documentCount: { type: integer, description: Reports not deleted. }
+        access: { type: string, enum: [admin, pm, member, viewer, shared], description: "The caller's project role, or shared when they are outside the project and the folder is shared with them." }
+        canUpload: { type: boolean, description: False in an archived project. }
+        canShare: { type: boolean, description: Admin, pm or member, in a live project. }
+        canManage: { type: boolean, description: "Delete anyone's report (admin or pm); whoever can upload deletes their own." }
+    FolderShare:
+      type: object
+      required: [userId, name, avatarUrl, sharedBy, createdAt]
+      properties:
+        userId: { type: integer, format: int64 }
+        name: { type: string, description: Empty when user-service does not know the user any more. }
+        avatarUrl: { type: string }
+        sharedBy: { type: integer, format: int64 }
         createdAt: { type: string, format: date-time }
     CommentInput:
       type: object

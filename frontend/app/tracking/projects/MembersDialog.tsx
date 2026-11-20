@@ -1,25 +1,24 @@
 'use client';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { api } from '../shared/api/client';
 import { useBoard, useMe } from '../shared/api/queries';
 import type { components } from '../shared/api/schema';
 import { useConfirm } from '../shared/confirm';
 import { errorMessage } from '../shared/errors';
 import { useLang, useT } from '../shared/i18n';
 import { routes } from '../shared/routes';
+import { useUserSearch } from '../shared/useUserSearch';
 import { dropProject, useAddMember, useMembers, useRemoveMember, useSetRole } from './project-mutations';
 
 type S = components['schemas'];
 type Role = S['ProjectRole'];
 const ROLES: Role[] = ['pm', 'member', 'viewer'];
-const DEBOUNCE_MS = 250;
 
 const TEXT = {
   th: {
@@ -61,29 +60,6 @@ const TEXT = {
     roles: { pm: 'PM', member: 'Member', viewer: 'Viewer' } as Record<Role, string>,
   },
 };
-
-/** Debounced search. A cleanup flag drops any response that is no longer the latest request. */
-function useUserSearch(q: string) {
-  const [state, setState] = useState<{ q: string; users: S['User'][] } | null>(null);
-  useEffect(() => {
-    const term = q.trim();
-    if (!term) return;
-    const ctl = new AbortController();
-    let stale = false;
-    const timer = setTimeout(() => {
-      api<S['User'][]>(`/users?q=${encodeURIComponent(term)}`, { signal: ctl.signal })
-        .then((users) => !stale && setState({ q: term, users }))
-        .catch(() => !stale && setState({ q: term, users: [] }));
-    }, DEBOUNCE_MS);
-    return () => {
-      stale = true;
-      ctl.abort();
-      clearTimeout(timer);
-    };
-  }, [q]);
-  // Results of an older term are never shown for the current one.
-  return q.trim() && state?.q === q.trim() ? state.users : null;
-}
 
 export function MembersDialog({
   projectId,
