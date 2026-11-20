@@ -135,7 +135,7 @@ describe('Team page', () => {
     expect(screen.getByRole('status').textContent).toBe('Showing 2 of 3 people');
     // Folded again, the category still says it holds a chosen filter.
     fireEvent.click(within(bar).getByRole('button', { name: /^Programming/ }));
-    expect(within(bar).getByRole('button', { name: /^Programming/ }).textContent).toBe('Programming21 chosen');
+    expect(within(bar).getByRole('button', { name: /^Programming/ }).textContent).toBe('Programming1 chosen2');
     // A skill on a card adds to the filter too: Go AND React leaves Ann.
     fireEvent.click(within(card('Ann Lee')).getByRole('button', { name: 'React' }));
     expect(screen.queryByRole('heading', { name: 'Ben Ko' })).toBeNull();

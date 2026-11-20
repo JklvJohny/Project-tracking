@@ -182,7 +182,8 @@ function SkillGroups({ skills, categories, chosen, people, onToggle }: Props) {
   const [openGroups, toggleGroup] = useOpenGroups();
   const picked = new Set(chosen.map((s) => s.toLocaleLowerCase()));
   return (
-    <div role="group" aria-label={t.list} className="flex flex-col border-t pt-1.5">
+    // Tiles in a grid so names, counts and + line up; items-start lets an open tile grow without stretching its row.
+    <div role="group" aria-label={t.list} className="grid items-start gap-2 border-t pt-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {groupSkills(skills, categories).map(({ category, skills: list }) => {
         const key = category ? `c${category.id}` : 'none';
         const open = openGroups.has(key);
@@ -190,34 +191,46 @@ function SkillGroups({ skills, categories, chosen, people, onToggle }: Props) {
         const panelId = `${ids}-${key}`;
         const nPicked = list.filter((s) => picked.has(s.name.toLocaleLowerCase())).length;
         return (
-          <div key={key} className="flex flex-col">
-            <div className="flex items-center gap-1">
+          <div
+            key={key}
+            className={`flex flex-col rounded-lg border bg-background ${category ? '' : 'border-dashed'} ${open ? 'shadow-sm' : ''}`}
+          >
+            <div className="flex items-center gap-0.5 p-1">
               <button
                 type="button"
                 aria-expanded={open}
                 aria-controls={panelId}
                 onClick={() => toggleGroup(key)}
-                className="-ml-1.5 inline-flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-xs font-semibold hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"
+                className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-xs font-semibold hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"
               >
                 <ChevronDown
                   className={`size-3.5 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none ${open ? '' : '-rotate-90'}`}
                   aria-hidden
                 />
                 <span className={`truncate ${category ? '' : 'text-muted-foreground'}`}>{label}</span>
-                <span className="rounded-full bg-muted px-1.5 text-[11px] font-normal text-muted-foreground tabular-nums">{list.length}</span>
                 {/* Folded, a group still says when it holds a filter in use. */}
                 {nPicked > 0 && (
-                  <span className="rounded-full bg-primary px-1.5 text-[11px] font-medium text-primary-foreground tabular-nums">
+                  <span className="shrink-0 rounded-full bg-primary px-1.5 text-[11px] font-medium text-primary-foreground tabular-nums">
                     {t.picked(nPicked)}
                   </span>
                 )}
+                <span
+                  className={`ml-auto shrink-0 rounded-full px-1.5 text-[11px] font-normal tabular-nums ${
+                    list.length === 0 ? 'text-muted-foreground/70' : 'bg-muted text-muted-foreground'
+                  }`}
+                >
+                  {list.length}
+                </span>
               </button>
-              {category && (
+              {category ? (
                 // The new chip should be in sight: open the category it went into.
                 <AddSkill skills={skills} categories={categories} people={people} preset={category} onAdded={(id) => toggleGroup(id === null ? 'none' : `c${id}`, true)} />
+              ) : (
+                // No "+" here; the gap keeps its count in line with the other tiles'.
+                <span aria-hidden className="size-6 shrink-0" />
               )}
             </div>
-            <div id={panelId} hidden={!open} className="pt-0.5 pb-2 pl-5">
+            <div id={panelId} hidden={!open} className="border-t px-2.5 py-2">
               {open &&
                 (list.length === 0 ? (
                   <p className="text-xs text-muted-foreground">{t.emptyCategory}</p>
