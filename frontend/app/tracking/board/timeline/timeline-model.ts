@@ -42,7 +42,7 @@ export function mondayOf(iso: string): string {
 
 export const defaultRange = (today: string): Range => ({ start: mondayOf(today), days: 28 });
 
-function statusOf(c: TimelineCard, today: string): TimelineStatus {
+export function statusOf(c: TimelineCard, today: string): TimelineStatus {
   if (c.completedAt) return 'done';
   if (c.dueDate && c.dueDate < today) return 'overdue';
   if (c.startDate && c.startDate <= today) return 'active';

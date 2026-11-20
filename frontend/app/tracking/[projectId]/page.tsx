@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname, useParams, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Settings, Upload, Users } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Columns3, Settings, Upload, Users } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { Suspense, useCallback, useRef, useState, type CSSProperties } from 'react';
 import { Button } from '@/components/ui/button';
@@ -21,6 +21,7 @@ import { useStoredOpen } from '../board/useStoredOpen';
 
 // Loaded on demand: keeps markdown, the pickers and the member forms out of the board's first load.
 const CardPanel = dynamic(() => import('../card/CardPanel').then((m) => m.CardPanel));
+const CalendarView = dynamic(() => import('../board/calendar/Calendar').then((m) => m.CalendarView));
 const ListTableDialog = dynamic(() => import('../board/ListTableDialog').then((m) => m.ListTableDialog));
 const MembersDialog = dynamic(() => import('../projects/MembersDialog').then((m) => m.MembersDialog));
 const ProjectSettingsDialog = dynamic(() =>
@@ -37,6 +38,9 @@ const TEXT = {
     import: 'นำเข้า',
     soon: 'เร็ว ๆ นี้',
     team: 'สมาชิกโปรเจกต์',
+    views: 'มุมมอง',
+    board: 'บอร์ด',
+    calendar: 'ปฏิทิน',
   },
   en: {
     projects: 'Projects',
@@ -47,6 +51,9 @@ const TEXT = {
     import: 'Import',
     soon: 'Coming soon',
     team: 'Project members',
+    views: 'Views',
+    board: 'Board',
+    calendar: 'Calendar',
   },
 };
 
@@ -117,6 +124,33 @@ function Header({ projectId }: { projectId: number }) {
   );
 }
 
+/** Board and Calendar are two views of one project; the URL (?view=calendar) decides which shows. */
+function ViewTabs({ calendar }: { calendar: boolean }) {
+  const t = useT(TEXT);
+  const pathname = usePathname();
+  return (
+    <nav aria-label={t.views} className="mx-4 mb-3 flex gap-1 border-b">
+      {[
+        { key: 'board', href: pathname, label: t.board, icon: Columns3, current: !calendar },
+        { key: 'calendar', href: `${pathname}?view=calendar`, label: t.calendar, icon: CalendarDays, current: calendar },
+      ].map(({ key, href, label, icon: Icon, current }) => (
+        <Link
+          key={key}
+          href={href}
+          scroll={false}
+          aria-current={current ? 'page' : undefined}
+          className={`-mb-px inline-flex items-center gap-2 border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+            current ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <Icon className="size-4" aria-hidden />
+          {label}
+        </Link>
+      ))}
+    </nav>
+  );
+}
+
 function BoardPage() {
   const t = useT(TEXT);
   const params = useParams<{ projectId: string }>();
@@ -141,6 +175,7 @@ function BoardPage() {
     const qs = next.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }, [router, pathname, search]);
+  const calendar = search.get('view') === 'calendar';
   const focusChecklist = search.get('focus') === 'checklist';
   // One-shot hint from the card preview's "+": drop only `focus` so a reload or Back does not re-focus.
   const focusHandled = useCallback(() => {
@@ -206,12 +241,16 @@ function BoardPage() {
     <div className="flex flex-col">
       <Header projectId={projectId} />
       <ArchivedBanner projectId={projectId} />
-      {/* With the splitter (both open, or one folded by it) on sm+: a fixed-height stack the handle divides.
-          Below sm everything flows and scrolls with the page. */}
+      <ViewTabs calendar={calendar} />
+      {calendar ? (
+        <CalendarView projectId={projectId} />
+      ) : (
+      /* With the splitter (both open, or one folded by it) on sm+: a fixed-height stack the handle divides.
+          Below sm everything flows and scrolls with the page. */
       <div
         ref={stack}
         style={both ? ({ '--split': split } as CSSProperties) : undefined}
-        className={split3 ? 'flex flex-col sm:h-[max(32rem,calc(100dvh-12.5rem))]' : 'flex flex-col'}
+        className={split3 ? 'flex flex-col sm:h-[max(32rem,calc(100dvh-15.5rem))]' : 'flex flex-col'}
       >
         <div className={boardBox}>
           <BoardSection projectId={projectId} open={boardOpen} onOpenChange={toggleBoard} fill={boardFills} />
@@ -230,6 +269,7 @@ function BoardPage() {
         )}
         <TimelineSection projectId={projectId} open={timelineOpen} onOpenChange={toggleTimeline} />
       </div>
+      )}
       {listId !== undefined && <ListTableDialog key={`list-${listId}`}projectId={projectId} listId={listId} onClose={closeList} />}
       {cardId !== undefined && (
         <CardPanel

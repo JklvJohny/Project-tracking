@@ -59,10 +59,11 @@ const TEXT = {
 /**
  * Hands focus back to the card that opened the panel (its link survives the close; Radix has no trigger to restore).
  * The last match wins: a list table opened over the board renders after it and holds the `&card=` link.
+ * Only links on screen count: the calendar keeps its phone agenda in the DOM (display: none) after the month grid.
  */
 function focusOpener(cardId: number) {
-  const links = document.querySelectorAll<HTMLElement>(`a[href$="?card=${cardId}"], a[href$="&card=${cardId}"]`);
-  links[links.length - 1]?.focus();
+  const links = [...document.querySelectorAll<HTMLElement>(`a[href$="?card=${cardId}"], a[href$="&card=${cardId}"]`)];
+  links.findLast((a) => a.getClientRects().length > 0)?.focus();
 }
 
 export function CardPanel({
