@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"tracking-service/internal/apperr"
+	"tracking-service/internal/authz"
 	"tracking-service/internal/board"
 	"tracking-service/internal/store"
 	"tracking-service/internal/validate"
@@ -138,6 +139,11 @@ func (s *Service) UpdateItem(ctx context.Context, userID, itemID int64, in ItemP
 		if it, err = lockedItem(ctx, r, it); err != nil {
 			return err
 		}
+		if in.IsDone != nil {
+			if err := canTick(ctx, r, sc, userID); err != nil {
+				return err
+			}
+		}
 		fields := map[string]string{}
 		changed := []string{}
 		if in.Text != nil {
@@ -197,4 +203,23 @@ func (s *Service) DeleteItem(ctx context.Context, userID, itemID int64) error {
 		}
 		return s.touch(ctx, r, sc, userID, "checklist.deleted", it.ID, nil)
 	})
+}
+
+// canTick decides who may tick or untick a checklist item: admins and PMs on any card, members only on cards
+// assigned to them (the owner's rule, 2026-11-19). Viewers never reach here (resolveEditable needs EditCards).
+// Editing an item's text, adding, moving and deleting items stay open to every member.
+func canTick(ctx context.Context, r store.Repos, sc scope, userID int64) error {
+	if sc.role == authz.Admin || sc.role == authz.PM {
+		return nil
+	}
+	ch, err := r.Cards.Children(ctx, sc.card.ID)
+	if err != nil {
+		return err
+	}
+	for _, id := range ch.AssigneeIDs {
+		if id == userID {
+			return nil
+		}
+	}
+	return apperr.Forbidden()
 }

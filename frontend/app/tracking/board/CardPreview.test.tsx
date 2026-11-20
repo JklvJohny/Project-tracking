@@ -103,4 +103,17 @@ describe('CardPreview controls inside a draggable row', () => {
     renderIn(true, vi.fn());
     expect(screen.getByText('Write spec').closest('label')!.className).toContain('pointer-events-auto');
   });
+
+  it('an editor who may not tick (a member not assigned) sees disabled checkboxes that click through', () => {
+    render(
+      <TrackingProvider lang="en">
+        <CardPreview projectId={7} card={withItems} users={users} labels={labels} members={members} canEdit canTick={false} />
+      </TrackingProvider>,
+    );
+    const box = screen.getByRole('checkbox', { name: 'Write spec' });
+    expect(box.hasAttribute('disabled')).toBe(true);
+    expect(screen.getByText('Write spec').closest('label')!.className).not.toContain('pointer-events-auto');
+    // the "+" controls still follow canEdit
+    expect(screen.getByRole('button', { name: 'Add assignee' })).toBeTruthy();
+  });
 });

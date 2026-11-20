@@ -127,4 +127,17 @@ describe('Checklist', () => {
     );
     expect(await screen.findByText('ต้องกรอกข้อความ')).toBeTruthy();
   });
+
+  it('without the right to tick, checkboxes are disabled but text stays editable', async () => {
+    render(
+      <TrackingProvider lang="en">
+        <Checklist projectId={1} cardId={5} readOnly={false} canTick={false} />
+      </TrackingProvider>,
+    );
+    const box = await screen.findByRole('checkbox', { name: 'Two' });
+    expect(box.hasAttribute('disabled')).toBe(true);
+    fireEvent.click(box);
+    expect(apiMock).not.toHaveBeenCalledWith('/checklist/2', { method: 'PATCH', json: { isDone: true } });
+    expect(screen.getAllByRole('textbox').length).toBeGreaterThan(0);
+  });
 });

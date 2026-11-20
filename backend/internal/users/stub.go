@@ -40,3 +40,7 @@ func (s *stub) Search(_ context.Context, q string, limit int) ([]User, error) {
 	}
 	return out, nil
 }
+
+func (s *stub) Department(_ context.Context, limit int) ([]User, error) {
+	return append([]User{}, s.all[:min(limit, len(s.all))]...), nil
+}

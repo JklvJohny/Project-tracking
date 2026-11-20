@@ -166,6 +166,23 @@ type Document struct {
 	DeletedAt  *time.Time
 }
 
+// ReportTemplate is a department-wide report template file (not tied to a
+// project). Category is free text; the UI groups by it.
+type ReportTemplate struct {
+	ID          int64
+	Category    string
+	Name        string
+	Description string
+	StorageKey  string
+	Filename    string
+	MimeType    string
+	SizeBytes   int64
+	UploadedBy  int64
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	DeletedAt   *time.Time
+}
+
 type CommentMention struct {
 	CommentID int64
 	UserID    int64
@@ -192,4 +209,52 @@ type BoardSnapshot struct {
 	Labels  []Label
 	Members []Member
 	Users   []CachedUser
+}
+
+// DashboardRow is one active card with the project and list it sits in, as the
+// dashboard reads it. AssigneeIDs is never nil.
+type DashboardRow struct {
+	CardID      int64
+	ProjectID   int64
+	ProjectName string
+	ListName    string
+	Title       string
+	Priority    int16
+	StartDate   *Date
+	DueDate     *Date
+	CompletedAt *time.Time
+	AssigneeIDs []int64
+}
+
+// TaskRow is one open card assigned to the caller, as My Tasks reads it.
+type TaskRow struct {
+	DashboardRow
+	ChecklistTotal int
+	ChecklistDone  int
+}
+
+// Workload is one person's open cards across every live project.
+type Workload struct {
+	Open    int
+	Overdue int
+	DueSoon int
+}
+
+// CatalogSkill is a skill the department has named, whether or not anyone
+// lists it yet, so it can be offered and filtered on before it is used.
+type CatalogSkill struct {
+	Name string
+	// CategoryID is the skill's one category; nil is "uncategorised".
+	CategoryID *int64
+	CreatedBy  int64
+	CreatedAt  time.Time
+}
+
+// SkillCategory groups the department's skills (Programming, Network, ...).
+// Every skill sits in at most one.
+type SkillCategory struct {
+	ID        int64
+	Name      string
+	CreatedBy int64
+	CreatedAt time.Time
 }

@@ -1,6 +1,8 @@
 'use client';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CheckCircle2, Archive, GripVertical } from 'lucide-react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { memo, useRef, useState, type KeyboardEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,6 +28,7 @@ const TEXT = {
     cards: (n: string) => `การ์ดใน ${n}`,
     archiveCard: (title: string) => `เก็บการ์ด ${title} ถาวร`,
     dragList: (n: string) => `ย้ายลิสต์ ${n} (Space หรือ Alt+ลูกศร)`,
+    openTable: (n: string) => `ดูลิสต์ ${n} เป็นตาราง`,
   },
   en: {
     renameLabel: 'List name',
@@ -35,17 +38,30 @@ const TEXT = {
     cards: (n: string) => `Cards in ${n}`,
     archiveCard: (title: string) => `Archive card ${title}`,
     dragList: (n: string) => `Move list ${n} (Space or Alt+arrows)`,
+    openTable: (n: string) => `View list ${n} as a table`,
   },
 };
 
-type ListCardsProps = Pick<ListColumnProps, 'projectId' | 'cards' | 'users' | 'labels' | 'members' | 'canAddCards'>;
+type ListCardsProps = Pick<
+  ListColumnProps,
+  'projectId' | 'cards' | 'users' | 'labels' | 'members' | 'canAddCards' | 'canTickAny' | 'meId'
+>;
 
 /**
  * The rows live in their own memoised component: ListColumn re-renders on every pointer move of a drag (its
  * sortable hooks subscribe to dnd-kit's context), and without this boundary each of those renders rebuilt every
  * row of the list.
  */
-const ListCards = memo(function ListCards({ projectId, cards, users, labels, members, canAddCards }: ListCardsProps) {
+const ListCards = memo(function ListCards({
+  projectId,
+  cards,
+  users,
+  labels,
+  members,
+  canAddCards,
+  canTickAny,
+  meId,
+}: ListCardsProps) {
   const t = useT(TEXT);
   const archiveCard = useArchiveCard(projectId);
   return (
@@ -61,6 +77,7 @@ const ListCards = memo(function ListCards({ projectId, cards, users, labels, mem
                 labels={labels}
                 members={members}
                 canEdit={canAddCards}
+                canTick={canAddCards && (canTickAny || (meId !== undefined && c.assigneeIds.includes(meId)))}
                 actionSpace={canAddCards}
               />
               {canAddCards && (
@@ -104,6 +121,9 @@ type ListColumnProps = {
   members: S['BoardMember'][];
   canManage: boolean;
   canAddCards: boolean;
+  /** Admin/PM on a live project: may tick any card's checklist. Members tick only cards assigned to them (`meId`). */
+  canTickAny: boolean;
+  meId: number | undefined;
 };
 
 export const ListColumn = memo(function ListColumn({
@@ -115,11 +135,14 @@ export const ListColumn = memo(function ListColumn({
   members,
   canManage,
   canAddCards,
+  canTickAny,
+  meId,
 }: ListColumnProps) {
   const t = useT(TEXT);
   const update = useUpdateList(projectId);
   const { canDragCards, canDragLists } = useDndCtx();
   const { setColumn, columnStyle, setHandle, handleProps, setDrop, isDragging, isOver } = useSortableList(list.id);
+  const pathname = usePathname();
   const [renaming, setRenaming] = useState(false);
   // Enter/Escape unmount the focused input, which can fire blur: settled makes commit run once and never after Escape.
   const settled = useRef(false);
@@ -174,7 +197,15 @@ export const ListColumn = memo(function ListColumn({
           />
         ) : (
           <h2 id={`list-h-${list.id}`} className="min-w-0 flex-1 truncate py-1 text-sm font-semibold">
-            {list.name}
+            <Link
+              href={`${pathname}?list=${list.id}`}
+              scroll={false}
+              draggable={false}
+              title={t.openTable(list.name)}
+              className="rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+            >
+              {list.name}
+            </Link>
           </h2>
         )}
         {list.isDone && <CheckCircle2 className="size-4 shrink-0 text-(--s-done)" aria-label={t.done} role="img" />}
@@ -207,6 +238,8 @@ export const ListColumn = memo(function ListColumn({
           labels={labels}
           members={members}
           canAddCards={canAddCards}
+          canTickAny={canTickAny}
+          meId={meId}
         />
       </ol>
       {canAddCards && <AddCard projectId={projectId} listId={list.id} listName={list.name} />}

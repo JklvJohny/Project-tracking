@@ -10,6 +10,7 @@ PostgreSQL, schema `tracking`, owned only by `tracking-service`. Status: **propo
 erDiagram
     user_cache ||..o| user_roles : "user_id (no FK, external)"
     projects ||--o{ project_members : has
+    skill_categories |o--o{ skill_catalog : groups
     projects ||--|| boards : "has one"
     projects ||--o{ labels : defines
     boards ||--o{ lists : contains
@@ -35,6 +36,23 @@ erDiagram
         text handle "for @mention"
         text avatar_url
         timestamptz synced_at
+    }
+    user_skills {
+        bigint user_id PK "user-service id"
+        text skill PK "free text tag, 1-40 chars; unique per user case-insensitively"
+        int position "order the person listed them"
+    }
+    skill_catalog {
+        text name PK "1-40 chars; unique by lower(name)"
+        bigint category_id FK "nullable: uncategorised; ON DELETE SET NULL"
+        bigint created_by "user_id"
+        timestamptz created_at
+    }
+    skill_categories {
+        bigint id PK "identity; listed in this order"
+        text name "1-40 chars; unique by lower(name)"
+        bigint created_by "user_id"
+        timestamptz created_at
     }
     projects {
         bigint id PK "identity"
@@ -181,6 +199,20 @@ erDiagram
         timestamptz created_at
         timestamptz deleted_at
     }
+    report_templates {
+        bigint id PK "identity"
+        text category "free text, 1-60 chars"
+        text name "1-120 chars"
+        text description "0-500 chars"
+        text storage_key
+        text filename
+        text mime_type "docx | xlsx | pptx | doc | xls | ppt | pdf"
+        bigint size_bytes
+        bigint uploaded_by "user_id"
+        timestamptz created_at
+        timestamptz updated_at
+        timestamptz deleted_at
+    }
     import_jobs {
         bigint id PK "identity"
         bigint project_id FK
@@ -274,6 +306,10 @@ CREATE INDEX ON activity_events (project_id, created_at DESC);   -- P2, created 
 CREATE INDEX ON notifications (user_id, created_at DESC);        -- P2, notification list
 CREATE INDEX ON notifications (user_id) WHERE read_at IS NULL;   -- P2, unread badge
 CREATE INDEX ON notifications (created_at);                      -- P2, daily 1-year cleanup
+CREATE INDEX idx_report_templates_live ON report_templates (lower(category), lower(name), id) WHERE deleted_at IS NULL; -- Reports > Templates list
+CREATE UNIQUE INDEX ux_user_skills ON user_skills (user_id, lower(skill)); -- one spelling per tag per person; the PK (user_id, skill) alone lets "Go" and "go" both in
+CREATE UNIQUE INDEX ux_skill_catalog ON skill_catalog (lower(name)); -- the department list: "Go" and "go" are one skill
+CREATE UNIQUE INDEX ux_skill_categories_name ON skill_categories (lower(name)); -- "Network" and "network" are one category
 ```
 
 ## Business decisions (2026-11-17)

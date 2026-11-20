@@ -7,16 +7,20 @@ const DEFAULT = 0.55;
 const MIN = 0.2;
 const MAX = 0.8;
 const STEP = 0.05;
+// Dragging past these edges collapses a section instead of squeezing it: near the top the Board folds away,
+// near the bottom the Timeline does.
+export const COLLAPSE_TOP = 0.08;
+export const COLLAPSE_BOTTOM = 0.92;
 
 const TEXT = {
   th: {
     label: 'ปรับขนาดบอร์ดและไทม์ไลน์',
-    hint: 'ลากเพื่อปรับขนาด · ดับเบิลคลิกเพื่อรีเซ็ต',
+    hint: 'ลากเพื่อปรับขนาด · ลากสุดขอบเพื่อพับ · ดับเบิลคลิกเพื่อรีเซ็ต',
     value: (b: number) => `บอร์ด ${b}%, ไทม์ไลน์ ${100 - b}%`,
   },
   en: {
     label: 'Resize board and timeline',
-    hint: 'Drag to resize · double-click to reset',
+    hint: 'Drag to resize · drag to an edge to collapse · double-click to reset',
     value: (b: number) => `Board ${b}%, timeline ${100 - b}%`,
   },
 };
@@ -29,6 +33,7 @@ export function useSplit(): [number, (v: number) => void] {
   useEffect(() => {
     try {
       const v = parseFloat(localStorage.getItem(KEY) ?? '');
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- storage is only readable after mount
       if (Number.isFinite(v)) setRatio(clamp(v));
     } catch {
       /* storage unavailable: keep the default */
@@ -46,20 +51,50 @@ export function useSplit(): [number, (v: number) => void] {
   return [ratio, set];
 }
 
-/** Horizontal drag handle between the Board and Timeline; `value` is the Board's share (0.2-0.8). */
+/**
+ * Horizontal drag handle between the Board and Timeline; `value` is the Board's share (0.2-0.8).
+ * Dragging past COLLAPSE_TOP / COLLAPSE_BOTTOM (or ArrowUp at the minimum / ArrowDown at the maximum) calls
+ * `onCollapse` with the section to fold. The stored ratio is left as it was, so reopening restores the split.
+ * While a section is folded by the splitter (`collapsed`), the handle stays: dragging it back past the edge
+ * (or ArrowDown / ArrowUp) calls `onExpand` with the section and the new Board share. Pointer capture is kept
+ * across fold and unfold, so one drag can go to the edge and back.
+ */
 export function Splitter({
   value,
+  collapsed = null,
   onChange,
+  onCollapse,
+  onExpand,
   containerRef,
 }: {
   value: number;
+  collapsed?: 'board' | 'timeline' | null;
   onChange: (v: number) => void;
+  onCollapse: (section: 'board' | 'timeline') => void;
+  onExpand: (section: 'board' | 'timeline', ratio: number) => void;
   containerRef: RefObject<HTMLDivElement | null>;
 }) {
   const t = useT(TEXT);
-  const pct = Math.round(value * 100);
+  const pct = collapsed === 'board' ? 0 : collapsed === 'timeline' ? 100 : Math.round(value * 100);
 
   const onKeyDown = (e: KeyboardEvent) => {
+    if (collapsed) {
+      if ((collapsed === 'board' && e.key === 'ArrowDown') || (collapsed === 'timeline' && e.key === 'ArrowUp')) {
+        e.preventDefault();
+        onExpand(collapsed, collapsed === 'board' ? MIN : MAX);
+      }
+      return;
+    }
+    if (e.key === 'ArrowUp' && value <= MIN) {
+      e.preventDefault();
+      onCollapse('board');
+      return;
+    }
+    if (e.key === 'ArrowDown' && value >= MAX) {
+      e.preventDefault();
+      onCollapse('timeline');
+      return;
+    }
     const next =
       e.key === 'ArrowUp'
         ? value - STEP
@@ -85,7 +120,18 @@ export function Splitter({
   const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
     if (!e.currentTarget.hasPointerCapture?.(e.pointerId)) return;
     const box = containerRef.current?.getBoundingClientRect();
-    if (box && box.height > 0) onChange((e.clientY - box.top) / box.height);
+    if (!box || box.height <= 0) return;
+    const raw = (e.clientY - box.top) / box.height;
+    const inside = raw > COLLAPSE_TOP && raw < COLLAPSE_BOTTOM;
+    if (collapsed) {
+      if (inside) onExpand(collapsed, clamp(raw));
+      return;
+    }
+    if (!inside) {
+      onCollapse(raw <= COLLAPSE_TOP ? 'board' : 'timeline');
+      return;
+    }
+    onChange(raw);
   };
 
   return (
@@ -94,15 +140,15 @@ export function Splitter({
       tabIndex={0}
       aria-orientation="horizontal"
       aria-label={t.label}
-      aria-valuemin={20}
-      aria-valuemax={80}
+      aria-valuemin={0}
+      aria-valuemax={100}
       aria-valuenow={pct}
       aria-valuetext={t.value(pct)}
       title={t.hint}
       onKeyDown={onKeyDown}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
-      onDoubleClick={() => onChange(0.5)}
+      onDoubleClick={() => (collapsed ? onExpand(collapsed, 0.5) : onChange(0.5))}
       className="group relative z-10 flex h-3 shrink-0 cursor-row-resize touch-none items-center justify-center border-t bg-muted/40 hover:bg-primary/10 focus-visible:bg-primary/10 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
     >
       <span aria-hidden className="h-1 w-12 rounded-full bg-input group-hover:bg-primary group-focus-visible:bg-primary" />

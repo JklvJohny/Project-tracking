@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname, useParams, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Settings, Upload, Users } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Columns3, Settings, Upload, Users } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { Suspense, useCallback, useRef, useState, type CSSProperties } from 'react';
 import { Button } from '@/components/ui/button';
@@ -14,12 +14,15 @@ import { StatusPill } from '../shared/StatusPill';
 import { routes } from '../shared/routes';
 import { ArchivedBanner } from '../board/ArchivedBanner';
 import { ArchivedSheet } from '../board/ArchivedSheet';
-import { BoardSection } from '../board/BoardSection';
+import { BOARD_OPEN_KEY, BoardSection } from '../board/BoardSection';
 import { Splitter, useSplit } from '../board/Splitter';
-import { TimelineSection } from '../board/timeline/Timeline';
+import { TIMELINE_OPEN_KEY, TimelineSection } from '../board/timeline/Timeline';
+import { useStoredOpen } from '../board/useStoredOpen';
 
 // Loaded on demand: keeps markdown, the pickers and the member forms out of the board's first load.
 const CardPanel = dynamic(() => import('../card/CardPanel').then((m) => m.CardPanel));
+const CalendarView = dynamic(() => import('../board/calendar/Calendar').then((m) => m.CalendarView));
+const ListTableDialog = dynamic(() => import('../board/ListTableDialog').then((m) => m.ListTableDialog));
 const MembersDialog = dynamic(() => import('../projects/MembersDialog').then((m) => m.MembersDialog));
 const ProjectSettingsDialog = dynamic(() =>
   import('../projects/ProjectSettingsDialog').then((m) => m.ProjectSettingsDialog),
@@ -35,6 +38,9 @@ const TEXT = {
     import: 'นำเข้า',
     soon: 'เร็ว ๆ นี้',
     team: 'สมาชิกโปรเจกต์',
+    views: 'มุมมอง',
+    board: 'บอร์ด',
+    calendar: 'ปฏิทิน',
   },
   en: {
     projects: 'Projects',
@@ -45,6 +51,9 @@ const TEXT = {
     import: 'Import',
     soon: 'Coming soon',
     team: 'Project members',
+    views: 'Views',
+    board: 'Board',
+    calendar: 'Calendar',
   },
 };
 
@@ -115,6 +124,33 @@ function Header({ projectId }: { projectId: number }) {
   );
 }
 
+/** Board and Calendar are two views of one project; the URL (?view=calendar) decides which shows. */
+function ViewTabs({ calendar }: { calendar: boolean }) {
+  const t = useT(TEXT);
+  const pathname = usePathname();
+  return (
+    <nav aria-label={t.views} className="mx-4 mb-3 flex gap-1 border-b">
+      {[
+        { key: 'board', href: pathname, label: t.board, icon: Columns3, current: !calendar },
+        { key: 'calendar', href: `${pathname}?view=calendar`, label: t.calendar, icon: CalendarDays, current: calendar },
+      ].map(({ key, href, label, icon: Icon, current }) => (
+        <Link
+          key={key}
+          href={href}
+          scroll={false}
+          aria-current={current ? 'page' : undefined}
+          className={`-mb-px inline-flex items-center gap-2 border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+            current ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <Icon className="size-4" aria-hidden />
+          {label}
+        </Link>
+      ))}
+    </nav>
+  );
+}
+
 function BoardPage() {
   const t = useT(TEXT);
   const params = useParams<{ projectId: string }>();
@@ -131,6 +167,15 @@ function BoardPage() {
     const qs = next.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }, [router, pathname, search]);
+  const listParam = Number(search.get('list'));
+  const listId = Number.isInteger(listParam) && listParam > 0 ? listParam : undefined;
+  const closeList = useCallback(() => {
+    const next = new URLSearchParams(search.toString());
+    next.delete('list');
+    const qs = next.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }, [router, pathname, search]);
+  const calendar = search.get('view') === 'calendar';
   const focusChecklist = search.get('focus') === 'checklist';
   // One-shot hint from the card preview's "+": drop only `focus` so a reload or Back does not re-focus.
   const focusHandled = useCallback(() => {
@@ -139,32 +184,93 @@ function BoardPage() {
     const qs = next.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }, [router, pathname, search]);
-  const [boardOpen, setBoardOpen] = useState(true);
-  const [timelineOpen, setTimelineOpen] = useState(false);
+  const [boardOpen, setBoardOpen] = useStoredOpen(BOARD_OPEN_KEY, true);
+  const [timelineOpen, setTimelineOpen] = useStoredOpen(TIMELINE_OPEN_KEY, false);
   const [split, setSplit] = useSplit();
+  // Which section the splitter folded, if any. While set, the handle stays so it can be dragged back out.
+  // Toggling a section header is an explicit choice, so it drops the handle.
+  const [folded, setFolded] = useState<'board' | 'timeline' | null>(null);
+  const collapse = useCallback(
+    (section: 'board' | 'timeline') => {
+      setFolded(section);
+      if (section === 'board') setBoardOpen(false);
+      else setTimelineOpen(false);
+    },
+    [setBoardOpen, setTimelineOpen],
+  );
+  const expand = useCallback(
+    (section: 'board' | 'timeline', ratio: number) => {
+      setSplit(ratio);
+      setFolded(null);
+      if (section === 'board') setBoardOpen(true);
+      else setTimelineOpen(true);
+    },
+    [setSplit, setBoardOpen, setTimelineOpen],
+  );
+  const toggleBoard = useCallback(
+    (o: boolean) => {
+      setFolded(null);
+      setBoardOpen(o);
+    },
+    [setBoardOpen],
+  );
+  const toggleTimeline = useCallback(
+    (o: boolean) => {
+      setFolded(null);
+      setTimelineOpen(o);
+    },
+    [setTimelineOpen],
+  );
   const stack = useRef<HTMLDivElement>(null);
   const both = boardOpen && timelineOpen;
+  const foldedNow = both ? null : folded === 'board' && timelineOpen ? 'board' : folded === 'timeline' && boardOpen ? 'timeline' : null;
+  const split3 = both || foldedNow !== null;
+  // Board region: a share of the stack when both are open, just its header when folded, the rest when Timeline is folded.
+  // A fixed-height board region (both open, or Timeline folded) lets the lists scroller fill it, so its horizontal
+  // scrollbar stays on screen.
+  const boardFills = both || foldedNow === 'timeline';
+  const boardBox = both
+    ? 'sm:flex sm:min-h-0 sm:shrink-0 sm:basis-[calc(var(--split)*100%)] sm:flex-col'
+    : foldedNow === 'board'
+      ? 'sm:shrink-0'
+      : foldedNow === 'timeline'
+        ? 'sm:flex sm:min-h-0 sm:flex-1 sm:flex-col'
+        : undefined;
   if (!Number.isInteger(projectId) || projectId <= 0) return <p className="p-6 text-sm">{t.invalid}</p>;
   return (
     <div className="flex flex-col">
       <Header projectId={projectId} />
       <ArchivedBanner projectId={projectId} />
-      {/* Both open on sm+: a fixed-height stack that the splitter divides. Below sm everything flows and scrolls with the page. */}
+      <ViewTabs calendar={calendar} />
+      {calendar ? (
+        <CalendarView projectId={projectId} />
+      ) : (
+      /* With the splitter (both open, or one folded by it) on sm+: a fixed-height stack the handle divides.
+          Below sm everything flows and scrolls with the page. */
       <div
         ref={stack}
         style={both ? ({ '--split': split } as CSSProperties) : undefined}
-        className={both ? 'flex flex-col sm:h-[max(32rem,calc(100dvh-12.5rem))]' : 'flex flex-col'}
+        className={split3 ? 'flex flex-col sm:h-[max(32rem,calc(100dvh-15.5rem))]' : 'flex flex-col'}
       >
-        <div className={both ? 'sm:min-h-0 sm:shrink-0 sm:basis-[calc(var(--split)*100%)] sm:overflow-auto' : undefined}>
-          <BoardSection projectId={projectId} onOpenChange={setBoardOpen} />
+        <div className={boardBox}>
+          <BoardSection projectId={projectId} open={boardOpen} onOpenChange={toggleBoard} fill={boardFills} />
         </div>
-        {both && (
+        {split3 && (
           <div className="max-sm:hidden">
-            <Splitter value={split} onChange={setSplit} containerRef={stack} />
+            <Splitter
+              value={split}
+              collapsed={foldedNow}
+              onChange={setSplit}
+              onCollapse={collapse}
+              onExpand={expand}
+              containerRef={stack}
+            />
           </div>
         )}
-        <TimelineSection projectId={projectId} onOpenChange={setTimelineOpen} />
+        <TimelineSection projectId={projectId} open={timelineOpen} onOpenChange={toggleTimeline} />
       </div>
+      )}
+      {listId !== undefined && <ListTableDialog key={`list-${listId}`}projectId={projectId} listId={listId} onClose={closeList} />}
       {cardId !== undefined && (
         <CardPanel
           key={cardId}

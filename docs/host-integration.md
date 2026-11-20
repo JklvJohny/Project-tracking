@@ -137,8 +137,10 @@ close animations and state variants. The `@custom-variant dark` line must match 
 tracking folder is mounted as a route segment. If the host mounts the pages another way, import
 `app/tracking/tracking.css` once from whatever layout wraps them. It holds only the series colours (`--s-*`,
 `--p-*`, `--pb-*`), the 13px type scale of `.tracking-root`, the drag styles and the `.card-row`
-`content-visibility` rule. All surface colours (`background`, `border`, `primary`, `muted`...) come from the host's
-shadcn theme, so tracking follows the host's light and dark themes.
+`content-visibility` rule. In light mode all surface colours (`background`, `border`, `primary`, `muted`...) come from
+the host's shadcn theme. In dark mode the user's dark palette (Settings: slate, warm or navy; `<html data-pt-dark>`)
+replaces `background`, `card`, `popover`, `muted`, `secondary`, `accent`, `ring` and the `sidebar*` tokens, so the host
+shell turns the same colour while tracking is mounted; `primary`, `border` and `destructive` stay the host's.
 
 ## 5. TrackingProvider props
 
@@ -152,6 +154,7 @@ import { TrackingProvider } from './shared/provider';
 <TrackingProvider
   lang={hostLang}                       // 'th' | 'en'
   theme={hostTheme}                     // 'light' | 'dark' | 'system'
+  darkPalette={hostDarkPalette}         // optional: 'slate' | 'warm' | 'navy'
   getAuthHeaders={() => ({ Authorization: `Bearer ${token}` })}
 >
   {children}
@@ -162,6 +165,7 @@ import { TrackingProvider } from './shared/provider';
 |---|---|---|
 | `lang` | `'th' \| 'en'` | Controlled language. Omit it and the provider keeps its own value in `localStorage` key `pt-lang` (default `th`). Every user-facing string is looked up from it; user content is never translated. |
 | `theme` | `'light' \| 'dark' \| 'system'` | Controlled theme. Omit it and the provider uses `localStorage` key `pt-theme` (default `system`). The provider toggles the `dark` class on `<html>` and sets `<html lang>`. If the host already does both, pass its value and the result is the same. |
+| `darkPalette` | `'slate' \| 'warm' \| 'navy'` | Controlled dark-mode palette. Omit it and the provider uses `localStorage` key `pt-dark-palette` (default `slate`), set from the Settings page. The provider sets `data-pt-dark` on `<html>`; it only has an effect under `.dark`. |
 | `getAuthHeaders` | `() => Record<string,string> \| Promise<Record<string,string>>` | Called before every request; its headers are merged into the request. This is where the host's auth goes. The local harness uses it to send `X-User-ID`; production sends the real credentials and the service validates them with the production authenticator. |
 
 A `TrackingProvider` nested inside another one is a no-op, so the host can mount one high up (for example around its
@@ -176,18 +180,30 @@ Page URLs are defined once in `app/tracking/shared/routes.ts`:
 const BASE = '/tracking';
 export const routes = {
   projects: BASE,                                       // projects list
+  archived: `${BASE}#archived`,                         // archived section under the projects list (Restore lives there)
+  myTasks: `${BASE}/my-tasks`,                          // the caller's open cards across projects
+  dashboard: `${BASE}/dashboard`,                       // Dashboard page (?project=<id> scopes it to one project)
   reports: `${BASE}/reports`,                           // Reports page (?project=<id> opens a folder)
+  team: `${BASE}/team`,                                 // Team page: people, skills, open work
+  settings: `${BASE}/settings`,                         // Settings page: theme and dark palette (per browser)
   board: (projectId) => `${BASE}/${projectId}`,         // board
   card: (projectId, cardId) => `${BASE}/${projectId}?card=${cardId}`, // board with the card panel open
 };
 ```
 
-Add two sidebar items: `href: routes.projects` (label "Projects" / "โปรเจกต์") and `href: routes.reports` (label
-"Reports" / "รายงาน"). The tracking pages have no tab bar of their own; the host sidebar is the only way between
-them. Mark Projects as current for `/tracking` and `/tracking/<projectId>`, and Reports for `/tracking/reports`. The board and card links inside
+Add four sidebar items: `href: routes.dashboard` (label "Dashboard" / "แดชบอร์ด"), `href: routes.projects` (label
+"Projects" / "โปรเจกต์"), `href: routes.reports` (label "Reports" / "รายงาน"), and `href: routes.team` (label "Team" / "ทีมงาน"). Archived projects have no item: they are a folding section under the projects list, and the old `/tracking/archived` URL redirects there. The tracking pages have no tab bar of their own; the host sidebar is the only way between
+them. Mark Dashboard as current for `/tracking/dashboard`, Projects for `/tracking` and `/tracking/<projectId>`, Reports for `/tracking/reports`, and Team for `/tracking/team`. The board and card links inside
 the tracking pages are built from the same file, so changing `BASE` there moves the whole feature to another mount
 point (and the route folder `app/tracking/` must move with it). Navigation inside tracking uses `<Link>`, never
 `router.push`.
+
+My tasks has no sidebar item. The signed-in user's avatar in the host header opens the account menu (a dropdown);
+add an item "My tasks" / "งานของฉัน" linking to `routes.myTasks`, with `aria-current="page"` on `/tracking/my-tasks`,
+and an item "Settings" / "ตั้งค่า" linking to `routes.settings`. The dev sidebar also lists Settings under "Other";
+the host may put it in either place, or merge it into its own settings page if it has one.
+Keep the host's own items (profile, sign out) in the same menu. Do not mark Projects as current on that page, although
+the path starts with `/tracking`. `app/(dev)/DevShell.tsx` (`UserMenu`) shows the intended shape.
 
 ## 7. What not to copy
 
@@ -210,3 +226,13 @@ point (and the route folder `app/tracking/` must move with it). Navigation insid
 6. Open `/tracking/reports`, pick a folder, upload a PDF, double-click it to open the viewer, delete it and press
    Undo. A non-PDF and a file over 20 MB are rejected with a message.
 7. Open a board and press Timeline: bars appear grouped by assignee, and the splitter resizes the board and timeline.
+
+## 9. user-service adapter
+
+`backend/internal/users` is the only place tracking-service talks to user-service. Until it is wired, `users.NewStub()`
+returns eight fixed people. A real adapter implements all of `users.Provider`:
+
+- `Get(ids)`: profiles by id, unknown ids skipped.
+- `Search(q, limit)`: the member picker's free-text search.
+- `Department(limit)`: everyone in the department that uses tracking. The Team page (`GET /team`) lists exactly these
+  people, so it must not return the whole company.

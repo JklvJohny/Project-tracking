@@ -22,6 +22,9 @@ type Repos struct {
 	Users     UserRepo
 	Activity  ActivityRepo
 	Documents DocumentRepo
+	Templates TemplateRepo
+	Dashboard DashboardRepo
+	Team      TeamRepo
 }
 
 type CommentRepo interface {
@@ -79,6 +82,34 @@ type DocumentRepo interface {
 	// SQL: SELECT ... FROM documents WHERE project_id = $1 AND deleted_at IS NULL
 	// ORDER BY created_at DESC, id DESC (idx_documents_project).
 	ByProject(ctx context.Context, projectID int64) ([]Document, error)
+}
+
+type TemplateRepo interface {
+	// Create assigns ID and stores t as given.
+	// SQL: INSERT INTO report_templates (category, name, description, storage_key,
+	// filename, mime_type, size_bytes, uploaded_by, created_at, updated_at) ... RETURNING id.
+	Create(ctx context.Context, t ReportTemplate) (ReportTemplate, error)
+
+	// Get returns a template even when soft-deleted (the caller checks
+	// DeletedAt); ErrNotFound if absent.
+	// SQL: SELECT ... FROM report_templates WHERE id = $1.
+	Get(ctx context.Context, id int64) (ReportTemplate, error)
+
+	// SaveDetails writes category, name, description and updated_at; ErrNotFound
+	// if absent. The file columns never change.
+	// SQL: UPDATE report_templates SET category = $2, name = $3, description = $4,
+	// updated_at = $5 WHERE id = $1.
+	SaveDetails(ctx context.Context, t ReportTemplate) error
+
+	// SetDeleted sets deleted_at (nil restores); ErrNotFound if absent.
+	// SQL: UPDATE report_templates SET deleted_at = $2 WHERE id = $1.
+	SetDeleted(ctx context.Context, id int64, at *time.Time) error
+
+	// List returns every non-deleted template ordered by lower(category),
+	// lower(name), id.
+	// SQL: SELECT ... FROM report_templates WHERE deleted_at IS NULL
+	// ORDER BY lower(category), lower(name), id (idx_report_templates_live).
+	List(ctx context.Context) ([]ReportTemplate, error)
 }
 
 type ChecklistRepo interface {
@@ -423,4 +454,116 @@ type IDPos struct {
 	ID       int64
 	Position string
 	Archived bool
+}
+
+type DashboardRepo interface {
+	// Rows returns every active card of the listed projects: not archived, in a
+	// list that is not archived, in a project that is not archived. Rows are
+	// ordered by project id, then card id; AssigneeIDs ascending, never nil.
+	// SQL: one query, no N+1 for any len(projectIDs):
+	// SELECT c.id, p.id, p.name, l.name, c.title, c.priority, c.start_date,
+	// c.due_date, c.completed_at,
+	// COALESCE(array_agg(a.user_id ORDER BY a.user_id) FILTER (WHERE a.user_id IS NOT NULL), '{}')
+	// FROM cards c JOIN lists l ON l.id = c.list_id AND l.archived_at IS NULL
+	// JOIN boards b ON b.id = l.board_id
+	// JOIN projects p ON p.id = b.project_id AND p.archived_at IS NULL
+	// LEFT JOIN card_assignees a ON a.card_id = c.id
+	// WHERE p.id = ANY($1) AND c.archived_at IS NULL
+	// GROUP BY c.id, p.id, l.id ORDER BY p.id, c.id (idx_cards_list).
+	Rows(ctx context.Context, projectIDs []int64) ([]DashboardRow, error)
+
+	// AssignedTo returns the open cards of the listed projects assigned to
+	// userID: same "active" rules as Rows, plus completed_at IS NULL. Rows are
+	// ordered by due date (none last), then card id; AssigneeIDs ascending,
+	// never nil, and include the other assignees.
+	// SQL: one query driven by the card_assignees (user_id) index:
+	// SELECT c.id, p.id, p.name, l.name, c.title, c.priority, c.start_date,
+	// c.due_date, c.completed_at,
+	// (SELECT array_agg(user_id ORDER BY user_id) FROM card_assignees WHERE card_id = c.id),
+	// (SELECT count(*) FROM checklist_items WHERE card_id = c.id),
+	// (SELECT count(*) FILTER (WHERE is_done) FROM checklist_items WHERE card_id = c.id)
+	// FROM card_assignees me JOIN cards c ON c.id = me.card_id
+	// JOIN lists l ON l.id = c.list_id AND l.archived_at IS NULL
+	// JOIN boards b ON b.id = l.board_id
+	// JOIN projects p ON p.id = b.project_id AND p.archived_at IS NULL
+	// WHERE me.user_id = $1 AND p.id = ANY($2) AND c.archived_at IS NULL
+	// AND c.completed_at IS NULL ORDER BY c.due_date NULLS LAST, c.id
+	// (idx_checklist_card for the counts).
+	AssignedTo(ctx context.Context, userID int64, projectIDs []int64) ([]TaskRow, error)
+}
+
+// TeamRepo backs the Team page: each person's skills and how much open work
+// they carry. Skills are free text tags owned by tracking-service; the people
+// themselves come from user-service.
+type TeamRepo interface {
+	// Skills returns every user's skills in the order saved; users with none
+	// are absent from the map.
+	// SQL: SELECT user_id, array_agg(skill ORDER BY position) FROM user_skills GROUP BY user_id.
+	Skills(ctx context.Context) (map[int64][]string, error)
+
+	// SetSkills replaces userID's skills with skills, kept in order (the
+	// caller has trimmed and de-duplicated them). An empty slice removes all.
+	// SQL: DELETE FROM user_skills WHERE user_id = $1;
+	// INSERT INTO user_skills (user_id, skill, position)
+	// SELECT $1, s, ord FROM unnest($2::text[]) WITH ORDINALITY AS t(s, ord).
+	SetSkills(ctx context.Context, userID int64, skills []string) error
+
+	// Workload counts each assignee's open cards across every project, with
+	// the same "active" rules as DashboardRepo.Rows plus completed_at IS NULL.
+	// Overdue: due_date < today. DueSoon: today <= due_date < soon. Users with
+	// no open card are absent from the map.
+	// SQL: one query, grouped by assignee:
+	// SELECT a.user_id, count(*),
+	// count(*) FILTER (WHERE c.due_date < $1),
+	// count(*) FILTER (WHERE c.due_date >= $1 AND c.due_date < $2)
+	// FROM card_assignees a
+	// JOIN cards c ON c.id = a.card_id AND c.archived_at IS NULL AND c.completed_at IS NULL
+	// JOIN lists l ON l.id = c.list_id AND l.archived_at IS NULL
+	// JOIN boards b ON b.id = l.board_id
+	// JOIN projects p ON p.id = b.project_id AND p.archived_at IS NULL
+	// GROUP BY a.user_id.
+	Workload(ctx context.Context, today, soon Date) (map[int64]Workload, error)
+
+	// Catalog returns the department's named skills by lower(name), name.
+	// SQL: SELECT name, category_id, created_by, created_at FROM skill_catalog ORDER BY lower(name), name.
+	Catalog(ctx context.Context) ([]CatalogSkill, error)
+
+	// AddToCatalog stores s unless a skill with the same name ignoring case
+	// exists, and reports whether it was added.
+	// SQL: INSERT INTO skill_catalog (name, category_id, created_by, created_at) VALUES ($1, $2, $3, $4)
+	// ON CONFLICT ((lower(name))) DO NOTHING; added = rows affected = 1.
+	AddToCatalog(ctx context.Context, s CatalogSkill) (bool, error)
+
+	// SetSkillCategory puts the skill named s.Name (ignoring case) in
+	// s.CategoryID (nil: none), adding it to the catalog first if it is only
+	// on people's cards. An existing entry keeps its spelling and creator.
+	// SQL: INSERT INTO skill_catalog (name, category_id, created_by, created_at) VALUES ($1, $2, $3, $4)
+	// ON CONFLICT ((lower(name))) DO UPDATE SET category_id = EXCLUDED.category_id.
+	SetSkillCategory(ctx context.Context, s CatalogSkill) error
+
+	// Categories returns the skill categories in the order they were made.
+	// SQL: SELECT id, name, created_by, created_at FROM skill_categories ORDER BY id.
+	Categories(ctx context.Context) ([]SkillCategory, error)
+
+	// CreateCategory stores c with a new ID; ErrDuplicate if the name exists
+	// ignoring case.
+	// SQL: INSERT INTO skill_categories (name, created_by, created_at) VALUES ($1, $2, $3) RETURNING id
+	// (ux_skill_categories_name violation -> ErrDuplicate).
+	CreateCategory(ctx context.Context, c SkillCategory) (SkillCategory, error)
+
+	// RenameCategory sets the name of category id; ErrNotFound if missing,
+	// ErrDuplicate if another category has the name ignoring case.
+	// SQL: UPDATE skill_categories SET name = $2 WHERE id = $1.
+	RenameCategory(ctx context.Context, id int64, name string) error
+
+	// DeleteCategory removes category id; its skills become uncategorised.
+	// ErrNotFound if missing.
+	// SQL: DELETE FROM skill_categories WHERE id = $1
+	// (skill_catalog.category_id is ON DELETE SET NULL).
+	DeleteCategory(ctx context.Context, id int64) error
+
+	// RemoveFromCatalog deletes the entry matching name ignoring case;
+	// ErrNotFound if none. People who list the skill keep it.
+	// SQL: DELETE FROM skill_catalog WHERE lower(name) = lower($1).
+	RemoveFromCatalog(ctx context.Context, name string) error
 }

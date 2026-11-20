@@ -22,9 +22,13 @@ func (d *data) clone() *data {
 		checklist:     maps.Clone(d.checklist),
 		comments:      cloneMap(d.comments, cloneComment),
 		documents:     cloneMap(d.documents, cloneDocument),
+		templates:     cloneMap(d.templates, cloneTemplate),
 		mentions:      maps.Clone(d.mentions),
 		userRoles:     maps.Clone(d.userRoles),
 		userCache:     maps.Clone(d.userCache),
+		skills:        cloneMap(d.skills, slices.Clone[[]string]),
+		catalog:       cloneMap(d.catalog, cloneCatalogSkill),
+		categories:    maps.Clone(d.categories),
 		activity:      cloneEvents(d.activity),
 		seq:           maps.Clone(d.seq),
 	}
@@ -67,6 +71,11 @@ func cloneComment(c store.Comment) store.Comment {
 	return c
 }
 
+func cloneTemplate(t store.ReportTemplate) store.ReportTemplate {
+	t.DeletedAt = ptr(t.DeletedAt)
+	return t
+}
+
 func cloneDocument(d store.Document) store.Document {
 	d.DeletedAt = ptr(d.DeletedAt)
 	return d
@@ -80,4 +89,9 @@ func cloneEvents(in []store.ActivityEvent) []store.ActivityEvent {
 		out[i] = e
 	}
 	return out
+}
+
+func cloneCatalogSkill(s store.CatalogSkill) store.CatalogSkill {
+	s.CategoryID = ptr(s.CategoryID)
+	return s
 }

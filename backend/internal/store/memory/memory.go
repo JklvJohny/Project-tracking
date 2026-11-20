@@ -32,9 +32,13 @@ type data struct {
 	checklist     map[int64]store.ChecklistItem
 	comments      map[int64]store.Comment
 	documents     map[int64]store.Document
+	templates     map[int64]store.ReportTemplate
 	mentions      map[mentionKey]store.CommentMention
 	userRoles     map[int64]store.UserRole
 	userCache     map[int64]store.CachedUser
+	skills        map[int64][]string
+	catalog       map[string]store.CatalogSkill // by lower(name)
+	categories    map[int64]store.SkillCategory
 	activity      []store.ActivityEvent
 
 	// seq[table] is the last id issued for that table.
@@ -54,9 +58,13 @@ func newData() *data {
 		checklist:     map[int64]store.ChecklistItem{},
 		comments:      map[int64]store.Comment{},
 		documents:     map[int64]store.Document{},
+		templates:     map[int64]store.ReportTemplate{},
 		mentions:      map[mentionKey]store.CommentMention{},
 		userRoles:     map[int64]store.UserRole{},
 		userCache:     map[int64]store.CachedUser{},
+		skills:        map[int64][]string{},
+		catalog:       map[string]store.CatalogSkill{},
+		categories:    map[int64]store.SkillCategory{},
 		seq:           map[string]int64{},
 	}
 }
@@ -91,6 +99,9 @@ func (s *Store) repos(d *data) store.Repos {
 		Users:     &usersRepo{d: d, now: s.now},
 		Activity:  &activityRepo{d: d, now: s.now},
 		Documents: &documentRepo{d: d},
+		Templates: &templateRepo{d: d},
+		Dashboard: &dashboardRepo{d: d},
+		Team:      &teamRepo{d: d},
 	}
 }
 
@@ -123,4 +134,11 @@ func (s *Store) SeedUserRole(ur store.UserRole) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.d.userRoles[ur.UserID] = ur
+}
+
+// SeedSkills sets a person's skills directly (local seed data only).
+func (s *Store) SeedSkills(userID int64, skills ...string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.d.skills[userID] = skills
 }

@@ -1,0 +1,48 @@
+{
+  // Ctrl+Shift+B runs "dev" (the default build task): backend with air hot reload + frontend dev server.
+  // Ctrl+Alt+Shift+B (user keybinding) terminates all tasks and runs "dev: stop".
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "dev",
+      "dependsOn": ["dev: backend", "dev: frontend"],
+      "dependsOrder": "parallel",
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "dev: backend",
+      "type": "shell",
+      "command": "air",
+      "options": { "cwd": "${workspaceFolder}/backend" },
+      "isBackground": true,
+      "presentation": { "group": "dev", "panel": "dedicated", "reveal": "always" },
+      "problemMatcher": {
+        "owner": "air",
+        "pattern": { "regexp": "^(.*\\.go):(\\d+):(\\d+): (.*)$", "file": 1, "line": 2, "column": 3, "message": 4 },
+        "background": { "activeBegins": true, "beginsPattern": "building\\.\\.\\.", "endsPattern": "listening port=" }
+      }
+    },
+    {
+      "label": "dev: frontend",
+      "type": "shell",
+      "command": "powershell",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/scripts/dev-frontend.ps1"],
+      "isBackground": true,
+      "presentation": { "group": "dev", "panel": "dedicated", "reveal": "always" },
+      "problemMatcher": {
+        "owner": "next",
+        "pattern": { "regexp": "^\\s*(error|Error)\\s+(.*)$", "severity": 1, "message": 2 },
+        "background": { "activeBegins": true, "beginsPattern": "next dev|Next\\.js", "endsPattern": "Ready in|ready" }
+      }
+    },
+    {
+      "label": "dev: stop",
+      "type": "shell",
+      "command": "powershell",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/scripts/dev-down.ps1"],
+      "presentation": { "reveal": "silent", "panel": "shared" },
+      "problemMatcher": []
+    }
+  ]
+}

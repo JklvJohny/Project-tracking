@@ -51,7 +51,7 @@ export function AssignPopover({
           aria-label={t.add}
           title={t.add}
           {...stopDrag}
-          className="inline-flex size-8 items-center justify-center rounded-full border border-dashed border-muted-foreground/60 bg-card text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+          className="inline-flex size-6 items-center justify-center rounded-full border border-dashed border-muted-foreground/60 bg-card text-muted-foreground transition-colors hover:border-primary hover:text-primary"
         >
           <Plus className="size-3.5" aria-hidden />
         </button>

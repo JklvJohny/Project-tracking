@@ -6,3 +6,5 @@ backend/bin/
 .superpowers/
 backend/uploads/
 backend/tmp/
+# local sample PDFs for the Reports seed (ENV=local); never committed
+/reports/

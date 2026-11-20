@@ -5,6 +5,7 @@ import type { components } from '../shared/api/schema';
 import { useBoard, useProjects } from '../shared/api/queries';
 import { TrackingProvider } from '../shared/provider';
 import { MembersDialog } from './MembersDialog';
+import { pickOption } from '../shared/test-select';
 
 vi.mock('../shared/api/client', async (orig) => ({ ...(await orig<object>()), api: vi.fn() }));
 const replace = vi.fn();
@@ -68,8 +69,7 @@ describe('MembersDialog', () => {
       throw new ApiError('conflict', 409, 'last_pm');
     };
     renderDialog();
-    const select = await screen.findByLabelText('Role of Ann');
-    fireEvent.change(select, { target: { value: 'member' } });
+    await pickOption(await screen.findByRole('combobox', { name: 'Role of Ann' }), 'Member');
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toBe('A project must keep at least one PM');
   });
@@ -120,7 +120,7 @@ describe('MembersDialog', () => {
     usersImpl = async () => [{ id: 3, name: 'Cara', avatarUrl: '' }];
     writeImpl = async () => ({ userId: 3, name: 'Cara', avatarUrl: '', role: 'viewer', addedAt: 'x' });
     renderDialog();
-    fireEvent.change(await screen.findByLabelText('Role for new member'), { target: { value: 'viewer' } });
+    await pickOption(await screen.findByRole('combobox', { name: 'Role for new member' }), 'Viewer');
     fireEvent.change(screen.getByLabelText('Search people'), { target: { value: 'ca' } });
     fireEvent.click(await screen.findByRole('button', { name: 'Add Cara' }));
     await waitFor(() =>
@@ -154,7 +154,7 @@ describe('MembersDialog self role change', () => {
       </TrackingProvider>,
     );
     await waitFor(() => expect(screen.getByTestId('role').textContent).toBe('pm'));
-    fireEvent.change(await screen.findByLabelText('Role of Ann'), { target: { value: 'member' } });
+    await pickOption(await screen.findByRole('combobox', { name: 'Role of Ann' }), 'Member');
     await waitFor(() => expect(screen.getByTestId('role').textContent).toBe('member'));
   });
 });
@@ -186,8 +186,8 @@ describe('MembersDialog edge cases', () => {
     apiMock.mockImplementation((async (path: string, init?: never) =>
       path === '/projects/1/board' ? { ...board, project: { ...board.project, archivedAt: 'x' } } : base(path, init)) as never);
     renderDialog();
-    const select = (await screen.findByLabelText('Role of Bob')) as HTMLSelectElement;
-    await waitFor(() => expect(select.disabled).toBe(true));
+    const select = await screen.findByRole('combobox', { name: 'Role of Bob' });
+    await waitFor(() => expect(select.hasAttribute('disabled')).toBe(true));
     expect(screen.queryByLabelText('Search people')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Remove Bob' })).toBeNull();
   });

@@ -1,6 +1,7 @@
 'use client';
 import { Children, useMemo, type ComponentProps, type ElementType, type ReactNode } from 'react';
 import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { renderMentions } from './mentions';
 
 type Users = Map<number, { name: string }>;
@@ -44,12 +45,16 @@ function makeComponents(users?: Users): Record<string, ElementType> {
 
 const PLAIN = makeComponents();
 
-// No rehype-raw: raw HTML in the source stays text.
+// GFM adds task lists (- [x]), tables, strikethrough and bare links. No rehype-raw: raw HTML in the source stays text.
+const PLUGINS = [remarkGfm];
+
 export function Rendered({ source, users }: { source: string; users?: Users }) {
   const components = useMemo(() => (users ? makeComponents(users) : PLAIN), [users]);
   return (
-    <div className="space-y-2 text-sm leading-relaxed break-words [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_h1]:text-base [&_h1]:font-semibold [&_h2]:font-semibold [&_h3]:font-semibold [&_ol]:list-decimal [&_ol]:pl-5 [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-muted [&_pre]:p-2 [&_ul]:list-disc [&_ul]:pl-5">
-      <Markdown components={components}>{source}</Markdown>
+    <div className="space-y-2 text-sm leading-relaxed break-words [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_h1]:text-base [&_h1]:font-semibold [&_h2]:font-semibold [&_h3]:font-semibold [&_ol]:list-decimal [&_ol]:pl-5 [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-muted [&_pre]:p-2 [&_ul]:list-disc [&_ul]:pl-5 [&_.contains-task-list]:list-none [&_.contains-task-list]:pl-0.5 [&_.task-list-item_input]:mr-2 [&_.task-list-item_input]:align-middle [&_del]:text-muted-foreground [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:px-2 [&_td]:py-1 [&_th]:border [&_th]:bg-muted [&_th]:px-2 [&_th]:py-1 [&_th]:text-left">
+      <Markdown remarkPlugins={PLUGINS} components={components}>
+        {source}
+      </Markdown>
     </div>
   );
 }

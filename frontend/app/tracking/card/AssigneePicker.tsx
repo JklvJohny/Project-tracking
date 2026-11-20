@@ -1,10 +1,10 @@
 'use client';
 import { Plus } from 'lucide-react';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { components } from '../shared/api/schema';
+import { Avatar } from '../shared/Avatar';
 import { useT } from '../shared/i18n';
 import { SaveStatus, useInlineSave } from './inline';
 import { useAssign } from './mutations';
@@ -16,22 +16,10 @@ const TEXT = {
   en: { assignees: 'Assignees', add: 'Manage assignees', search: 'Search members', empty: 'No members found', none: 'Nobody assigned' },
 };
 
-const initials = (name: string) =>
-  name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((w) => Array.from(w)[0] ?? '')
-    .join('')
-    .toUpperCase();
-
-function Person({ name, avatarUrl }: { name: string; avatarUrl: string }) {
+function Person({ id, name, avatarUrl }: { id: number; name: string; avatarUrl: string }) {
   return (
     <>
-      <Avatar className="size-6">
-        {avatarUrl && <AvatarImage src={avatarUrl} alt="" />}
-        <AvatarFallback className="text-[10px]">{initials(name)}</AvatarFallback>
-      </Avatar>
+      <Avatar user={{ id, name, avatarUrl }} size="sm" />
       <span className="truncate">{name}</span>
     </>
   );
@@ -63,7 +51,7 @@ export function AssigneePicker({
         <ul className="contents">
           {assigned.map((u) => (
             <li key={u.id} className="flex max-w-48 items-center gap-1.5 rounded-full bg-muted py-0.5 pr-2.5 pl-0.5 text-sm">
-              <Person name={u.name} avatarUrl={u.avatarUrl} />
+              <Person id={u.id} name={u.name} avatarUrl={u.avatarUrl} />
             </li>
           ))}
         </ul>
@@ -90,7 +78,7 @@ export function AssigneePicker({
                           aria-checked={on}
                           onSelect={() => void save({ userId: m.userId, on: !on })}
                         >
-                          <Person name={m.name} avatarUrl={m.avatarUrl} />
+                          <Person id={m.userId} name={m.name} avatarUrl={m.avatarUrl} />
                         </CommandItem>
                       );
                     })}

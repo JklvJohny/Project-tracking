@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { api } from '../shared/api/client';
 import { useBoard, useMe } from '../shared/api/queries';
 import type { components } from '../shared/api/schema';
@@ -60,9 +61,6 @@ const TEXT = {
     roles: { pm: 'PM', member: 'Member', viewer: 'Viewer' } as Record<Role, string>,
   },
 };
-
-const selectCls =
-  'h-8 rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50';
 
 /** Debounced search. A cleanup flag drops any response that is no longer the latest request. */
 function useUserSearch(q: string) {
@@ -179,18 +177,18 @@ function MembersBody({ projectId, onOpenChange }: { projectId: number; onOpenCha
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
-            <select
-              aria-label={t.newRole}
-              className={selectCls}
-              value={newRole}
-              onChange={(e) => setNewRole(e.target.value as Role)}
-            >
-              {ROLES.map((r) => (
-                <option key={r} value={r}>
-                  {t.roles[r]}
-                </option>
-              ))}
-            </select>
+            <Select value={newRole} onValueChange={(v) => setNewRole(v as Role)}>
+              <SelectTrigger aria-label={t.newRole} className="w-36 shrink-0">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ROLES.map((r) => (
+                  <SelectItem key={r} value={r}>
+                    {t.roles[r]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         )}
         {!readOnly && results && (
@@ -223,19 +221,18 @@ function MembersBody({ projectId, onOpenChange }: { projectId: number; onOpenCha
               <li key={m.userId} className="flex items-center justify-between gap-2 py-2">
                 <span className="min-w-0 truncate text-sm">{m.name}</span>
                 <span className="flex shrink-0 items-center gap-2">
-                  <select
-                    aria-label={t.roleOf(m.name)}
-                    className={selectCls}
-                    value={m.role}
-                    disabled={readOnly || setRole.isPending}
-                    onChange={(e) => onRole(m, e.target.value as Role)}
-                  >
-                    {ROLES.map((r) => (
-                      <option key={r} value={r}>
-                        {t.roles[r]}
-                      </option>
-                    ))}
-                  </select>
+                  <Select value={m.role} disabled={readOnly || setRole.isPending} onValueChange={(v) => onRole(m, v as Role)}>
+                    <SelectTrigger aria-label={t.roleOf(m.name)} size="sm" className="w-36">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ROLES.map((r) => (
+                        <SelectItem key={r} value={r}>
+                          {t.roles[r]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   {!readOnly && (
                     <Button size="sm" variant="ghost" aria-label={t.remove(m.name)} disabled={remove.isPending} onClick={() => onRemove(m)}>
                       {t.removeOk}

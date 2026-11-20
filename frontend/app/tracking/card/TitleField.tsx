@@ -41,7 +41,7 @@ export function TitleField({
     if (!readOnly && !settled.current && next && next !== value) update.mutate({ title: next });
   });
 
-  if (readOnly) return <SheetTitle className="pr-8 text-lg font-semibold break-words">{value}</SheetTitle>;
+  if (readOnly) return <SheetTitle className="pr-8 text-xl font-semibold break-words">{value}</SheetTitle>;
 
   function commit(raw: string) {
     if (settled.current) return;
@@ -80,7 +80,7 @@ export function TitleField({
         data-dirty={draft !== value}
         onKeyDown={onKeyDown}
         onBlur={(e) => commit(e.currentTarget.value)}
-        className="h-auto border-transparent px-2 py-1.5 text-lg font-semibold shadow-none hover:border-input"
+        className="h-auto border-transparent px-2 py-1.5 text-xl font-semibold shadow-none hover:border-input md:text-xl"
       />
       <SaveStatus state={state} />
     </div>

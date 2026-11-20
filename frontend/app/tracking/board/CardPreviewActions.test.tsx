@@ -67,13 +67,14 @@ afterEach(cleanup);
 describe('CardPreview subtasks and assignees', () => {
   it('shows the count header, first items and "+N more"', async () => {
     await renderAs('member');
-    expect(screen.getByText('5 SUBTASKS')).toBeTruthy();
+    expect(screen.getByText('Subtasks')).toBeTruthy();
+    expect(screen.getByText(/of 5 subtasks done/)).toBeTruthy();
     expect(screen.getAllByRole('checkbox')).toHaveLength(3);
     expect(screen.getByText('+2 more')).toBeTruthy();
   });
 
   it('toggling a checkbox PATCHes the item and updates the count', async () => {
-    await renderAs('member');
+    await renderAs('pm');
     fireEvent.click(screen.getByRole('checkbox', { name: 'Build it' }));
     await waitFor(() =>
       expect(apiMock).toHaveBeenCalledWith('/checklist/12', { method: 'PATCH', json: { isDone: true } }),
@@ -82,9 +83,17 @@ describe('CardPreview subtasks and assignees', () => {
     expect(screen.getByRole('checkbox', { name: 'Build it' }).getAttribute('aria-checked')).toBe('true');
   });
 
+  it('a member not assigned to the card cannot tick its subtasks', async () => {
+    await renderAs('member');
+    const box = screen.getByRole('checkbox', { name: 'Build it' });
+    expect(box.hasAttribute('disabled')).toBe(true);
+    fireEvent.click(box);
+    expect(apiMock).not.toHaveBeenCalledWith('/checklist/12', expect.anything());
+  });
+
   it('rolls the toggle back when the request fails', async () => {
     toggleFails = true;
-    await renderAs('member');
+    await renderAs('pm');
     fireEvent.click(screen.getByRole('checkbox', { name: 'Build it' }));
     await waitFor(() =>
       expect(screen.getByRole('checkbox', { name: 'Build it' }).getAttribute('aria-checked')).toBe('false'),

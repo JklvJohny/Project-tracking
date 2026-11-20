@@ -4,12 +4,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useT } from '../shared/i18n';
 import { routes } from '../shared/routes';
 import { StatusPill } from '../shared/StatusPill';
+import { ProjectArchiveButton } from './ProjectArchiveButton';
 import { Members, Owner, Progress, Timeline } from './project-parts';
 import type { ProjectRow } from './project-row';
 
 const TEXT = {
-  th: { name: 'โปรเจกต์', owner: 'เจ้าของ', status: 'สถานะ', dates: 'ช่วงเวลา', members: 'สมาชิก', progress: 'ความคืบหน้า', loading: 'กำลังโหลด' },
-  en: { name: 'Project', owner: 'Owner', status: 'Status', dates: 'Timeline', members: 'Members', progress: 'Progress', loading: 'Loading' },
+  th: { name: 'โปรเจกต์', owner: 'เจ้าของ', status: 'สถานะ', dates: 'ช่วงเวลา', members: 'สมาชิก', progress: 'ความคืบหน้า', actions: 'การทำงาน', loading: 'กำลังโหลด' },
+  en: { name: 'Project', owner: 'Owner', status: 'Status', dates: 'Timeline', members: 'Members', progress: 'Progress', actions: 'Actions', loading: 'Loading' },
 };
 
 const TH = 'px-4 py-2 font-medium whitespace-nowrap';
@@ -29,6 +30,7 @@ export function ProjectsTable({ projects }: { projects: ProjectRow[] }) {
             <th scope="col" className={TH}>{t.dates}</th>
             <th scope="col" className={TH}>{t.members}</th>
             <th scope="col" className={TH}>{t.progress}</th>
+            <th scope="col" className={`${TH} w-px`}><span className="sr-only">{t.actions}</span></th>
           </tr>
         </thead>
         <tbody>
@@ -45,6 +47,7 @@ export function ProjectsTable({ projects }: { projects: ProjectRow[] }) {
               <td className={`${TD} whitespace-nowrap text-muted-foreground`}><Timeline p={p} /></td>
               <td className={TD}><Members p={p} /></td>
               <td className={`${TD} whitespace-nowrap`}><Progress p={p} /></td>
+              <td className={`${TD} w-px pr-2`}><ProjectArchiveButton project={p} /></td>
             </tr>
           ))}
         </tbody>

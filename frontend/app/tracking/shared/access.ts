@@ -19,3 +19,17 @@ export function boardAccess(b: Pick<Board, 'myRole' | 'project'> | undefined) {
     canRestore: manager && archived,
   };
 }
+
+/**
+ * Who may tick or untick a card's checklist items (owner's rule, 2026-11-19): admin and PM on any card, a member only
+ * on cards assigned to them, viewers never, nobody on an archived project. The server enforces the same rule (403).
+ */
+export function canTickCard(
+  b: Pick<Board, 'myRole' | 'project'> | undefined,
+  assigneeIds: readonly number[],
+  meId: number | undefined,
+): boolean {
+  const { canEdit, manager } = boardAccess(b);
+  if (!canEdit) return false;
+  return manager || (meId !== undefined && assigneeIds.includes(meId));
+}
