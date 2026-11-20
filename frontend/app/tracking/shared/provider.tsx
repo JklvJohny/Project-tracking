@@ -3,12 +3,13 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ApiError, configureApi } from './api/client';
 import { ConfirmProvider } from './confirm';
-import { TrackingContext, type Lang, type Theme, type TrackingCtx } from './i18n';
+import { DARK_PALETTES, TrackingContext, type DarkPalette, type Lang, type Theme, type TrackingCtx } from './i18n';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
 const LANG_KEY = 'pt-lang';
 const THEME_KEY = 'pt-theme';
+const DARK_KEY = 'pt-dark-palette';
 
 function readStored<T extends string>(key: string, allowed: readonly T[]): T | undefined {
   try {
@@ -44,6 +45,8 @@ export type TrackingProviderProps = {
   lang?: Lang;
   /** Controlled theme. Omit to use the provider's own store (localStorage `pt-theme`). */
   theme?: Theme;
+  /** Controlled dark-mode palette. Omit to use the provider's own store (localStorage `pt-dark-palette`). */
+  darkPalette?: DarkPalette;
   /** Extra headers for every API call (the host's auth; the dev shell's X-User-ID). */
   getAuthHeaders?: () => Record<string, string> | Promise<Record<string, string>>;
   children: ReactNode;
@@ -57,9 +60,10 @@ export function TrackingProvider(props: TrackingProviderProps) {
   return <Root {...props} />;
 }
 
-function Root({ lang: langProp, theme: themeProp, getAuthHeaders, children }: TrackingProviderProps) {
+function Root({ lang: langProp, theme: themeProp, darkPalette: paletteProp, getAuthHeaders, children }: TrackingProviderProps) {
   const [langState, setLangState] = useState<Lang>('th');
   const [themeState, setThemeState] = useState<Theme>('system');
+  const [paletteState, setPaletteState] = useState<DarkPalette>('slate');
   const [systemDark, setSystemDark] = useState(false);
   const [queryClient] = useState(makeQueryClient);
 
@@ -68,6 +72,7 @@ function Root({ lang: langProp, theme: themeProp, getAuthHeaders, children }: Tr
   useEffect(() => {
     setLangState(readStored(LANG_KEY, ['th', 'en'] as const) ?? 'th');
     setThemeState(readStored(THEME_KEY, ['light', 'dark', 'system'] as const) ?? 'system');
+    setPaletteState(readStored(DARK_KEY, DARK_PALETTES) ?? 'slate');
   }, []);
   /* eslint-enable react-hooks/set-state-in-effect */
 
@@ -83,13 +88,16 @@ function Root({ lang: langProp, theme: themeProp, getAuthHeaders, children }: Tr
   const lang = langProp ?? langState;
   const theme = themeProp ?? themeState;
   const resolvedTheme = theme === 'system' ? (systemDark ? 'dark' : 'light') : theme;
+  const darkPalette = paletteProp ?? paletteState;
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', resolvedTheme === 'dark');
     // Native controls and the page scrollbar follow the theme (no white scrollbar track in dark mode).
     document.documentElement.style.colorScheme = resolvedTheme;
     document.documentElement.lang = lang;
-  }, [resolvedTheme, lang]);
+    // Only takes effect under .dark (tracking.css), so it is set whatever the theme.
+    document.documentElement.dataset.ptDark = darkPalette;
+  }, [resolvedTheme, lang, darkPalette]);
 
   // Set during render, not in an effect: child effects (first queries) run before parent effects.
   configureApi({ getAuthHeaders });
@@ -102,10 +110,14 @@ function Root({ lang: langProp, theme: themeProp, getAuthHeaders, children }: Tr
     setThemeState(t);
     writeStored(THEME_KEY, t);
   }, []);
+  const setDarkPalette = useCallback((p: DarkPalette) => {
+    setPaletteState(p);
+    writeStored(DARK_KEY, p);
+  }, []);
 
   const ctx = useMemo<TrackingCtx>(
-    () => ({ lang, setLang, theme, setTheme, resolvedTheme }),
-    [lang, setLang, theme, setTheme, resolvedTheme],
+    () => ({ lang, setLang, theme, setTheme, resolvedTheme, darkPalette, setDarkPalette }),
+    [lang, setLang, theme, setTheme, resolvedTheme, darkPalette, setDarkPalette],
   );
 
   return (

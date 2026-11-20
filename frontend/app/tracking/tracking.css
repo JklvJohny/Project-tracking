@@ -1,6 +1,7 @@
 /* Series tokens copied from index.html (the visual reference). They sit on :root
    so portalled dialogs/popovers see them too. The surface tokens (background,
-   border, primary...) come from the host's shadcn theme, not from here. */
+   border, primary...) come from the host's shadcn theme, except in dark mode
+   where the chosen palette below replaces them. */
 :root {
   /* status series */
   --s-done: #059669; --s-active: #2563eb; --s-todo: #64748b; --s-overdue: #dc2626;
@@ -19,14 +20,41 @@
   --board-bg: color-mix(in oklab, var(--muted) 45%, var(--background));
 }
 .dark {
-  --s-done: #059669; --s-active: #3b82f6; --s-todo: #64748b; --s-overdue: #ef4444;
-  --p-urgent: #e11d48; --p-high: #d97706; --p-medium: #3b82f6; --p-low: #64748b;
+  /* Tailwind 400/500 shades: they keep >= 4.5:1 as text on every dark palette's cards (the 600s fell to ~3.8:1). */
+  --s-done: #10b981; --s-active: #60a5fa; --s-todo: #94a3b8; --s-overdue: #f87171;
+  --p-urgent: #fb7185; --p-high: #f59e0b; --p-medium: #60a5fa; --p-low: #94a3b8;
   --pb-urgent: #b91c1c; --pb-high: #b45309; --pb-medium: #2563eb; --pb-low: #475569;
   --av-0: #4f46e5; --av-1: #047857; --av-2: #b45309; --av-3: #be123c; --av-4: #0369a1; --av-5: #6d28d9;
   --sp-active-bg: color-mix(in oklab, #34d399 15%, transparent); --sp-active-fg: #a7f3d0; --sp-active-dot: #34d399;
   --sp-on_hold-bg: color-mix(in oklab, #fbbf24 15%, transparent); --sp-on_hold-fg: #fde68a; --sp-on_hold-dot: #fbbf24;
   --sp-done-bg: color-mix(in oklab, #60a5fa 15%, transparent); --sp-done-fg: #bfdbfe; --sp-done-dot: #60a5fa;
   --sp-archived-bg: color-mix(in oklab, #94a3b8 15%, transparent); --sp-archived-fg: #cbd5e1; --sp-archived-dot: #94a3b8;
+}
+
+/* Dark-mode palettes (Settings > Appearance). The provider sets data-pt-dark on <html>; these override the host's
+   near-black dark surface tokens, so the host shell around the pages matches. A preview swatch puts class="dark" and
+   data-pt-dark on one element to show a palette whatever the current theme. Muted text keeps >= 4.5:1 on bg, card
+   and muted in each. */
+.dark[data-pt-dark='slate'] {
+  --background: #1c2230; --foreground: #e6e9ef;
+  --card: #242b3a; --card-foreground: #e6e9ef; --popover: #242b3a; --popover-foreground: #e6e9ef;
+  --secondary: #303849; --secondary-foreground: #e6e9ef; --muted: #303849; --muted-foreground: #a3acbd;
+  --accent: #303849; --accent-foreground: #e6e9ef; --ring: #64708a;
+  --sidebar: #191e2a; --sidebar-foreground: #e6e9ef; --sidebar-accent: #2a3140; --sidebar-accent-foreground: #e6e9ef;
+}
+.dark[data-pt-dark='warm'] {
+  --background: #1f1d1b; --foreground: #ede9e5;
+  --card: #292624; --card-foreground: #ede9e5; --popover: #292624; --popover-foreground: #ede9e5;
+  --secondary: #36322f; --secondary-foreground: #ede9e5; --muted: #36322f; --muted-foreground: #b0a9a3;
+  --accent: #36322f; --accent-foreground: #ede9e5; --ring: #78716c;
+  --sidebar: #1b1918; --sidebar-foreground: #ede9e5; --sidebar-accent: #312d2a; --sidebar-accent-foreground: #ede9e5;
+}
+.dark[data-pt-dark='navy'] {
+  --background: #0f172a; --foreground: #e2e8f0;
+  --card: #1e293b; --card-foreground: #e2e8f0; --popover: #1e293b; --popover-foreground: #e2e8f0;
+  --secondary: #2b3850; --secondary-foreground: #e2e8f0; --muted: #2b3850; --muted-foreground: #9aa8bd;
+  --accent: #2b3850; --accent-foreground: #e2e8f0; --ring: #64748b;
+  --sidebar: #0c1323; --sidebar-foreground: #e2e8f0; --sidebar-accent: #1e293b; --sidebar-accent-foreground: #e2e8f0;
 }
 
 /* Compact type scale: tracking pages are dense (body 13px in index.html). */

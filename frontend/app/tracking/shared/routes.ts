@@ -9,6 +9,7 @@ export const routes = {
   dashboard: `${BASE}/dashboard`,
   reports: `${BASE}/reports`,
   team: `${BASE}/team`,
+  settings: `${BASE}/settings`,
   board: (projectId: number | string) => `${BASE}/${projectId}`,
   card: (projectId: number | string, cardId: number | string) => `${BASE}/${projectId}?card=${cardId}`,
 };

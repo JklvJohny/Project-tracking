@@ -83,7 +83,7 @@ const TRACKING_NAV: NavItem[] = [
   { key: 'reports', icon: FileText, href: routes.reports },
   { key: 'team', icon: Users, href: routes.team },
 ];
-const OTHER_NAV: NavItem[] = [{ key: 'settings', icon: Settings }];
+const OTHER_NAV: NavItem[] = [{ key: 'settings', icon: Settings, href: routes.settings }];
 
 function readDevUser(): string {
   try {
@@ -151,6 +151,7 @@ function Chrome({ children }: { children: ReactNode }) {
   const onArchived = path === routes.archived;
   const onMyTasks = path === routes.myTasks;
   const onTeam = path === routes.team;
+  const onSettings = path === routes.settings;
   const me = DEV_USERS.find((u) => String(u.id) === userId) ?? DEV_USERS[1];
   const dark = resolvedTheme === 'dark';
 
@@ -173,7 +174,9 @@ function Chrome({ children }: { children: ReactNode }) {
             ? onArchived
             : key === 'team'
               ? onTeam
-              : path.startsWith(routes.projects) && !onReports && !onDashboard && !onArchived && !onMyTasks && !onTeam;
+              : key === 'settings'
+                ? onSettings
+                : path.startsWith(routes.projects) && !onReports && !onDashboard && !onArchived && !onMyTasks && !onTeam && !onSettings;
     return (
       <Link
         key={key}
@@ -294,10 +297,11 @@ function UserMenu({ me, current }: { me: (typeof DEV_USERS)[number]; current: bo
             {t.myTasks}
           </Link>
         </DropdownMenuItem>
-        <DropdownMenuItem disabled>
-          <Settings aria-hidden />
-          {t.settings}
-          <span className="ml-auto rounded-full bg-muted px-1.5 py-0.5 text-[10px]">{t.soon}</span>
+        <DropdownMenuItem asChild>
+          <Link href={routes.settings}>
+            <Settings aria-hidden />
+            {t.settings}
+          </Link>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
