@@ -186,6 +186,7 @@ export const routes = {
   reports: `${BASE}/reports`,                           // Reports page (?project=<id> opens a folder)
   team: `${BASE}/team`,                                 // Team page: people, skills, open work
   profile: `${BASE}/profile`,                           // the signed-in user's photo, workload, skills, calendar
+  person: (userId) => `${BASE}/people/${userId}`,       // someone's page; admins and PMs only (Me.canViewPeople)
   settings: `${BASE}/settings`,                         // Settings page: theme and dark palette (per browser)
   board: (projectId) => `${BASE}/${projectId}`,         // board
   card: (projectId, cardId) => `${BASE}/${projectId}?card=${cardId}`, // board with the card panel open
@@ -198,6 +199,12 @@ them. Mark Dashboard as current for `/tracking/dashboard`, Projects for `/tracki
 the tracking pages are built from the same file, so changing `BASE` there moves the whole feature to another mount
 point (and the route folder `app/tracking/` must move with it). Navigation inside tracking uses `<Link>`, never
 `router.push`.
+
+People pages have no sidebar item either: names and pictures on the Team page and the dashboard's workload chart link
+to them (`people/PersonLink.tsx`) for admins and anyone who is PM of a project, and the server refuses everyone else
+(403). By the owner's decision they show every live project and open card of the person, also in projects the viewer is
+not in; those projects are listed without a link. When an admin or PM adds someone to a card that has dates, the
+assignee picker first shows the impact on that person's schedule (overlapping cards and cards per day).
 
 My tasks has no sidebar item. The signed-in user's avatar in the host header opens the account menu (a dropdown);
 add an item "Profile" / "โปรไฟล์" linking to `routes.profile` (`aria-current="page"` on `/tracking/profile`), an item

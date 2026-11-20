@@ -99,6 +99,8 @@ type MeView struct {
 	User             UserView `json:"user"`
 	IsAdmin          bool     `json:"isAdmin"`
 	CanCreateProject bool     `json:"canCreateProject"`
+	// CanViewPeople: may open other people's pages (authz.CanViewPeople).
+	CanViewPeople bool `json:"canViewPeople"`
 }
 
 type CreateProjectInput struct {
@@ -728,6 +730,9 @@ func (s *Service) Me(ctx context.Context, userID int64) (MeView, error) {
 			User:             UserView{ID: userID},
 			IsAdmin:          ur != nil && ur.Role == "admin",
 			CanCreateProject: authz.CanCreateProject(ur),
+		}
+		if out.CanViewPeople, err = authz.CanViewPeople(ctx, r, userID); err != nil {
+			return err
 		}
 		if cached, err := r.Users.Get(ctx, []int64{userID}); err != nil {
 			return err

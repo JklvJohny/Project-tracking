@@ -12,6 +12,7 @@ export const routes = {
   team: `${BASE}/team`,
   settings: `${BASE}/settings`,
   profile: `${BASE}/profile`,
+  person: (userId: number | string) => `${BASE}/people/${userId}`,
   board: (projectId: number | string) => `${BASE}/${projectId}`,
   card: (projectId: number | string, cardId: number | string) => `${BASE}/${projectId}?card=${cardId}`,
 };

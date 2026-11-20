@@ -1,15 +1,13 @@
 'use client';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { AlarmClock, Camera, CircleCheck, ListChecks, Trash2, TriangleAlert, type LucideIcon } from 'lucide-react';
+import { Camera, ListChecks, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { Suspense, useId, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { MonthCalendar } from '../board/calendar/Calendar';
-import type { TimelineCard } from '../board/timeline/timeline-model';
 import { api, API_BASE, ApiError } from '../shared/api/client';
-import { useMe, useMyTasks } from '../shared/api/queries';
+import { useMe, useMyTasks, useProjects } from '../shared/api/queries';
 import type { components } from '../shared/api/schema';
 import { Avatar } from '../shared/Avatar';
 import { useConfirm } from '../shared/confirm';
@@ -17,7 +15,8 @@ import { errorMessage } from '../shared/errors';
 import { useLang, useT } from '../shared/i18n';
 import { routes } from '../shared/routes';
 import { SkillsEditor } from '../team/SkillsEditor';
-import { allSkills, groupSkills, useSetSkills, useTeam } from '../team/queries';
+import { allSkills, useSetSkills, useTeam } from '../team/queries';
+import { SkillsByCategory, TaskCalendar, WorkloadStats } from '../people/parts';
 
 type S = components['schemas'];
 
@@ -41,15 +40,11 @@ const TEXT = {
       required: 'กรุณาเลือกไฟล์รูป',
     } as Record<string, string>,
     workload: 'งานของฉันตอนนี้',
-    open: 'งานค้าง',
-    overdue: 'เลยกำหนด',
-    soon: 'ครบกำหนดใน 7 วัน',
     allTasks: 'ดูงานทั้งหมด',
     skills: 'ทักษะ',
     skillsHint: 'แก้ที่นี่แล้วหน้าทีมงานจะเปลี่ยนตาม',
     noSkills: 'ยังไม่ได้ใส่ทักษะ',
     addSkills: 'เพิ่มทักษะ',
-    uncategorised: 'ไม่มีหมวดหมู่',
     calendar: 'ตารางงานของฉัน',
     calendarHint: 'งานที่ยังไม่เสร็จซึ่งมอบหมายให้คุณ ทุกโปรเจกต์',
     retry: 'ลองอีกครั้ง',
@@ -70,15 +65,11 @@ const TEXT = {
       required: 'Choose an image file',
     } as Record<string, string>,
     workload: 'My work right now',
-    open: 'Open',
-    overdue: 'Overdue',
-    soon: 'Due in 7 days',
     allTasks: 'See all my tasks',
     skills: 'Skills',
     skillsHint: 'Changes here show on the Team page too.',
     noSkills: 'No skills listed yet',
     addSkills: 'Add skills',
-    uncategorised: 'Uncategorised',
     calendar: 'My schedule',
     calendarHint: 'Open cards assigned to you, across every project.',
     retry: 'Retry',
@@ -195,18 +186,6 @@ function PhotoCard({ user }: { user: S['User'] }) {
   );
 }
 
-function Stat({ icon: Icon, label, value, tone }: { icon: LucideIcon; label: string; value: number | undefined; tone?: string }) {
-  return (
-    <div className="flex min-w-28 flex-1 flex-col gap-1 rounded-lg border bg-background px-3 py-2.5">
-      <span className={`flex items-center gap-1.5 text-xs ${tone ?? 'text-muted-foreground'}`}>
-        <Icon className="size-3.5" aria-hidden />
-        {label}
-      </span>
-      {value === undefined ? <Skeleton className="h-7 w-10" /> : <span className="text-2xl font-semibold tabular-nums">{value}</span>}
-    </div>
-  );
-}
-
 function SkillsCard({ userId, name }: { userId: number; name: string }) {
   const t = useT(TEXT);
   const team = useTeam();
@@ -214,15 +193,6 @@ function SkillsCard({ userId, name }: { userId: number; name: string }) {
   const [editing, setEditing] = useState(false);
   const me = team.data?.people.find((p) => p.userId === userId);
   const skills = useMemo(() => (team.data ? allSkills(team.data.people, team.data.catalog) : []), [team.data]);
-  // My skills, grouped by the department's categories, so the profile reads like the Team page.
-  const groups = useMemo(() => {
-    if (!me || !team.data) return [];
-    const mine = new Set(me.skills.map((s) => s.toLocaleLowerCase()));
-    return groupSkills(
-      skills.filter((s) => mine.has(s.name.toLocaleLowerCase())),
-      team.data.categories,
-    ).filter((g) => g.skills.length > 0);
-  }, [me, skills, team.data]);
 
   return (
     <section aria-labelledby="profile-skills" className="flex flex-col gap-3 rounded-xl border bg-card p-4">
@@ -261,22 +231,7 @@ function SkillsCard({ userId, name }: { userId: number; name: string }) {
           </button>
         </div>
       ) : (
-        <dl className="grid gap-x-4 gap-y-2 sm:grid-cols-[minmax(8rem,auto)_1fr]">
-          {groups.map(({ category, skills: list }) => (
-            <div key={category?.id ?? 'none'} className="contents">
-              <dt className={`pt-0.5 text-xs font-semibold ${category ? '' : 'text-muted-foreground'}`}>{category?.name ?? t.uncategorised}</dt>
-              <dd>
-                <ul className="flex flex-wrap gap-1.5">
-                  {list.map((s) => (
-                    <li key={s.name} className="rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-secondary-foreground">
-                      {s.name}
-                    </li>
-                  ))}
-                </ul>
-              </dd>
-            </div>
-          ))}
-        </dl>
+        <SkillsByCategory skills={me.skills} />
       )}
     </section>
   );
@@ -286,31 +241,8 @@ function ScheduleCard() {
   const t = useT(TEXT);
   const { lang } = useLang();
   const q = useMyTasks();
-  const tasks = q.data?.tasks;
-  // The calendar takes board cards; a task carries all it needs for one.
-  const cards = useMemo<TimelineCard[] | undefined>(
-    () =>
-      tasks?.map((x) => ({
-        id: x.cardId,
-        listId: 0,
-        title: x.title,
-        priority: x.priority,
-        startDate: x.startDate,
-        dueDate: x.dueDate,
-        position: '',
-        completedAt: null,
-        updatedAt: '',
-        labelIds: [],
-        assigneeIds: x.assignees.map((a) => a.id),
-        checklistTotal: x.checklistTotal,
-        checklistDone: x.checklistDone,
-        commentCount: 0,
-        checklistPreview: [],
-      })),
-    [tasks],
-  );
-  const users = useMemo(() => new Map(tasks?.flatMap((x) => x.assignees.map((a) => [a.id, a] as const)) ?? []), [tasks]);
-  const projectOf = useMemo(() => new Map(tasks?.map((x) => [x.cardId, x.projectId]) ?? []), [tasks]);
+  const projects = useProjects();
+  const visible = useMemo(() => new Set(projects.data?.map((p) => p.id) ?? []), [projects.data]);
 
   return (
     <section aria-labelledby="profile-calendar" className="flex flex-col gap-3 rounded-xl border bg-card p-4">
@@ -328,7 +260,7 @@ function ScheduleCard() {
           </Button>
         </div>
       ) : (
-        <MonthCalendar cards={cards} users={users} fit={false} cardHref={(id) => routes.card(projectOf.get(id) ?? 0, id)} />
+        <TaskCalendar tasks={q.data?.tasks} canOpen={(id) => visible.has(id)} here={routes.profile} />
       )}
     </section>
   );
@@ -363,11 +295,7 @@ function Profile() {
               {t.allTasks}
             </Link>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Stat icon={CircleCheck} label={t.open} value={team.data ? (mine?.open ?? 0) : undefined} />
-            <Stat icon={TriangleAlert} label={t.overdue} value={team.data ? (mine?.overdue ?? 0) : undefined} tone={mine?.overdue ? 'text-(--s-overdue)' : undefined} />
-            <Stat icon={AlarmClock} label={t.soon} value={team.data ? (mine?.dueSoon ?? 0) : undefined} />
-          </div>
+          <WorkloadStats load={team.data ? (mine ?? { open: 0, overdue: 0, dueSoon: 0 }) : undefined} />
         </div>
       </section>
       {user && <SkillsCard userId={user.id} name={user.name} />}

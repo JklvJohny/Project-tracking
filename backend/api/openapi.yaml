@@ -106,6 +106,19 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /people/{userID}:
+    parameters:
+      - $ref: '#/components/parameters/userID'
+    get:
+      tags: [team]
+      operationId: getPerson
+      summary: One person's page. Admins and anyone who is PM of a project may open anyone's, and see every live project and open card of that person, also in projects they are not in; everyone else only their own (403). Counts follow GET /team.
+      responses:
+        '200': { $ref: '#/components/responses/Person' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /team:
     get:
       tags: [team]
@@ -1233,6 +1246,16 @@ components:
                 required: [avatarUrl]
                 properties:
                   avatarUrl: { type: string, description: Empty when the person has no picture anywhere. }
+    Person:
+      description: The person's page.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [success, data]
+            properties:
+              success: { const: true }
+              data: { $ref: '#/components/schemas/PersonPage' }
     Skills:
       description: The person's skills as saved.
       content:
@@ -1394,11 +1417,12 @@ components:
         avatarUrl: { type: string }
     Me:
       type: object
-      required: [user, isAdmin, canCreateProject]
+      required: [user, isAdmin, canCreateProject, canViewPeople]
       properties:
         user: { $ref: '#/components/schemas/User' }
         isAdmin: { type: boolean }
         canCreateProject: { type: boolean, description: True for system admins and managers. }
+        canViewPeople: { type: boolean, description: 'True for system admins and anyone who is PM of a project: they may open any person page (GET /people/{userID}).' }
     Project:
       type: object
       required: [id, name, description, ownerId, status, startDate, endDate, createdAt, updatedAt, archivedAt, myRole]
@@ -1785,22 +1809,46 @@ components:
         asOf: { type: string, format: date, description: Today in Asia/Bangkok. }
         tasks:
           type: array
+          items: { $ref: '#/components/schemas/Task' }
+    Task:
+      type: object
+      description: One open card assigned to a person.
+      required: [cardId, projectId, projectName, listName, title, priority, startDate, dueDate, daysLeft, checklistTotal, checklistDone, assignees]
+      properties:
+        cardId: { type: integer, format: int64 }
+        projectId: { type: integer, format: int64 }
+        projectName: { type: string }
+        listName: { type: string }
+        title: { type: string }
+        priority: { $ref: '#/components/schemas/Priority' }
+        startDate: { type: [string, 'null'], format: date }
+        dueDate: { type: [string, 'null'], format: date }
+        daysLeft: { type: [integer, 'null'], description: Days from today to dueDate; negative when overdue; null without a dueDate. }
+        checklistTotal: { type: integer }
+        checklistDone: { type: integer }
+        assignees: { type: array, description: Everyone on the card, the person included, by user id., items: { $ref: '#/components/schemas/User' } }
+    PersonPage:
+      type: object
+      required: [asOf, person, projects, tasks]
+      properties:
+        asOf: { type: string, format: date, description: Today in Asia/Bangkok. }
+        person: { $ref: '#/components/schemas/TeamPerson' }
+        projects:
+          type: array
+          description: Live projects the person belongs to, by name, including ones the caller is not in.
           items:
             type: object
-            required: [cardId, projectId, projectName, listName, title, priority, startDate, dueDate, daysLeft, checklistTotal, checklistDone, assignees]
+            required: [id, name, status, role, open]
             properties:
-              cardId: { type: integer, format: int64 }
-              projectId: { type: integer, format: int64 }
-              projectName: { type: string }
-              listName: { type: string }
-              title: { type: string }
-              priority: { $ref: '#/components/schemas/Priority' }
-              startDate: { type: [string, 'null'], format: date }
-              dueDate: { type: [string, 'null'], format: date }
-              daysLeft: { type: [integer, 'null'], description: Days from today to dueDate; negative when overdue; null without a dueDate. }
-              checklistTotal: { type: integer }
-              checklistDone: { type: integer }
-              assignees: { type: array, description: Everyone on the card, the caller included, by user id., items: { $ref: '#/components/schemas/User' } }
+              id: { type: integer, format: int64 }
+              name: { type: string }
+              status: { $ref: '#/components/schemas/ProjectStatus' }
+              role: { $ref: '#/components/schemas/ProjectRole' }
+              open: { type: integer, minimum: 0, description: Open cards of this project assigned to the person. }
+        tasks:
+          type: array
+          description: Every open card assigned to the person in those projects, earliest due date first.
+          items: { $ref: '#/components/schemas/Task' }
     ReportTemplate:
       type: object
       description: A department-wide report template. The storage key is never sent.

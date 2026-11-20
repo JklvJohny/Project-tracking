@@ -92,6 +92,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/people/{userID}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userID: components["parameters"]["userID"];
+            };
+            cookie?: never;
+        };
+        /** One person's page. Admins and anyone who is PM of a project may open anyone's, and see every live project and open card of that person, also in projects they are not in; everyone else only their own (403). Counts follow GET /team. */
+        get: operations["getPerson"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/team": {
         parameters: {
             query?: never;
@@ -951,6 +970,8 @@ export interface components {
             isAdmin: boolean;
             /** @description True for system admins and managers. */
             canCreateProject: boolean;
+            /** @description True for system admins and anyone who is PM of a project: they may open any person page (GET /people/{userID}). */
+            canViewPeople: boolean;
         };
         Project: {
             /** Format: int64 */
@@ -1335,26 +1356,48 @@ export interface components {
              * @description Today in Asia/Bangkok.
              */
             asOf: string;
-            tasks: {
+            tasks: components["schemas"]["Task"][];
+        };
+        /** @description One open card assigned to a person. */
+        Task: {
+            /** Format: int64 */
+            cardId: number;
+            /** Format: int64 */
+            projectId: number;
+            projectName: string;
+            listName: string;
+            title: string;
+            priority: components["schemas"]["Priority"];
+            /** Format: date */
+            startDate: string | null;
+            /** Format: date */
+            dueDate: string | null;
+            /** @description Days from today to dueDate; negative when overdue; null without a dueDate. */
+            daysLeft: number | null;
+            checklistTotal: number;
+            checklistDone: number;
+            /** @description Everyone on the card */
+            assignees: components["schemas"]["User"][];
+        };
+        PersonPage: {
+            /**
+             * Format: date
+             * @description Today in Asia/Bangkok.
+             */
+            asOf: string;
+            person: components["schemas"]["TeamPerson"];
+            /** @description Live projects the person belongs to, by name, including ones the caller is not in. */
+            projects: {
                 /** Format: int64 */
-                cardId: number;
-                /** Format: int64 */
-                projectId: number;
-                projectName: string;
-                listName: string;
-                title: string;
-                priority: components["schemas"]["Priority"];
-                /** Format: date */
-                startDate: string | null;
-                /** Format: date */
-                dueDate: string | null;
-                /** @description Days from today to dueDate; negative when overdue; null without a dueDate. */
-                daysLeft: number | null;
-                checklistTotal: number;
-                checklistDone: number;
-                /** @description Everyone on the card */
-                assignees: components["schemas"]["User"][];
+                id: number;
+                name: string;
+                status: components["schemas"]["ProjectStatus"];
+                role: components["schemas"]["ProjectRole"];
+                /** @description Open cards of this project assigned to the person. */
+                open: number;
             }[];
+            /** @description Every open card assigned to the person in those projects, earliest due date first. */
+            tasks: components["schemas"]["Task"][];
         };
         /** @description A department-wide report template. The storage key is never sent. */
         ReportTemplate: {
@@ -1659,6 +1702,19 @@ export interface components {
                 };
             };
         };
+        /** @description The person's page. */
+        Person: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    /** @constant */
+                    success: true;
+                    data: components["schemas"]["PersonPage"];
+                };
+            };
+        };
         /** @description The person's skills as saved. */
         Skills: {
             headers: {
@@ -1944,6 +2000,24 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getPerson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userID: components["parameters"]["userID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Person"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
         };
     };

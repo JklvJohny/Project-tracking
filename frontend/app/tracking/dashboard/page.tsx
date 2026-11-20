@@ -5,6 +5,7 @@ import { Suspense, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useProjects } from '../shared/api/queries';
+import { PersonLink } from '../people/PersonLink';
 import { Avatar } from '../shared/Avatar';
 import { errorMessage } from '../shared/errors';
 import { fmtDate } from '../shared/format';
@@ -134,10 +135,10 @@ function DashboardView() {
       id: w.user.id,
       name: w.user.name,
       label: (
-        <>
+        <PersonLink userId={w.user.id} className="flex min-w-0 items-center gap-2">
           <Avatar user={w.user} size="xs" />
           <span className="truncate">{w.user.name}</span>
-        </>
+        </PersonLink>
       ),
       counts: w,
       total: w.open,

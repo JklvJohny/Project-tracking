@@ -11,7 +11,7 @@ import (
 	"tracking-service/internal/httpx"
 )
 
-// Mount registers GET /team, PUT /team/{userID}/skills, the skill list routes
+// Mount registers GET /team, GET /people/{userID}, PUT /team/{userID}/skills, the skill list routes
 // (/team/skills) and the category routes (/team/categories) on r, which must
 // sit behind the auth middleware.
 func Mount(r chi.Router, s *Service) {
@@ -19,6 +19,19 @@ func Mount(r chi.Router, s *Service) {
 	mountCategories(r, s)
 	r.Get("/team", func(w http.ResponseWriter, req *http.Request) {
 		v, err := s.List(req.Context())
+		if err != nil {
+			httpx.Fail(w, req, err)
+			return
+		}
+		httpx.OK(w, http.StatusOK, v)
+	})
+	r.Get("/people/{userID}", func(w http.ResponseWriter, req *http.Request) {
+		id, err := strconv.ParseInt(chi.URLParam(req, "userID"), 10, 64)
+		if err != nil || id <= 0 {
+			httpx.Fail(w, req, apperr.BadRequest("invalid userID"))
+			return
+		}
+		v, err := s.Person(req.Context(), auth.UserID(req.Context()), id)
 		if err != nil {
 			httpx.Fail(w, req, err)
 			return

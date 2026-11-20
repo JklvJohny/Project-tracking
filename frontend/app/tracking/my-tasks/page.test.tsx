@@ -20,7 +20,7 @@ afterEach(cleanup);
 
 function show(tasks: Task[]) {
   vi.mocked(api).mockImplementation(async (path: string) => {
-    if (path === '/me') return { user: me, isAdmin: false, canCreateProject: true } satisfies S['Me'];
+    if (path === '/me') return { user: me, isAdmin: false, canCreateProject: true, canViewPeople: false } satisfies S['Me'];
     return { asOf: '2026-11-18', tasks } satisfies S['MyTasks'];
   });
   render(

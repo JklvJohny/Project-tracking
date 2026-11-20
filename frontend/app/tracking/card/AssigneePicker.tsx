@@ -1,9 +1,13 @@
 'use client';
 import { Plus } from 'lucide-react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { useMe } from '../shared/api/queries';
 import type { components } from '../shared/api/schema';
+import { spanOf } from '../people/impact';
+import { ImpactPanel } from '../people/ImpactPanel';
 import { Avatar } from '../shared/Avatar';
 import { useT } from '../shared/i18n';
 import { SaveStatus, useInlineSave } from './inline';
@@ -42,6 +46,13 @@ export function AssigneePicker({
   const assign = useAssign(projectId, card.id);
   const { state, save } = useInlineSave(assign.mutateAsync);
   const assigned = card.assigneeIds.map((id) => users.find((u) => u.id === id)).filter((u) => !!u);
+  const me = useMe();
+  const [open, setOpen] = useState(false);
+  // Admins and PMs see how a dated card lands on someone's schedule before adding them; everyone else, and cards
+  // without dates (nothing to collide with), assign in one click as before.
+  const span = spanOf(card);
+  const canPreview = me.data?.canViewPeople === true && span !== null;
+  const [preview, setPreview] = useState<S['BoardMember'] | null>(null);
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -56,13 +67,33 @@ export function AssigneePicker({
           ))}
         </ul>
         {!readOnly && (
-          <Popover>
+          <Popover
+            open={open}
+            onOpenChange={(o) => {
+              setOpen(o);
+              if (!o) setPreview(null);
+            }}
+          >
             <PopoverTrigger asChild>
               <Button variant="outline" size="icon-sm" aria-label={t.add} title={t.add}>
                 <Plus aria-hidden />
               </Button>
             </PopoverTrigger>
-            <PopoverContent align="start" className="w-64 p-0">
+            <PopoverContent align="start" className={`p-0 ${preview ? 'w-[min(36rem,calc(100vw-2rem))]' : 'w-64'}`}>
+              {preview && span ? (
+                <ImpactPanel
+                  userId={preview.userId}
+                  name={preview.name}
+                  avatarUrl={preview.avatarUrl}
+                  card={{ id: card.id, title: card.title, span }}
+                  onBack={() => setPreview(null)}
+                  onAssign={() => {
+                    void save({ userId: preview.userId, on: true });
+                    setPreview(null);
+                    setOpen(false);
+                  }}
+                />
+              ) : (
               <Command>
                 <CommandInput placeholder={t.search} aria-label={t.search} />
                 <CommandList>
@@ -76,7 +107,7 @@ export function AssigneePicker({
                           value={`${m.name} ${m.userId}`}
                           data-checked={on}
                           aria-checked={on}
-                          onSelect={() => void save({ userId: m.userId, on: !on })}
+                          onSelect={() => (!on && canPreview ? setPreview(m) : void save({ userId: m.userId, on: !on }))}
                         >
                           <Person id={m.userId} name={m.name} avatarUrl={m.avatarUrl} />
                         </CommandItem>
@@ -85,6 +116,7 @@ export function AssigneePicker({
                   </CommandGroup>
                 </CommandList>
               </Command>
+              )}
             </PopoverContent>
           </Popover>
         )}

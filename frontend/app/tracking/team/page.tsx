@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useMe } from '../shared/api/queries';
+import { PersonLink } from '../people/PersonLink';
 import { Avatar } from '../shared/Avatar';
 import { errorMessage } from '../shared/errors';
 import { useLang, useT } from '../shared/i18n';
@@ -115,10 +116,14 @@ function PersonCard({
   return (
     <li className="flex flex-col gap-3 rounded-xl border bg-card p-4 shadow-sm">
       <div className="flex items-start gap-3">
-        <Avatar user={{ id: p.userId, name: p.name, avatarUrl: p.avatarUrl }} size="lg" />
+        <PersonLink userId={p.userId} decorative className="rounded-full">
+          <Avatar user={{ id: p.userId, name: p.name, avatarUrl: p.avatarUrl }} size="lg" />
+        </PersonLink>
         <div className="flex min-w-0 flex-1 flex-col gap-1 pt-0.5">
           <h2 className="flex min-w-0 items-center gap-1.5 font-semibold">
-            <span className="truncate">{p.name}</span>
+            <PersonLink userId={p.userId} className="truncate">
+              {p.name}
+            </PersonLink>
             {me && <span className="shrink-0 rounded-full bg-muted px-1.5 py-px text-[10px] font-medium text-muted-foreground">{t.you}</span>}
           </h2>
           <Workload p={p} />

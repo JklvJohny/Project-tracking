@@ -48,44 +48,52 @@ func (s *Service) MyTasks(ctx context.Context, userID int64) (MyTasks, error) {
 		if err != nil {
 			return err
 		}
-		seen := map[int64]bool{}
-		var userIDs []int64
-		for _, row := range rows {
-			for _, id := range row.AssigneeIDs {
-				if !seen[id] {
-					seen[id] = true
-					userIDs = append(userIDs, id)
-				}
-			}
-		}
-		cached, err := r.Users.Get(ctx, userIDs)
-		if err != nil {
-			return err
-		}
-		users := make(map[int64]store.CachedUser, len(cached))
-		for _, u := range cached {
-			users[u.UserID] = u
-		}
-		for _, row := range rows {
-			t := Task{
-				CardID: row.CardID, ProjectID: row.ProjectID, ProjectName: row.ProjectName, ListName: row.ListName,
-				Title: row.Title, Priority: store.PriorityName(row.Priority),
-				StartDate: dateStr(row.StartDate), DueDate: dateStr(row.DueDate),
-				ChecklistTotal: row.ChecklistTotal, ChecklistDone: row.ChecklistDone,
-				Assignees: make([]UserView, len(row.AssigneeIDs)),
-			}
-			if row.DueDate != nil {
-				left := daysBetween(*row.DueDate, today)
-				t.DaysLeft = &left
-			}
-			for i, id := range row.AssigneeIDs {
-				t.Assignees[i] = userView(id, users)
-			}
-			out.Tasks = append(out.Tasks, t)
-		}
-		return nil
+		out.Tasks, err = BuildTasks(ctx, r, rows, today)
+		return err
 	})
 	return out, err
+}
+
+// BuildTasks turns task rows into the API shape, with assignee names from
+// user_cache. DaysLeft counts from today.
+func BuildTasks(ctx context.Context, r store.Repos, rows []store.TaskRow, today store.Date) ([]Task, error) {
+	seen := map[int64]bool{}
+	var userIDs []int64
+	for _, row := range rows {
+		for _, id := range row.AssigneeIDs {
+			if !seen[id] {
+				seen[id] = true
+				userIDs = append(userIDs, id)
+			}
+		}
+	}
+	cached, err := r.Users.Get(ctx, userIDs)
+	if err != nil {
+		return nil, err
+	}
+	users := make(map[int64]store.CachedUser, len(cached))
+	for _, u := range cached {
+		users[u.UserID] = u
+	}
+	out := make([]Task, 0, len(rows))
+	for _, row := range rows {
+		t := Task{
+			CardID: row.CardID, ProjectID: row.ProjectID, ProjectName: row.ProjectName, ListName: row.ListName,
+			Title: row.Title, Priority: store.PriorityName(row.Priority),
+			StartDate: dateStr(row.StartDate), DueDate: dateStr(row.DueDate),
+			ChecklistTotal: row.ChecklistTotal, ChecklistDone: row.ChecklistDone,
+			Assignees: make([]UserView, len(row.AssigneeIDs)),
+		}
+		if row.DueDate != nil {
+			left := daysBetween(*row.DueDate, today)
+			t.DaysLeft = &left
+		}
+		for i, id := range row.AssigneeIDs {
+			t.Assignees[i] = userView(id, users)
+		}
+		out = append(out, t)
+	}
+	return out, nil
 }
 
 func dateStr(d *store.Date) *string {

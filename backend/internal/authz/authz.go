@@ -71,3 +71,34 @@ func Require(role Role, a Action) error {
 func CanCreateProject(ur *store.UserRole) bool {
 	return ur != nil && (ur.Role == "admin" || ur.Role == "manager")
 }
+
+// CanViewPeople is true for system admins and for anyone who is PM of at
+// least one project. They may open anyone's person page, which shows every
+// open card and project of that person, also in projects they are not part
+// of (the owner's decision, 2026-11-20: PMs plan across the department).
+func CanViewPeople(ctx context.Context, r store.Repos, userID int64) (bool, error) {
+	ur, err := r.UserRoles.Get(ctx, userID)
+	if err != nil {
+		return false, err
+	}
+	if ur != nil && ur.Role == "admin" {
+		return true, nil
+	}
+	ps, err := r.Projects.ByMember(ctx, userID)
+	if err != nil {
+		return false, err
+	}
+	for _, p := range ps {
+		m, err := r.Members.Get(ctx, p.ID, userID)
+		if errors.Is(err, store.ErrNotFound) {
+			continue
+		}
+		if err != nil {
+			return false, err
+		}
+		if Role(m.Role) == PM {
+			return true, nil
+		}
+	}
+	return false, nil
+}

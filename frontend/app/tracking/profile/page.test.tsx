@@ -68,6 +68,8 @@ beforeEach(() => {
       return { avatarUrl };
     }
     if (path === '/team/2/skills') return { skills: init!.json!.skills };
+    // The viewer can open project 5, so its cards link to the board.
+    if (path === '/projects') return [{ id: 5 }];
     throw new Error('unexpected ' + path);
   }) as never);
   render(
