@@ -31,21 +31,23 @@ function show(tasks: Task[]) {
 }
 
 describe('My tasks', () => {
-  it('groups by due date in one table, with heading rows and links to the card', async () => {
+  it('puts each task in its due-date column, linked to the card', async () => {
     show([
       task({ cardId: 1, title: 'Late', dueDate: '2026-11-15', daysLeft: -3 }),
       task({ cardId: 2, title: 'Now', dueDate: '2026-11-18', daysLeft: 0 }),
       task({ cardId: 3, title: 'Soon', assignees: [me, ann], checklistTotal: 4, checklistDone: 1 }),
       task({ cardId: 4, title: 'Whenever', dueDate: null, daysLeft: null }),
     ]);
-    const table = await screen.findByRole('table');
-    const heads = within(table).getAllByRole('columnheader').map((h) => h.textContent);
-    expect(heads.filter((h) => /Overdue|Today|Next 7 days|No due date/.test(h ?? ''))).toHaveLength(4);
-    expect(within(table).queryByRole('columnheader', { name: /Later/ })).toBeNull();
-    expect(screen.getByRole('link', { name: 'Late' }).getAttribute('href')).toBe('/tracking/7?card=1');
+    const column = async (name: string) => (await screen.findByRole('region', { name })) as HTMLElement;
+    expect(within(await column('Overdue')).getByText('Late')).toBeTruthy();
+    expect(within(await column('Today')).getByText('Now')).toBeTruthy();
+    expect(within(await column('No due date')).getByText('Whenever')).toBeTruthy();
+    // Every column stays, so the layout never shifts; an empty one says so.
+    expect(within(await column('Later')).getByText('Nothing here')).toBeTruthy();
+    expect(screen.getByText('Late').closest('a')!.getAttribute('href')).toBe('/tracking/7?card=1');
     expect(screen.getByText('3d overdue')).toBeTruthy();
-    const soon = screen.getByRole('link', { name: 'Soon' }).closest('tr')!;
-    expect(within(soon).getByText('1/4')).toBeTruthy();
+    const soon = within(await column('Next 7 days')).getByText('Soon').closest('a')!;
+    expect(within(soon).getByText('1 of 4 subtasks done')).toBeTruthy();
     // Only the other people on the card, never the caller.
     expect(within(soon).getByTitle('Ann')).toBeTruthy();
     expect(within(soon).queryByTitle('Napat K.')).toBeNull();
@@ -54,6 +56,6 @@ describe('My tasks', () => {
   it('shows an empty state when nothing is open', async () => {
     show([]);
     expect(await screen.findByRole('heading', { name: 'Nothing open' })).toBeTruthy();
-    expect(screen.queryByRole('table')).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Overdue' })).toBeNull();
   });
 });

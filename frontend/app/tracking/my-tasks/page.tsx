@@ -1,8 +1,8 @@
 'use client';
 import { useQuery } from '@tanstack/react-query';
-import { CalendarClock, ListChecks, TriangleAlert } from 'lucide-react';
+import { CalendarClock, CalendarDays, CalendarOff, CalendarRange, ListChecks, TriangleAlert, type LucideIcon } from 'lucide-react';
 import Link from 'next/link';
-import { Fragment, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { api } from '../shared/api/client';
 import { useMe } from '../shared/api/queries';
@@ -24,40 +24,38 @@ const TEXT = {
   th: {
     title: 'งานของฉัน',
     asOf: (d: string) => `ข้อมูล ณ ${d}`,
-    caption: 'งานที่ยังไม่เสร็จที่ได้รับมอบหมาย แยกตามกำหนดส่ง',
+    open: (n: number) => `${n} งานที่ยังไม่เสร็จ`,
     groups: { overdue: 'เลยกำหนด', today: 'วันนี้', week: 'ภายใน 7 วัน', later: 'หลังจากนั้น', none: 'ไม่มีกำหนดส่ง' } as Record<Group, string>,
-    card: 'การ์ด',
-    priority: 'ความสำคัญ',
-    due: 'กำหนดส่ง',
-    subtasks: 'งานย่อย',
-    with: 'ทำร่วมกับ',
+    count: (n: number) => `${n} งาน`,
+    tasksIn: (g: string) => `งานกลุ่ม ${g}`,
+    nothing: 'ไม่มีงาน',
     late: (n: number) => `เกิน ${n} วัน`,
     soon: (n: number) => `อีก ${n} วัน`,
     todayShort: 'วันนี้',
+    progress: (d: number, n: number) => `งานย่อยเสร็จ ${d} จาก ${n}`,
+    with: 'ทำร่วมกับ',
     loading: 'กำลังโหลดงานของฉัน',
     retry: 'ลองอีกครั้ง',
     empty: 'ไม่มีงานค้าง',
     emptyHint: 'การ์ดที่ได้รับมอบหมายและยังไม่เสร็จจะแสดงที่นี่',
-    summary: 'สรุปงาน',
   },
   en: {
     title: 'My tasks',
     asOf: (d: string) => `as of ${d}`,
-    caption: 'Open cards assigned to me, by due date',
+    open: (n: number) => `${n} open task${n === 1 ? '' : 's'}`,
     groups: { overdue: 'Overdue', today: 'Today', week: 'Next 7 days', later: 'Later', none: 'No due date' } as Record<Group, string>,
-    card: 'Card',
-    priority: 'Priority',
-    due: 'Due',
-    subtasks: 'Subtasks',
-    with: 'With',
+    count: (n: number) => `${n} task${n === 1 ? '' : 's'}`,
+    tasksIn: (g: string) => `${g} tasks`,
+    nothing: 'Nothing here',
     late: (n: number) => `${n}d overdue`,
     soon: (n: number) => `in ${n}d`,
     todayShort: 'Today',
+    progress: (d: number, n: number) => `${d} of ${n} subtasks done`,
+    with: 'With',
     loading: 'Loading my tasks',
     retry: 'Retry',
     empty: 'Nothing open',
     emptyHint: 'Open cards assigned to you show up here.',
-    summary: 'Summary',
   },
 };
 
@@ -69,6 +67,15 @@ function groupOf(t: Task): Group {
   return d <= 7 ? 'week' : 'later';
 }
 
+const ICON: Record<Group, LucideIcon> = {
+  overdue: TriangleAlert,
+  today: CalendarClock,
+  week: CalendarDays,
+  later: CalendarRange,
+  none: CalendarOff,
+};
+
+// Status is never colour alone: each column also has its icon and name, each card its due text.
 const TONE: Record<Group, string> = {
   overdue: 'text-red-700 dark:text-red-300',
   today: 'text-amber-800 dark:text-amber-300',
@@ -76,11 +83,18 @@ const TONE: Record<Group, string> = {
   later: 'text-muted-foreground',
   none: 'text-muted-foreground',
 };
+const CHIP: Record<Group, string> = {
+  overdue: 'bg-red-100 text-red-800 dark:bg-red-400/15 dark:text-red-200',
+  today: 'bg-amber-100 text-amber-900 dark:bg-amber-400/15 dark:text-amber-200',
+  week: 'bg-muted text-foreground',
+  later: 'bg-muted text-muted-foreground',
+  none: 'bg-muted text-muted-foreground',
+};
 
-const TH = 'px-3 py-2 font-medium whitespace-nowrap';
-const TD = 'px-3 py-2.5 align-middle';
+// Board-sized columns that scroll sideways; on wide screens all five share the width.
+const COLUMN = 'flex w-72 shrink-0 flex-col rounded-xl border border-border/70 bg-muted/50 xl:w-auto';
 
-/** The caller's open cards across projects, reached from their avatar in the header. */
+/** The caller's open cards across projects as due-date columns, reached from the avatar menu. */
 export default function MyTasksPage() {
   const t = useT(TEXT);
   const { lang } = useLang();
@@ -92,12 +106,12 @@ export default function MyTasksPage() {
   let body: ReactNode;
   if (q.isPending)
     body = (
-      <div aria-busy="true" className="space-y-2 rounded-xl border bg-card p-4">
+      <div aria-busy="true" className="flex gap-3 overflow-hidden xl:grid xl:grid-cols-5">
         <span role="status" aria-label={t.loading} className="sr-only">
           {t.loading}
         </span>
-        {[0, 1, 2, 3, 4].map((i) => (
-          <div key={i} className="h-9 animate-pulse rounded bg-muted" />
+        {GROUPS.map((g) => (
+          <div key={g} className={`${COLUMN} h-64 animate-pulse`} />
         ))}
       </div>
     );
@@ -124,122 +138,115 @@ export default function MyTasksPage() {
     const by = new Map<Group, Task[]>(GROUPS.map((g) => [g, []]));
     for (const task of q.data.tasks) by.get(groupOf(task))!.push(task);
     body = (
-      <>
-        <ul aria-label={t.summary} className="mb-4 flex flex-wrap gap-2">
-          {GROUPS.filter((g) => by.get(g)!.length > 0).map((g) => (
-            <li key={g}>
-              <a
-                href={`#group-${g}`}
-                className={`inline-flex items-center gap-1.5 rounded-full border bg-card px-3 py-1 text-xs font-medium hover:bg-accent ${TONE[g]}`}
-              >
-                {g === 'overdue' && <TriangleAlert className="size-3.5" aria-hidden />}
-                {t.groups[g]}
-                <span className="tabular-nums">{by.get(g)!.length}</span>
-              </a>
-            </li>
-          ))}
-        </ul>
-        {/* relative: the avatars' sr-only names are absolutely positioned and would widen the page from outside the scroller. */}
-        <div className="relative overflow-x-auto rounded-xl border bg-card">
-          <table className="w-full text-sm">
-            <caption className="sr-only">{t.caption}</caption>
-            <thead className="border-b bg-muted/50 text-left text-xs text-muted-foreground">
-              <tr>
-                <th scope="col" className={TH}>{t.card}</th>
-                <th scope="col" className={TH}>{t.priority}</th>
-                <th scope="col" className={TH}>{t.due}</th>
-                <th scope="col" className={TH}>{t.subtasks}</th>
-                <th scope="col" className={TH}>{t.with}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {GROUPS.map((g) => {
-                const rows = by.get(g)!;
-                if (rows.length === 0) return null;
-                return (
-                  <Fragment key={g}>
-                    <tr id={`group-${g}`} className="scroll-mt-4 border-b bg-muted/30">
-                      <th scope="colgroup" colSpan={5} className={`px-3 py-1.5 text-left text-xs font-semibold ${TONE[g]}`}>
-                        {t.groups[g]} <span className="font-normal text-muted-foreground tabular-nums">({rows.length})</span>
-                      </th>
-                    </tr>
-                    {rows.map((task) => (
-                      <Row key={task.cardId} task={task} group={g} meId={meId} />
-                    ))}
-                  </Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </>
+      // relative: the avatars' sr-only names are absolutely positioned and would widen the page from outside the scroller.
+      // scroll-px keeps the snapped first column off the edge; items-start lets each column end with its last card.
+      <div className="relative -mx-4 flex scroll-px-4 snap-x items-start gap-3 overflow-x-auto px-4 pb-2 sm:-mx-6 sm:scroll-px-6 sm:px-6 xl:mx-0 xl:grid xl:grid-cols-5 xl:overflow-visible xl:px-0">
+        {GROUPS.map((g) => {
+          const rows = by.get(g)!;
+          const Icon = ICON[g];
+          return (
+            <section key={g} aria-labelledby={`mt-${g}`} className={`${COLUMN} snap-start`}>
+              <div className="flex items-center gap-2 px-3 pt-2.5 pb-1.5">
+                <Icon className={`size-4 shrink-0 ${TONE[g]}`} aria-hidden />
+                <h2 id={`mt-${g}`} className={`min-w-0 flex-1 truncate text-sm font-semibold ${TONE[g]}`}>
+                  {t.groups[g]}
+                </h2>
+                <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground tabular-nums">
+                  <span aria-hidden>{rows.length}</span>
+                  <span className="sr-only">{t.count(rows.length)}</span>
+                </span>
+              </div>
+              {rows.length === 0 ? (
+                <p className="mx-2 mb-2 rounded-lg border border-dashed px-3 py-6 text-center text-xs text-muted-foreground">
+                  {t.nothing}
+                </p>
+              ) : (
+                <ol
+                  aria-label={t.tasksIn(t.groups[g])}
+                  className="mx-2 mb-2 flex flex-col divide-y divide-border overflow-hidden rounded-lg bg-card shadow-sm ring-1 ring-border/60"
+                >
+                  {rows.map((task) => (
+                    <li key={task.cardId}>
+                      <TaskCard task={task} group={g} meId={meId} />
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </section>
+          );
+        })}
+      </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-5 sm:px-6 sm:py-6">
+    <div className="mx-auto max-w-[96rem] px-4 py-5 sm:px-6 sm:py-6">
       <div className="mb-5">
         <h1 className="text-2xl font-semibold tracking-tight">{t.title}</h1>
-        {q.data && <p className="text-sm text-muted-foreground">{t.asOf(fmtDate(q.data.asOf, lang))}</p>}
+        {q.data && (
+          <p className="text-sm text-muted-foreground">
+            {t.open(q.data.tasks.length)} · {t.asOf(fmtDate(q.data.asOf, lang))}
+          </p>
+        )}
       </div>
       {body}
     </div>
   );
 }
 
-function Row({ task, group, meId }: { task: Task; group: Group; meId: number | undefined }) {
+function TaskCard({ task, group, meId }: { task: Task; group: Group; meId: number | undefined }) {
   const t = useT(TEXT);
   const { lang } = useLang();
   const others = task.assignees.filter((u) => u.id !== meId);
   const d = task.daysLeft;
   const when = d === null ? null : d < 0 ? t.late(-d) : d === 0 ? t.todayShort : t.soon(d);
+  const pct = task.checklistTotal > 0 ? Math.round((task.checklistDone / task.checklistTotal) * 100) : 0;
   return (
-    <tr className="border-b last:border-0 hover:bg-accent/50">
-      <td className={`${TD} max-w-96 min-w-56`}>
-        <Link href={routes.card(task.projectId, task.cardId)} className="font-medium break-words hover:underline">
-          {task.title}
-        </Link>
-        <p className="truncate text-xs text-muted-foreground">{`${task.projectName} · ${task.listName}`}</p>
-      </td>
-      <td className={TD}>
-        <span
-          className="rounded px-1.5 py-0.5 text-[10px] leading-4 font-bold tracking-wide whitespace-nowrap text-white uppercase"
-          style={{ background: `var(--pb-${task.priority})` }}
-        >
-          {priorityLabel(task.priority, lang)}
-        </span>
-      </td>
-      <td className={`${TD} whitespace-nowrap`}>
-        {task.dueDate ? (
-          <span className="flex flex-col">
-            <span className={`inline-flex items-center gap-1 text-xs font-medium ${TONE[group]}`}>
-              {group === 'overdue' ? <TriangleAlert className="size-3.5" aria-hidden /> : <CalendarClock className="size-3.5" aria-hidden />}
-              {when}
-            </span>
-            <span className="text-xs text-muted-foreground">{fmtDate(task.dueDate, lang)}</span>
+    <Link
+      href={routes.card(task.projectId, task.cardId)}
+      className="block px-3.5 py-3 transition-colors hover:bg-muted/40 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+    >
+      <span
+        className="inline-block rounded px-1.5 py-0.5 text-[10px] leading-4 font-bold tracking-wide text-white uppercase"
+        style={{ background: `var(--pb-${task.priority})` }}
+      >
+        {priorityLabel(task.priority, lang)}
+      </span>
+      <span className="mt-1.5 block text-[15px] leading-snug font-semibold break-words">{task.title}</span>
+      <span className="mt-0.5 block truncate text-xs text-muted-foreground">{`${task.projectName} · ${task.listName}`}</span>
+      {task.checklistTotal > 0 && (
+        <span className="mt-2.5 flex items-center gap-2" title={t.progress(task.checklistDone, task.checklistTotal)}>
+          <span aria-hidden className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+            <span className="block h-full rounded-full bg-(--s-done)" style={{ width: `${pct}%` }} />
           </span>
-        ) : (
-          <span className="text-muted-foreground">–</span>
-        )}
-      </td>
-      <td className={`${TD} whitespace-nowrap`}>
-        {task.checklistTotal > 0 ? (
-          <span className="inline-flex items-center gap-2">
-            <span aria-hidden className="h-1.5 w-14 overflow-hidden rounded-full bg-muted">
-              <span
-                className="block h-full rounded-full bg-(--s-done)"
-                style={{ width: `${Math.round((task.checklistDone / task.checklistTotal) * 100)}%` }}
-              />
-            </span>
-            <span className="text-xs text-muted-foreground tabular-nums">
+          <span className="text-xs text-muted-foreground tabular-nums">
+            <span aria-hidden>
               {task.checklistDone}/{task.checklistTotal}
             </span>
+            <span className="sr-only">{t.progress(task.checklistDone, task.checklistTotal)}</span>
           </span>
-        ) : (
-          <span className="text-muted-foreground">–</span>
-        )}
-      </td>
-      <td className={TD}>{others.length > 0 ? <AvatarStack users={others} max={4} /> : <span className="text-muted-foreground">–</span>}</td>
-    </tr>
+        </span>
+      )}
+      {(task.dueDate || others.length > 0) && (
+        <span className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+          {task.dueDate && (
+            <>
+              <span
+                className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium whitespace-nowrap ${CHIP[group]}`}
+              >
+                {group === 'overdue' ? <TriangleAlert className="size-3.5" aria-hidden /> : <CalendarClock className="size-3.5" aria-hidden />}
+                {when}
+              </span>
+              <span className="text-xs whitespace-nowrap text-muted-foreground">{fmtDate(task.dueDate, lang)}</span>
+            </>
+          )}
+          {others.length > 0 && (
+            <span role="group" aria-label={t.with} className="ml-auto">
+              <AvatarStack users={others} max={3} />
+            </span>
+          )}
+        </span>
+      )}
+    </Link>
   );
 }
