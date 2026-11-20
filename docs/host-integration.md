@@ -180,7 +180,7 @@ Page URLs are defined once in `app/tracking/shared/routes.ts`:
 const BASE = '/tracking';
 export const routes = {
   projects: BASE,                                       // projects list
-  archived: `${BASE}/archived`,                         // archived projects (Restore lives here)
+  archived: `${BASE}#archived`,                         // archived section under the projects list (Restore lives there)
   myTasks: `${BASE}/my-tasks`,                          // the caller's open cards across projects
   dashboard: `${BASE}/dashboard`,                       // Dashboard page (?project=<id> scopes it to one project)
   reports: `${BASE}/reports`,                           // Reports page (?project=<id> opens a folder)
@@ -191,9 +191,9 @@ export const routes = {
 };
 ```
 
-Add five sidebar items: `href: routes.dashboard` (label "Dashboard" / "แดชบอร์ด"), `href: routes.projects` (label
-"Projects" / "โปรเจกต์"), `href: routes.archived` (label "Archived projects" / "โปรเจกต์ที่เก็บถาวร"), `href: routes.reports` (label "Reports" / "รายงาน"), and `href: routes.team` (label "Team" / "ทีมงาน"). The tracking pages have no tab bar of their own; the host sidebar is the only way between
-them. Mark Dashboard as current for `/tracking/dashboard`, Projects for `/tracking` and `/tracking/<projectId>`, Archived projects for `/tracking/archived`, Reports for `/tracking/reports`, and Team for `/tracking/team`. The board and card links inside
+Add four sidebar items: `href: routes.dashboard` (label "Dashboard" / "แดชบอร์ด"), `href: routes.projects` (label
+"Projects" / "โปรเจกต์"), `href: routes.reports` (label "Reports" / "รายงาน"), and `href: routes.team` (label "Team" / "ทีมงาน"). Archived projects have no item: they are a folding section under the projects list, and the old `/tracking/archived` URL redirects there. The tracking pages have no tab bar of their own; the host sidebar is the only way between
+them. Mark Dashboard as current for `/tracking/dashboard`, Projects for `/tracking` and `/tracking/<projectId>`, Reports for `/tracking/reports`, and Team for `/tracking/team`. The board and card links inside
 the tracking pages are built from the same file, so changing `BASE` there moves the whole feature to another mount
 point (and the route folder `app/tracking/` must move with it). Navigation inside tracking uses `<Link>`, never
 `router.push`.

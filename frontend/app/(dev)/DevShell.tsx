@@ -1,7 +1,7 @@
 'use client';
 // Local-only stand-in for the host app's sidebar, header and login. Never copied to the host.
 import { useQueryClient } from '@tanstack/react-query';
-import { Archive, BarChart3, FileText, FolderOpen, ListChecks, Moon, Settings, Sun, Upload, Users, type LucideIcon } from 'lucide-react';
+import { BarChart3, FileText, FolderOpen, ListChecks, Moon, Settings, Sun, Upload, Users, type LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
@@ -60,25 +60,22 @@ const DEV_USERS = [
 const TEXT = {
   th: {
     nav: 'เมนูหลัก', app: 'แอปหลัก', section: 'ติดตามงาน', other: 'อื่นๆ', dashboard: 'แดชบอร์ด', projects: 'โปรเจกต์',
-    archived: 'โปรเจกต์ที่เก็บถาวร',
     import: 'นำเข้า', reports: 'รายงาน', team: 'ทีมงาน', settings: 'ตั้งค่า', soon: 'เร็ว ๆ นี้', lang: 'ภาษา', theme: 'สลับธีม',
     user: 'ผู้ใช้ (dev)', mobileNav: 'ไปที่', myTasks: 'งานของฉัน', account: 'บัญชีของฉัน',
     roles: { admin: 'ผู้ดูแลระบบ', manager: 'ผู้จัดการ', member: 'สมาชิก', viewer: 'ผู้ชม', 'no role': 'ผู้ใช้ทั่วไป' } as Record<string, string>,
   },
   en: {
     nav: 'Main menu', app: 'Host App', section: 'Tracking', other: 'Other', dashboard: 'Dashboard', projects: 'Projects',
-    archived: 'Archived projects',
     import: 'Import', reports: 'Reports', team: 'Team', settings: 'Settings', soon: 'Soon', lang: 'Language', theme: 'Toggle theme',
     user: 'User (dev)', mobileNav: 'Go to', myTasks: 'My tasks', account: 'My account',
     roles: { admin: 'Admin', manager: 'Manager', member: 'Member', viewer: 'Viewer', 'no role': 'User' } as Record<string, string>,
   },
 };
 
-type NavItem = { key: 'dashboard' | 'projects' | 'archived' | 'import' | 'reports' | 'team' | 'settings'; icon: LucideIcon; href?: string };
+type NavItem = { key: 'dashboard' | 'projects' | 'import' | 'reports' | 'team' | 'settings'; icon: LucideIcon; href?: string };
 const TRACKING_NAV: NavItem[] = [
   { key: 'dashboard', icon: BarChart3, href: routes.dashboard },
   { key: 'projects', icon: FolderOpen, href: routes.projects },
-  { key: 'archived', icon: Archive, href: routes.archived },
   { key: 'import', icon: Upload },
   { key: 'reports', icon: FileText, href: routes.reports },
   { key: 'team', icon: Users, href: routes.team },
@@ -148,7 +145,6 @@ function Chrome({ children }: { children: ReactNode }) {
   const path = usePathname() ?? '';
   const onReports = path === routes.reports || path.startsWith(`${routes.reports}/`);
   const onDashboard = path === routes.dashboard || path.startsWith(`${routes.dashboard}/`);
-  const onArchived = path === routes.archived;
   const onMyTasks = path === routes.myTasks;
   const onTeam = path === routes.team;
   const onSettings = path === routes.settings;
@@ -170,13 +166,11 @@ function Chrome({ children }: { children: ReactNode }) {
         ? onReports
         : key === 'dashboard'
           ? onDashboard
-          : key === 'archived'
-            ? onArchived
-            : key === 'team'
-              ? onTeam
-              : key === 'settings'
-                ? onSettings
-                : path.startsWith(routes.projects) && !onReports && !onDashboard && !onArchived && !onMyTasks && !onTeam && !onSettings;
+          : key === 'team'
+            ? onTeam
+            : key === 'settings'
+              ? onSettings
+              : path.startsWith(routes.projects) && !onReports && !onDashboard && !onMyTasks && !onTeam && !onSettings;
     return (
       <Link
         key={key}
@@ -204,9 +198,6 @@ function Chrome({ children }: { children: ReactNode }) {
         </Link>
         <Link href={routes.projects} className="rounded px-2 py-1 font-medium hover:bg-accent sm:hidden">
           {t.projects}
-        </Link>
-        <Link href={routes.archived} className="rounded px-2 py-1 font-medium hover:bg-accent sm:hidden">
-          {t.archived}
         </Link>
         <Link href={routes.reports} className="rounded px-2 py-1 font-medium hover:bg-accent sm:hidden">
           {t.reports}

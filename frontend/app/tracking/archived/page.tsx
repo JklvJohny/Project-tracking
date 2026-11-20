@@ -1,12 +1,7 @@
-'use client';
-import { Suspense } from 'react';
-import { ProjectsView } from '../projects/ProjectsView';
+import { redirect } from 'next/navigation';
+import { routes } from '../shared/routes';
 
-/** Archived projects, reached from the sidebar. Admin and PM restore them from here. */
-export default function ArchivedProjectsPage() {
-  return (
-    <Suspense>
-      <ProjectsView archived />
-    </Suspense>
-  );
+/** Archived projects now sit under the projects list; old links and bookmarks land on that section. */
+export default function ArchivedProjectsPage(): never {
+  redirect(routes.archived);
 }

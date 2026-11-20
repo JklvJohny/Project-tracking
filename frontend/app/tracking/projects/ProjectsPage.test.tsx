@@ -54,6 +54,29 @@ afterEach(() => {
 });
 
 describe('Projects page', () => {
+  it('archived projects sit in their own folding section under the list, not in the status tabs', async () => {
+    const gone = { ...full, id: 3, name: 'Old intranet', archivedAt: '2026-10-01T00:00:00Z' };
+    setup([full, gone]);
+    const section = (await screen.findByRole('heading', { name: /Archived projects/ })).closest('section')!;
+    expect(section.id).toBe('archived');
+    expect(within(section).getByRole('link', { name: 'Old intranet' })).toBeTruthy();
+    // The live list and its count leave it out.
+    expect(screen.getByText('1 project')).toBeTruthy();
+    expect(screen.getAllByRole('link', { name: 'Old intranet' })).toHaveLength(1);
+    const toggle = within(section).getByRole('button', { name: /Archived projects/ });
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    toggle.click();
+    await screen.findByRole('button', { name: /Archived projects/, expanded: false });
+    expect(within(section).queryByRole('link', { name: 'Old intranet' })).toBeNull();
+    expect(localStorage.getItem('pt-projects-archived-open')).toBe('0');
+  });
+
+  it('no archived section when nothing is archived', async () => {
+    setup([full]);
+    await screen.findByRole('link', { name: 'Website redesign' });
+    expect(screen.queryByRole('heading', { name: /Archived projects/ })).toBeNull();
+  });
+
   it('table renders owner, members, timeline and progress columns', async () => {
     setup([full]);
     const table = await screen.findByRole('table');

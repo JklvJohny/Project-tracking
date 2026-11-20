@@ -4,7 +4,8 @@ const BASE = '/tracking';
 
 export const routes = {
   projects: BASE,
-  archived: `${BASE}/archived`,
+  /** The archived section under the projects list (the old `/archived` page redirects here). */
+  archived: `${BASE}#archived`,
   myTasks: `${BASE}/my-tasks`,
   dashboard: `${BASE}/dashboard`,
   reports: `${BASE}/reports`,

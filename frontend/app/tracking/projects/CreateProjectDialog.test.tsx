@@ -3,7 +3,6 @@ import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, api } from '../shared/api/client';
 import { TrackingProvider } from '../shared/provider';
-import ArchivedProjectsPage from '../archived/page';
 import ProjectsPage from '../page';
 import { CreateProjectDialog } from './CreateProjectDialog';
 
@@ -160,32 +159,25 @@ describe('ProjectsPage', () => {
     expect((await screen.findAllByRole('button', { name: /New project/ })).length).toBeGreaterThan(0);
   });
 
-  it('filters: all and active hide archived; archived shows only archived', async () => {
+  it('status filters cover live projects only; archived ones stay in their section under the list', async () => {
     mockApi(false, [
       proj(1, 'Live A', 'active', null),
       proj(2, 'Held B', 'on_hold', null),
       proj(3, 'Old C', 'active', '2026-02-01T00:00:00Z'),
     ]);
+    const inArchived = (name: string) => screen.getByRole('link', { name }).closest('section')?.id === 'archived';
     const { unmount } = renderPage();
     await screen.findByText('Live A');
-    expect(screen.queryByText('Old C')).toBeNull();
+    expect(inArchived('Old C')).toBe(true);
+    expect(inArchived('Live A')).toBe(false);
     unmount();
     searchStatus = 'active';
     renderPage();
     await screen.findByText('Live A');
     expect(screen.queryByText('Held B')).toBeNull();
-    expect(screen.queryByText('Old C')).toBeNull();
-    cleanup();
-    searchStatus = '';
-    // Archived projects have their own page (sidebar), not a status filter.
-    render(
-      <TrackingProvider lang="en">
-        <ArchivedProjectsPage />
-      </TrackingProvider>,
-    );
-    await screen.findByText('Old C');
-    expect(screen.getByRole('heading', { name: 'Archived projects' })).toBeTruthy();
-    expect(screen.queryByText('Live A')).toBeNull();
+    // Not a status: the archived section shows whatever tab is chosen.
+    expect(inArchived('Old C')).toBe(true);
+    // No "Archived" tab.
     expect(screen.queryByRole('link', { name: /Archived/ })).toBeNull();
   });
 
@@ -212,22 +204,18 @@ describe('ProjectsPage', () => {
     fireEvent.change(input, { target: { value: 'Live A' } });
     fireEvent.keyDown(input, { key: 'Enter' });
     await waitFor(() => expect(posts).toEqual(['/projects/1/archive']));
-    // The archived project leaves the live list.
-    await waitFor(() => expect(screen.queryByText('Live A')).toBeNull());
+    // The archived project moves from the live list to the archived section.
+    await waitFor(() => expect(screen.getByRole('link', { name: 'Live A' }).closest('section')?.id).toBe('archived'));
   });
 
-  it('members and viewers get no archive button; archived page offers Restore to a PM', async () => {
+  it('members and viewers get no archive button; the archived section offers Restore to a PM', async () => {
     mockApi(false, [{ ...proj(1, 'Live A', 'active', null), myRole: 'member' }]);
     renderPage();
     await screen.findByText('Live A');
     expect(screen.queryByRole('button', { name: /Archive Live A/ })).toBeNull();
     cleanup();
     mockApi(false, [proj(3, 'Old C', 'active', '2026-02-01T00:00:00Z')]);
-    render(
-      <TrackingProvider lang="en">
-        <ArchivedProjectsPage />
-      </TrackingProvider>,
-    );
+    renderPage();
     expect(await screen.findByRole('button', { name: 'Restore Old C' })).toBeTruthy();
   });
 });
