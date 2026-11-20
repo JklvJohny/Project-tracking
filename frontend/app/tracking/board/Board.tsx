@@ -54,14 +54,28 @@ export function BoardSkeleton({ fill = false }: { fill?: boolean }) {
   );
 }
 
-export function Board({ projectId, fill = false }: { projectId: number; fill?: boolean }) {
+export function Board({
+  projectId,
+  fill = false,
+  visible = null,
+}: {
+  projectId: number;
+  fill?: boolean;
+  /** Ids of the cards the filter keeps, or null when no filter is on. */
+  visible?: Set<number> | null;
+}) {
   const t = useT(TEXT);
   const { lang } = useLang();
   const board = useBoard(projectId);
   const me = useMe();
   const panHandlers = usePanScroll();
   const data = board.data;
-  const byList = useMemo(() => (data ? cardsByList(data) : null), [data]);
+  const byList = useMemo(() => {
+    if (!data) return null;
+    const all = cardsByList(data);
+    if (!visible) return all;
+    return new Map([...all].map(([listId, cards]) => [listId, cards.filter((c) => visible.has(c.id))]));
+  }, [data, visible]);
 
   if (board.isPending) return <BoardSkeleton fill={fill} />;
   // A failed background refetch (for example right after a failed move) must not hide a board we already have.
@@ -81,7 +95,8 @@ export function Board({ projectId, fill = false }: { projectId: number; fill?: b
   const meId = me.data?.user?.id;
 
   return (
-    <BoardDnd projectId={projectId} data={data} byList={byList} canDragCards={canAddCards} canDragLists={canManage}>
+    // A drop among hidden cards would land where the user cannot see, so cards do not drag while filtered.
+    <BoardDnd projectId={projectId} data={data} byList={byList} canDragCards={canAddCards && !visible} canDragLists={canManage}>
       {(cardsOf) => (
         <div role="group" aria-label={t.lists} className={scrollerClass(fill)} {...panHandlers}>
           {data.lists.map((l) => (

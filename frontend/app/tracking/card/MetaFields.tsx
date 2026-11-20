@@ -1,4 +1,5 @@
 'use client';
+import { X } from 'lucide-react';
 import { useRef, useState, type KeyboardEvent } from 'react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -11,8 +12,8 @@ import { useUpdateCard } from './mutations';
 type S = components['schemas'];
 
 const TEXT = {
-  th: { priority: 'ความสำคัญ', start: 'วันเริ่มต้น', due: 'วันครบกำหนด', none: 'ไม่ระบุ' },
-  en: { priority: 'Priority', start: 'Start date', due: 'Due date', none: 'Not set' },
+  th: { priority: 'ความสำคัญ', start: 'วันเริ่มต้น', due: 'วันครบกำหนด', none: 'ไม่ระบุ', clear: (f: string) => `ล้าง${f}` },
+  en: { priority: 'Priority', start: 'Start date', due: 'Due date', none: 'Not set', clear: (f: string) => `Clear ${f.toLowerCase()}` },
 };
 
 const PRIORITIES: Priority[] = ['low', 'medium', 'high', 'urgent'];
@@ -62,22 +63,45 @@ function DateField({
       setDraft(value ?? '');
     }
   };
+  // The native field draws its digits in the browser's locale (11/16/2026 on an English Windows), whatever the
+  // app language. Its text is hidden and the app's own format is drawn over it; a click opens the picker.
   return (
-    <Input
-      type="date"
-      aria-label={label}
-      value={draft}
-      onFocus={() => (settled.current = false)}
-      onChange={(e) => {
-        settled.current = false;
-        setDraft(e.target.value);
-      }}
-      data-inline-edit
-      data-dirty={draft !== (value ?? '')}
-      onKeyDown={onKeyDown}
-      onBlur={(e) => void commit(e.currentTarget)}
-      className="w-auto"
-    />
+    <div className="relative">
+      <Input
+        type="date"
+        aria-label={label}
+        value={draft}
+        onFocus={() => (settled.current = false)}
+        onClick={(e) => e.currentTarget.showPicker?.()}
+        onChange={(e) => {
+          settled.current = false;
+          setDraft(e.target.value);
+        }}
+        data-inline-edit
+        data-dirty={draft !== (value ?? '')}
+        onKeyDown={onKeyDown}
+        onBlur={(e) => void commit(e.currentTarget)}
+        className="w-full cursor-pointer text-transparent [&::-webkit-datetime-edit]:text-transparent"
+      />
+      <span aria-hidden className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm">
+        {draft ? fmtDate(draft, lang) : <span className="text-muted-foreground">{t.none}</span>}
+      </span>
+      {value && (
+        <button
+          type="button"
+          aria-label={t.clear(label)}
+          title={t.clear(label)}
+          onClick={() => {
+            settled.current = true;
+            setDraft('');
+            void onSave(null).then((ok) => !ok && setDraft(value ?? ''));
+          }}
+          className="absolute top-1/2 right-9 inline-flex size-6 -translate-y-1/2 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+        >
+          <X className="size-3.5" aria-hidden />
+        </button>
+      )}
+    </div>
   );
 }
 

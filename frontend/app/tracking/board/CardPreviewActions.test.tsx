@@ -67,7 +67,8 @@ afterEach(cleanup);
 describe('CardPreview subtasks and assignees', () => {
   it('shows the count header, first items and "+N more"', async () => {
     await renderAs('member');
-    expect(screen.getByText('5 SUBTASKS')).toBeTruthy();
+    expect(screen.getByText('Subtasks')).toBeTruthy();
+    expect(screen.getByText(/of 5 subtasks done/)).toBeTruthy();
     expect(screen.getAllByRole('checkbox')).toHaveLength(3);
     expect(screen.getByText('+2 more')).toBeTruthy();
   });

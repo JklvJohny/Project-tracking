@@ -1,9 +1,12 @@
 'use client';
 import { ChevronDown } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { useBoard } from '../shared/api/queries';
 import { useT } from '../shared/i18n';
 import { Board } from './Board';
 import { BoardFilters } from './BoardFilters';
+import { EMPTY_FILTER, isFiltering, matchesFilter, type CardFilter } from './card-filter';
+import { todayIso } from '../shared/format';
 
 export const BOARD_OPEN_KEY = 'pt-board-open';
 
@@ -37,6 +40,14 @@ export function BoardSection({
   const t = useT(TEXT);
   const board = useBoard(projectId);
   const flip = () => onOpenChange(!open);
+  const [filter, setFilter] = useState<CardFilter>(EMPTY_FILTER);
+  const data = board.data;
+  // null = no filter: the board keeps every card and drag and drop stays on.
+  const visible = useMemo(() => {
+    if (!data || !isFiltering(filter)) return null;
+    const today = todayIso();
+    return new Set(data.cards.filter((c) => matchesFilter(c, filter, today)).map((c) => c.id));
+  }, [data, filter]);
   const title = board.data ? t.title(board.data.lists.length, board.data.cards.length) : t.board;
 
   return (
@@ -54,8 +65,17 @@ export function BoardSection({
       <div id="board-section-body" hidden={!open} className={fill ? 'flex min-h-0 flex-1 flex-col' : undefined}>
         {open && (
           <>
-            <BoardFilters />
-            <Board projectId={projectId} fill={fill} />
+            {data && (
+              <BoardFilters
+                value={filter}
+                onChange={setFilter}
+                members={data.members}
+                labels={data.labels}
+                shown={visible ? visible.size : data.cards.length}
+                total={data.cards.length}
+              />
+            )}
+            <Board projectId={projectId} fill={fill} visible={visible} />
           </>
         )}
       </div>

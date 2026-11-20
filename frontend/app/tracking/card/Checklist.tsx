@@ -104,7 +104,7 @@ function ItemRow({
   };
 
   return (
-    <li data-item={item.id} className="flex items-center gap-2 py-1" onKeyDown={readOnly ? undefined : onKeyDown}>
+    <li data-item={item.id} className="group/item flex items-center gap-2 py-1" onKeyDown={readOnly ? undefined : onKeyDown}>
       <Checkbox
         checked={item.isDone}
         disabled={readOnly || !canTick}
@@ -141,6 +141,7 @@ function ItemRow({
               item.isDone ? 'text-muted-foreground line-through' : ''
             }`}
           />
+          <span className="flex items-center opacity-0 transition-opacity group-hover/item:opacity-100 group-focus-within/item:opacity-100 [@media(hover:none)]:opacity-100">
           <Button variant="ghost" size="icon-xs" aria-label={t.up(item.text)} title={t.up(item.text)} disabled={index === 0} onClick={() => onMove(-1)}>
             <ArrowUp aria-hidden />
           </Button>
@@ -150,6 +151,7 @@ function ItemRow({
           <Button variant="ghost" size="icon-xs" aria-label={t.del(item.text)} title={t.del(item.text)} onClick={onDelete}>
             <Trash2 aria-hidden />
           </Button>
+          </span>
         </>
       )}
     </li>
