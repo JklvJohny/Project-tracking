@@ -3,7 +3,7 @@ import { Check, UserPlus } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useMembers } from '../projects/project-mutations';
 import { useTeam } from '../team/queries';
@@ -16,7 +16,6 @@ import { useShare, useShares, useUnshare, type Folder } from './queries';
 const TEXT = {
   th: {
     title: (n: string) => `แชร์โฟลเดอร์ ${n}`,
-    desc: 'คนนอกโปรเจกต์จะเห็นโฟลเดอร์นี้เมื่อแชร์ให้เท่านั้น เขาดู ดาวน์โหลด และอัปโหลดรายงานได้ ลบได้เฉพาะไฟล์ของตัวเอง และไม่เห็นบอร์ดของโปรเจกต์',
     pick: 'เลือกคนที่จะแชร์ให้',
     search: 'ค้นหาชื่อ',
     noResults: 'ไม่พบคน',
@@ -33,7 +32,6 @@ const TEXT = {
   },
   en: {
     title: (n: string) => `Share the ${n} folder`,
-    desc: "People outside the project see this folder only once it is shared with them. They can view, download and upload reports and delete their own, but not see the project's board.",
     pick: 'Choose people to share with',
     search: 'Search names',
     noResults: 'No one found',
@@ -54,10 +52,9 @@ export function ShareDialog({ folder, open, onOpenChange }: { folder: Folder; op
   const t = useT(TEXT);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle>{t.title(folder.name)}</DialogTitle>
-          <DialogDescription>{t.desc}</DialogDescription>
         </DialogHeader>
         {open && <ShareBody projectId={folder.id} />}
       </DialogContent>
