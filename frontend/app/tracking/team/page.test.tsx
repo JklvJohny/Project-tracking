@@ -18,10 +18,19 @@ const person = (userId: number, name: string, skills: string[], open = 0, overdu
 });
 let people: Person[];
 let failPut = false;
+let catalog: string[];
 
-type Init = { method?: string; json?: { skills: string[] } };
+type Init = { method?: string; json?: { skills: string[]; name?: string; userIds?: number[] } };
 beforeEach(() => {
+  // Radix Checkbox measures itself.
+  globalThis.ResizeObserver ??= class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver;
   failPut = false;
+  localStorage.clear();
+  catalog = ['Kotlin'];
   people = [
     person(3, 'Ann Lee', ['React', 'Go'], 5, 1, 2),
     person(4, 'Ben Ko', ['Go', 'PostgreSQL'], 1),
@@ -31,7 +40,14 @@ beforeEach(() => {
   vi.mocked(toast.error).mockReset();
   apiMock.mockImplementation((async (path: string, init?: Init) => {
     if (path === '/me') return { user: { id: 2, name: 'Napat K.', avatarUrl: '' }, isAdmin: false, canCreateProject: true };
-    if (path === '/team') return { asOf: '2026-11-20', people };
+    if (path === '/team') return { asOf: '2026-11-20', people, catalog };
+    if (path === '/team/skills' && init?.method === 'POST') {
+      const { name, userIds } = init.json!;
+      catalog = [...catalog, name!];
+      people = people.map((p) => (userIds!.includes(p.userId) ? { ...p, skills: [...p.skills, name!] } : p));
+      return { asOf: '2026-11-20', people, catalog };
+    }
+    if (init?.method === 'DELETE') return {};
     if (init?.method === 'PUT') {
       if (failPut) throw new ApiError('server_error', 500, 'boom');
       return { skills: init.json!.skills };
@@ -62,9 +78,15 @@ describe('Team page', () => {
 
   it('filters by skill (every chosen skill), by text, and sorts least busy first', async () => {
     await screen.findByRole('list', { name: 'Team members' });
+    // Folded by default; the toggle remembers.
+    const toggle = screen.getByRole('button', { name: /All skills/ });
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByRole('list', { name: 'Filter by skill' })).toBeNull();
+    fireEvent.click(toggle);
+    expect(localStorage.getItem('pt-team-skills-open')).toBe('1');
     const bar = screen.getByRole('list', { name: 'Filter by skill' });
-    // Most common first.
-    expect(within(bar).getAllByRole('button').map((b) => b.textContent)).toEqual(['Go 2', 'PostgreSQL 1', 'React 1']);
+    // Most common first; a named skill nobody has comes last with 0.
+    expect(within(bar).getAllByRole('button', { pressed: false }).map((b) => b.textContent)).toEqual(['Go 2', 'PostgreSQL 1', 'React 1', 'Kotlin 0']);
     fireEvent.click(within(bar).getByRole('button', { name: /^Go/ }));
     expect(screen.getByRole('status').textContent).toBe('Showing 2 of 3 people');
     // A skill on a card adds to the filter too: Go AND React leaves Ann.
@@ -112,5 +134,49 @@ describe('Team page', () => {
 describe('cleanSkills', () => {
   it('trims, squeezes spaces and keeps the first spelling of a duplicate', () => {
     expect(cleanSkills([' UX   design ', 'go', 'Go', '', 'ux design'])).toEqual(['UX design', 'go']);
+  });
+});
+
+describe('Skill list', () => {
+  it('folded, the chosen filters stay visible and can be dropped', async () => {
+    await screen.findByRole('list', { name: 'Team members' });
+    fireEvent.click(within(card('Ann Lee')).getByRole('button', { name: 'React' }));
+    const chosen = screen.getByRole('list', { name: 'Chosen skills' });
+    fireEvent.click(within(chosen).getByRole('button', { name: 'Stop filtering by React' }));
+    expect(screen.getByRole('status').textContent).toBe('Showing 3 of 3 people');
+  });
+
+  it('adds a new skill and gives it to the people ticked', async () => {
+    await screen.findByRole('list', { name: 'Team members' });
+    fireEvent.click(screen.getByRole('button', { name: 'New skill' }));
+    const field = await screen.findByLabelText('Skill name');
+    fireEvent.change(field, { target: { value: '  Rust  ' } });
+    fireEvent.click(screen.getByRole('checkbox', { name: /Napat K\./ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    await waitFor(() =>
+      expect(apiMock).toHaveBeenCalledWith('/team/skills', { method: 'POST', json: { name: 'Rust', userIds: [2] } }),
+    );
+    expect(await within(card('Napat')).findByRole('button', { name: 'Rust' })).toBeTruthy();
+  });
+
+  it('refuses an existing name with nobody ticked, without calling the server', async () => {
+    await screen.findByRole('list', { name: 'Team members' });
+    fireEvent.click(screen.getByRole('button', { name: 'New skill' }));
+    fireEvent.change(await screen.findByLabelText('Skill name'), { target: { value: 'go' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    expect(screen.getByRole('alert').textContent).toMatch(/already listed/);
+    expect(apiMock.mock.calls.some(([p]) => p === '/team/skills')).toBe(false);
+  });
+
+  it('removes an unused skill from the list at once and offers Undo', async () => {
+    await screen.findByRole('list', { name: 'Team members' });
+    fireEvent.click(screen.getByRole('button', { name: /All skills/ }));
+    // Only unused skills can be removed.
+    expect(screen.queryByRole('button', { name: 'Remove Go from the skill list' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Kotlin from the skill list' }));
+    await waitFor(() => expect(screen.queryByRole('button', { name: /^Kotlin/ })).toBeNull());
+    await waitFor(() => expect(apiMock).toHaveBeenCalledWith('/team/skills?name=Kotlin', { method: 'DELETE' }));
+    const [, opts] = vi.mocked(toast).mock.calls.at(-1)! as unknown as [string, { action: { label: string } }];
+    expect(opts.action.label).toBe('Undo');
   });
 });

@@ -239,3 +239,11 @@ type Workload struct {
 	Overdue int
 	DueSoon int
 }
+
+// CatalogSkill is a skill the department has named, whether or not anyone
+// lists it yet, so it can be offered and filtered on before it is used.
+type CatalogSkill struct {
+	Name      string
+	CreatedBy int64
+	CreatedAt time.Time
+}

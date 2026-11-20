@@ -1,8 +1,10 @@
 package memory
 
 import (
+	"cmp"
 	"context"
 	"slices"
+	"strings"
 
 	"tracking-service/internal/store"
 )
@@ -55,4 +57,33 @@ func (r *teamRepo) Workload(_ context.Context, today, soon store.Date) (map[int6
 		out[k.UserID] = w
 	}
 	return out, nil
+}
+
+func (r *teamRepo) Catalog(_ context.Context) ([]store.CatalogSkill, error) {
+	out := make([]store.CatalogSkill, 0, len(r.d.catalog))
+	for _, s := range r.d.catalog {
+		out = append(out, s)
+	}
+	slices.SortFunc(out, func(a, b store.CatalogSkill) int {
+		return cmp.Or(cmp.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)), cmp.Compare(a.Name, b.Name))
+	})
+	return out, nil
+}
+
+func (r *teamRepo) AddToCatalog(_ context.Context, s store.CatalogSkill) (bool, error) {
+	k := strings.ToLower(s.Name)
+	if _, ok := r.d.catalog[k]; ok {
+		return false, nil
+	}
+	r.d.catalog[k] = s
+	return true, nil
+}
+
+func (r *teamRepo) RemoveFromCatalog(_ context.Context, name string) error {
+	k := strings.ToLower(name)
+	if _, ok := r.d.catalog[k]; !ok {
+		return store.ErrNotFound
+	}
+	delete(r.d.catalog, k)
+	return nil
 }

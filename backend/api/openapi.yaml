@@ -65,6 +65,40 @@ paths:
       responses:
         '200': { $ref: '#/components/responses/Team' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+  /team/skills:
+    post:
+      tags: [team]
+      operationId: addSkill
+      summary: Name a skill for the department (the Team page offers and filters on it even before anyone has it) and optionally give it to people, in one transaction. A name that exists ignoring case is reused with its first spelling; people who already have it are left alone. Anyone signed in. Returns the Team view.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              additionalProperties: false
+              properties:
+                name: { type: string, maxLength: 40, description: Trimmed with inner spaces squeezed; required. }
+                userIds: { type: array, items: { type: integer, format: int64 }, description: People to give it to. Unknown ids are fields.userIds=unknown; anyone already at 30 skills is fields.userIds=too_many. }
+      responses:
+        '200': { $ref: '#/components/responses/Team' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    delete:
+      tags: [team]
+      operationId: removeSkill
+      summary: Take a skill off the department list (matched ignoring case). People who list it keep it. The name is a query parameter because skills such as CI/CD contain a slash.
+      parameters:
+        - name: name
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/Empty' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /team/{userID}/skills:
     parameters:
       - $ref: '#/components/parameters/userID'
@@ -1571,12 +1605,13 @@ components:
               assignees: { type: array, items: { $ref: '#/components/schemas/User' } }
     Team:
       type: object
-      required: [asOf, people]
+      required: [asOf, people, catalog]
       properties:
         asOf: { type: string, format: date, description: Today in Asia/Bangkok. }
         people:
           type: array
           items: { $ref: '#/components/schemas/TeamPerson' }
+        catalog: { type: array, items: { type: string }, description: Skills the department has named, including ones nobody lists yet, by name ignoring case. }
     TeamPerson:
       type: object
       required: [userId, name, avatarUrl, skills, open, overdue, dueSoon]

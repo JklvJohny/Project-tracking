@@ -70,9 +70,13 @@ export function matchesTeam(p: Person, f: TeamFilter): boolean {
   return f.skills.every((s) => mine.includes(s.toLocaleLowerCase()));
 }
 
-/** Every skill in the team, most common first, then by name; the first spelling seen is shown. */
-export function allSkills(people: Person[]): { name: string; count: number }[] {
+/**
+ * Every skill in the team, most common first, then by name; the first spelling seen is shown. Named skills nobody has
+ * yet (the catalog) come last with count 0.
+ */
+export function allSkills(people: Person[], catalog: string[] = []): { name: string; count: number }[] {
   const by = new Map<string, { name: string; count: number }>();
+  for (const s of catalog) by.set(s.toLocaleLowerCase(), { name: s, count: 0 });
   for (const p of people)
     for (const s of p.skills) {
       const k = s.toLocaleLowerCase();
@@ -81,4 +85,46 @@ export function allSkills(people: Person[]): { name: string; count: number }[] {
       else by.set(k, { name: s, count: 1 });
     }
   return [...by.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+}
+
+/** Names a skill for the department and gives it to the chosen people; the server answers with the whole Team view. */
+export function useAddSkill() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ name, userIds }: { name: string; userIds: number[] }) =>
+      api<Team>('/team/skills', { method: 'POST', json: { name, userIds } }),
+    onSuccess: (v) => qc.setQueryData(teamKey, v),
+  });
+}
+
+const TEXT = {
+  th: { removed: (n: string) => `ลบทักษะ "${n}" ออกจากรายการแล้ว`, undo: 'เลิกทำ' },
+  en: { removed: (n: string) => `Skill "${n}" removed from the list`, undo: 'Undo' },
+};
+
+/** Takes an unused skill off the list at once, with Undo (adding it back) instead of a confirm. */
+export function useRemoveSkill() {
+  const qc = useQueryClient();
+  const { lang } = useLang();
+  const add = useAddSkill();
+  return useMutation({
+    mutationFn: (name: string) => api<unknown>(`/team/skills?name=${encodeURIComponent(name)}`, { method: 'DELETE' }),
+    onMutate: async (name) => {
+      await qc.cancelQueries({ queryKey: teamKey });
+      const before = qc.getQueryData<Team>(teamKey);
+      qc.setQueryData<Team>(teamKey, (old) => old && { ...old, catalog: old.catalog.filter((s) => s !== name) });
+      return { before };
+    },
+    onError: (e, _n, ctx) => {
+      if (ctx?.before) qc.setQueryData(teamKey, ctx.before);
+      toast.error(errorMessage(e, lang));
+    },
+    onSuccess: (_r, name) =>
+      toast(TEXT[lang].removed(name), {
+        action: {
+          label: TEXT[lang].undo,
+          onClick: () => add.mutate({ name, userIds: [] }, { onError: (e) => toast.error(errorMessage(e, lang)) }),
+        },
+      }),
+  });
 }

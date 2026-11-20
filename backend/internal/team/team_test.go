@@ -232,3 +232,88 @@ func TestTeam_WorkloadCountsOpenCardsInLiveProjects(t *testing.T) {
 		t.Fatalf("user 1 open = %v", q["open"])
 	}
 }
+
+func catalog(body map[string]any) []any {
+	return body["data"].(map[string]any)["catalog"].([]any)
+}
+
+func TestTeam_AddSkillToCatalogAndPeople(t *testing.T) {
+	e := newEnv(t)
+	// Named with nobody yet: it shows in the catalog only.
+	code, body := e.call(3, "POST", "/team/skills", `{"name":"  Kubernetes "}`)
+	if code != 200 {
+		t.Fatalf("POST = %d %v", code, body)
+	}
+	if c := catalog(body); len(c) != 1 || c[0] != "Kubernetes" {
+		t.Fatalf("catalog = %v", c)
+	}
+	if s := person(t, body, 2)["skills"].([]any); len(s) != 0 {
+		t.Fatalf("user 2 skills = %v, want none", s)
+	}
+	// Same name in another case, now given to two people: the first spelling wins, no duplicate entry.
+	e.call(2, "PUT", "/team/2/skills", `{"skills":["Go"]}`)
+	code, body = e.call(3, "POST", "/team/skills", `{"name":"kubernetes","userIds":[2,5,5]}`)
+	if code != 200 {
+		t.Fatalf("POST again = %d %v", code, body)
+	}
+	if c := catalog(body); len(c) != 1 {
+		t.Fatalf("catalog = %v, want one entry", c)
+	}
+	for id, want := range map[float64][]any{2: {"Go", "Kubernetes"}, 5: {"Kubernetes"}} {
+		got := person(t, body, id)["skills"].([]any)
+		if len(got) != len(want) || got[len(got)-1] != "Kubernetes" {
+			t.Fatalf("user %v skills = %v, want %v", id, got, want)
+		}
+	}
+	// Someone who already has it is left alone.
+	_, body = e.call(3, "POST", "/team/skills", `{"name":"Kubernetes","userIds":[2]}`)
+	if got := person(t, body, 2)["skills"].([]any); len(got) != 2 {
+		t.Fatalf("user 2 skills = %v", got)
+	}
+}
+
+func TestTeam_AddSkillValidation(t *testing.T) {
+	e := newEnv(t)
+	full := make([]string, 30)
+	for i := range full {
+		full[i] = `"s` + strconv.Itoa(i) + `"`
+	}
+	e.call(1, "PUT", "/team/4/skills", `{"skills":[`+strings.Join(full, ",")+`]}`)
+	for _, c := range []struct {
+		body, field, want string
+	}{
+		{`{"name":"  "}`, "name", "required"},
+		{`{"name":"` + strings.Repeat("x", 41) + `"}`, "name", "too_long"},
+		{`{"name":"Go","userIds":[99]}`, "userIds", "unknown"},
+		{`{"name":"Go","userIds":[4]}`, "userIds", "too_many"},
+	} {
+		code, body := e.call(1, "POST", "/team/skills", c.body)
+		fields, _ := body["fields"].(map[string]any)
+		if code != 422 || fields[c.field] != c.want {
+			t.Errorf("%s: %d %v, want 422 %s=%s", c.body, code, body, c.field, c.want)
+		}
+	}
+	// The rejected add left nothing behind: the whole request is one transaction.
+	_, body := e.call(1, "GET", "/team", "")
+	if c := catalog(body); len(c) != 0 {
+		t.Fatalf("catalog = %v after rejected adds", c)
+	}
+}
+
+func TestTeam_RemoveSkillFromCatalogKeepsPeoplesTags(t *testing.T) {
+	e := newEnv(t)
+	e.call(1, "POST", "/team/skills", `{"name":"CI/CD","userIds":[3]}`)
+	if code, body := e.call(1, "DELETE", "/team/skills?name=ci%2Fcd", ""); code != 200 {
+		t.Fatalf("DELETE = %d %v", code, body)
+	}
+	_, body := e.call(1, "GET", "/team", "")
+	if c := catalog(body); len(c) != 0 {
+		t.Fatalf("catalog = %v", c)
+	}
+	if s := person(t, body, 3)["skills"].([]any); len(s) != 1 || s[0] != "CI/CD" {
+		t.Fatalf("user 3 skills = %v, want kept", s)
+	}
+	if code, _ := e.call(1, "DELETE", "/team/skills?name=nope", ""); code != 404 {
+		t.Fatalf("missing = %d, want 404", code)
+	}
+}

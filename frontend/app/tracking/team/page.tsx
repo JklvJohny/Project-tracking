@@ -8,6 +8,7 @@ import { useMe } from '../shared/api/queries';
 import { Avatar } from '../shared/Avatar';
 import { errorMessage } from '../shared/errors';
 import { useLang, useT } from '../shared/i18n';
+import { SkillBar } from './SkillBar';
 import { SkillsEditor } from './SkillsEditor';
 import { allSkills, matchesTeam, useSetSkills, useTeam, type Person, type TeamFilter } from './queries';
 
@@ -18,7 +19,6 @@ const TEXT = {
     title: 'ทีมงาน',
     lead: 'ทักษะและงานที่ค้างอยู่ของแต่ละคน ใช้เลือกคนให้เหมาะกับงาน',
     search: 'ค้นหาชื่อหรือทักษะ',
-    skills: 'กรองตามทักษะ',
     clear: 'ล้างตัวกรอง',
     sort: 'เรียงตาม',
     sorts: { name: 'ชื่อ', load: 'งานค้างน้อยสุด' } as Record<Sort, string>,
@@ -43,7 +43,6 @@ const TEXT = {
     title: 'Team',
     lead: "Each person's skills and open work, to pick who fits a task.",
     search: 'Search name or skill',
-    skills: 'Filter by skill',
     clear: 'Clear filters',
     sort: 'Sort by',
     sorts: { name: 'Name', load: 'Least busy' } as Record<Sort, string>,
@@ -180,7 +179,8 @@ export default function TeamPage() {
   const [filter, setFilter] = useState<TeamFilter>({ q: '', skills: [] });
   const [sort, setSort] = useState<Sort>('name');
   const people = q.data?.people;
-  const skills = useMemo(() => allSkills(people ?? []), [people]);
+  const catalog = q.data?.catalog;
+  const skills = useMemo(() => allSkills(people ?? [], catalog), [people, catalog]);
   const shown = useMemo(() => {
     const list = (people ?? []).filter((p) => matchesTeam(p, filter));
     // The server sends them by name; "least busy" puts the freest first, fewest overdue breaking ties.
@@ -193,7 +193,6 @@ export default function TeamPage() {
       return { ...f, skills: has ? f.skills.filter((x) => x.toLocaleLowerCase() !== k) : [...f.skills, s] };
     });
   const filtering = filter.q.trim() !== '' || filter.skills.length > 0;
-  const picked = new Set(filter.skills.map((s) => s.toLocaleLowerCase()));
 
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-5 sm:px-6 sm:py-6">
@@ -258,25 +257,7 @@ export default function TeamPage() {
                 </Select>
               </div>
             </div>
-            {skills.length > 0 && (
-              <ul aria-label={t.skills} className="flex flex-wrap gap-1.5">
-                {skills.map(({ name, count }) => {
-                  const on = picked.has(name.toLocaleLowerCase());
-                  return (
-                    <li key={name}>
-                      <button
-                        type="button"
-                        aria-pressed={on}
-                        onClick={() => toggle(name)}
-                        className={`${chip} border ${on ? 'border-primary bg-primary text-primary-foreground' : 'bg-background hover:bg-accent'}`}
-                      >
-                        {name} <span className={`tabular-nums ${on ? 'opacity-80' : 'text-muted-foreground'}`}>{count}</span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
+            <SkillBar skills={skills} chosen={filter.skills} people={q.data.people} onToggle={toggle} />
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
               <span role="status">{t.showing(shown.length, q.data.people.length)}</span>
               {filtering && (

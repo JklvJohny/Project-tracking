@@ -5,6 +5,8 @@ package team
 
 import (
 	"context"
+	"errors"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -58,6 +60,9 @@ type Person struct {
 type View struct {
 	AsOf   string   `json:"asOf"`
 	People []Person `json:"people"`
+	// Catalog is the skills the department has named, including ones nobody
+	// lists yet, by name ignoring case.
+	Catalog []string `json:"catalog"`
 }
 
 // List returns the department's people (from user-service) by name.
@@ -71,8 +76,12 @@ func (s *Service) List(ctx context.Context) (View, error) {
 	}
 	var skills map[int64][]string
 	var load map[int64]store.Workload
+	var catalog []store.CatalogSkill
 	err = s.st.View(ctx, func(r store.Repos) error {
 		if skills, err = r.Team.Skills(ctx); err != nil {
+			return err
+		}
+		if catalog, err = r.Team.Catalog(ctx); err != nil {
 			return err
 		}
 		load, err = r.Team.Workload(ctx, today, soon)
@@ -81,7 +90,10 @@ func (s *Service) List(ctx context.Context) (View, error) {
 	if err != nil {
 		return View{}, err
 	}
-	out := View{AsOf: string(today), People: make([]Person, 0, len(people))}
+	out := View{AsOf: string(today), People: make([]Person, 0, len(people)), Catalog: make([]string, 0, len(catalog))}
+	for _, c := range catalog {
+		out.Catalog = append(out.Catalog, c.Name)
+	}
 	for _, u := range people {
 		sk := skills[u.ID]
 		if sk == nil {
@@ -146,4 +158,89 @@ func cleanSkills(raw []string) ([]string, error) {
 		return nil, apperr.Validation(map[string]string{"skills": "too_many"})
 	}
 	return out, nil
+}
+
+// AddSkill names a skill for the department and, optionally, gives it to the
+// listed people in the same transaction. Adding a name that exists (ignoring
+// case) is not an error: the people still get it, under the existing
+// spelling. Anyone signed in may add.
+func (s *Service) AddSkill(ctx context.Context, caller int64, raw string, userIDs []int64) (View, error) {
+	name, err := cleanSkill(raw)
+	if err != nil {
+		return View{}, err
+	}
+	if len(userIDs) > 0 {
+		found, err := s.up.Get(ctx, uniq(userIDs))
+		if err != nil {
+			return View{}, err
+		}
+		if len(found) != len(uniq(userIDs)) {
+			return View{}, apperr.Validation(map[string]string{"userIds": "unknown"})
+		}
+	}
+	err = s.st.Update(ctx, func(r store.Repos) error {
+		if _, err := r.Team.AddToCatalog(ctx, store.CatalogSkill{Name: name, CreatedBy: caller, CreatedAt: s.now()}); err != nil {
+			return err
+		}
+		catalog, err := r.Team.Catalog(ctx)
+		if err != nil {
+			return err
+		}
+		for _, c := range catalog {
+			if strings.EqualFold(c.Name, name) {
+				name = c.Name
+			}
+		}
+		all, err := r.Team.Skills(ctx)
+		if err != nil {
+			return err
+		}
+		for _, id := range uniq(userIDs) {
+			mine := all[id]
+			if slices.ContainsFunc(mine, func(x string) bool { return strings.EqualFold(x, name) }) {
+				continue
+			}
+			if len(mine) >= maxSkills {
+				return apperr.Validation(map[string]string{"userIds": "too_many"})
+			}
+			if err := r.Team.SetSkills(ctx, id, append(slices.Clone(mine), name)); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return View{}, err
+	}
+	return s.List(ctx)
+}
+
+// RemoveSkill takes a name off the department's list. People who list it keep
+// it, so it only disappears from the page once nobody has it.
+func (s *Service) RemoveSkill(ctx context.Context, name string) error {
+	err := s.st.Update(ctx, func(r store.Repos) error {
+		return r.Team.RemoveFromCatalog(ctx, strings.TrimSpace(name))
+	})
+	if errors.Is(err, store.ErrNotFound) {
+		return apperr.NotFound("skill")
+	}
+	return err
+}
+
+func uniq(ids []int64) []int64 {
+	out := slices.Clone(ids)
+	slices.Sort(out)
+	return slices.Compact(out)
+}
+
+// cleanSkill applies the tag rules to one name, which is required.
+func cleanSkill(raw string) (string, error) {
+	s := strings.Join(strings.Fields(raw), " ")
+	switch {
+	case s == "":
+		return "", apperr.Validation(map[string]string{"name": "required"})
+	case utf8.RuneCountInString(s) > maxSkill:
+		return "", apperr.Validation(map[string]string{"name": "too_long"})
+	}
+	return s, nil
 }

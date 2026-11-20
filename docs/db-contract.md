@@ -815,6 +815,18 @@ Backs the Team page (`internal/team`). Table `user_skills (user_id bigint, skill
 - Does: per assignee, open cards across every project (not archived, active list, non-archived project, completed_at IS NULL): total, overdue (due before today), due soon (today up to `soon`, exclusive). Assignees with nothing open are absent. The page shows counts only, never the cards, so a project the caller cannot see is not revealed.
 - SQL obligation: one grouped query driven by `card_assignees`; see the comment on `TeamRepo.Workload` in `internal/store/repos.go`.
 
+Table `skill_catalog (name text PRIMARY KEY, created_by bigint, created_at timestamptz)` with `ux_skill_catalog (lower(name))` is the department's list of named skills, so a skill can be offered and filtered on before anyone has it. Adding one with people (`POST /team/skills`) inserts the catalog row and appends the tag to each person's `user_skills` in the same transaction; removing it from the catalog leaves people's tags alone.
+
+**`Catalog`**
+- SQL obligation: SELECT name, created_by, created_at FROM skill_catalog ORDER BY lower(name), name.
+
+**`AddToCatalog`**
+- Does: inserts unless a name matching ignoring case exists; reports whether it inserted. The service then reuses the stored spelling.
+- SQL obligation: INSERT INTO skill_catalog (name, created_by, created_at) VALUES ($1, $2, $3) ON CONFLICT ((lower(name))) DO NOTHING.
+
+**`RemoveFromCatalog`**
+- SQL obligation: DELETE FROM skill_catalog WHERE lower(name) = lower($1); ErrNotFound when no row.
+
 ### Blob store contract (`internal/blob`)
 
 Uploaded files are bytes in a `blob.Store`, never in the database and never in a public folder. The service writes the blob first and the row second inside `Store.Update`; if the row write fails it deletes the blob. Delete is soft: only `deleted_at` is set, the blob stays so restore works.

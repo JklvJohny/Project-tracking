@@ -72,6 +72,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/team/skills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Name a skill for the department (the Team page offers and filters on it even before anyone has it) and optionally give it to people, in one transaction. A name that exists ignoring case is reused with its first spelling; people who already have it are left alone. Anyone signed in. Returns the Team view. */
+        post: operations["addSkill"];
+        /** Take a skill off the department list (matched ignoring case). People who list it keep it. The name is a query parameter because skills such as CI/CD contain a slash. */
+        delete: operations["removeSkill"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/team/{userID}/skills": {
         parameters: {
             query?: never;
@@ -1192,6 +1210,8 @@ export interface components {
              */
             asOf: string;
             people: components["schemas"]["TeamPerson"][];
+            /** @description Skills the department has named */
+            catalog: string[];
         };
         TeamPerson: {
             /** Format: int64 */
@@ -1754,6 +1774,46 @@ export interface operations {
         responses: {
             200: components["responses"]["Team"];
             401: components["responses"]["Unauthorized"];
+        };
+    };
+    addSkill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Trimmed with inner spaces squeezed; required. */
+                    name: string;
+                    /** @description People to give it to. Unknown ids are fields.userIds=unknown; anyone already at 30 skills is fields.userIds=too_many. */
+                    userIds?: number[];
+                };
+            };
+        };
+        responses: {
+            200: components["responses"]["Team"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
+    removeSkill: {
+        parameters: {
+            query: {
+                name: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Empty"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
     };
     setSkills: {

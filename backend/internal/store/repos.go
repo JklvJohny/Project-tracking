@@ -523,4 +523,19 @@ type TeamRepo interface {
 	// JOIN projects p ON p.id = b.project_id AND p.archived_at IS NULL
 	// GROUP BY a.user_id.
 	Workload(ctx context.Context, today, soon Date) (map[int64]Workload, error)
+
+	// Catalog returns the department's named skills by lower(name), name.
+	// SQL: SELECT name, created_by, created_at FROM skill_catalog ORDER BY lower(name), name.
+	Catalog(ctx context.Context) ([]CatalogSkill, error)
+
+	// AddToCatalog stores s unless a skill with the same name ignoring case
+	// exists, and reports whether it was added.
+	// SQL: INSERT INTO skill_catalog (name, created_by, created_at) VALUES ($1, $2, $3)
+	// ON CONFLICT ((lower(name))) DO NOTHING; added = rows affected = 1.
+	AddToCatalog(ctx context.Context, s CatalogSkill) (bool, error)
+
+	// RemoveFromCatalog deletes the entry matching name ignoring case;
+	// ErrNotFound if none. People who list the skill keep it.
+	// SQL: DELETE FROM skill_catalog WHERE lower(name) = lower($1).
+	RemoveFromCatalog(ctx context.Context, name string) error
 }
