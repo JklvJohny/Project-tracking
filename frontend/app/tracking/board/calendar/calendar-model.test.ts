@@ -1,6 +1,6 @@
 ﻿import { describe, expect, it } from 'vitest';
 import type { components } from '../../shared/api/schema';
-import { addMonths, buildMonth, parseMonth } from './calendar-model';
+import { addMonths, buildMonth, parseMonth, weekCount } from './calendar-model';
 
 type S = components['schemas'];
 const card = (over: Partial<S['CardSummary']> & { id: number }): S['CardSummary'] => ({
@@ -27,6 +27,9 @@ describe('month helpers', () => {
     expect(parseMonth('2026-02', TODAY)).toBe('2026-02');
     expect(parseMonth('2026-13', TODAY)).toBe('2026-11');
     expect(parseMonth(null, TODAY)).toBe('2026-11');
+  });
+  it('counts the rows a month needs, Monday-first', () => {
+    expect([weekCount('2026-11'), weekCount('2026-12'), weekCount('2027-02')]).toEqual([6, 5, 4]);
   });
   it('steps across year ends', () => {
     expect(addMonths('2026-12', 1)).toBe('2027-01');

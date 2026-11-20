@@ -50,6 +50,11 @@ function lastDayOf(month: string): string {
   return addDays(`${addMonths(month, 1)}-01`, -1);
 }
 
+/** Rows the month grid needs (4 to 6), known before the cards are laid out. */
+export function weekCount(month: string): number {
+  return Math.floor(daysBetween(mondayOf(`${month}-01`), lastDayOf(month)) / 7) + 1;
+}
+
 const span = (c: TimelineCard) => {
   const from = c.startDate ?? c.dueDate;
   const to = c.dueDate ?? c.startDate;

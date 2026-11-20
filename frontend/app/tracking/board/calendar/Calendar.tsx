@@ -2,7 +2,7 @@
 import { AlertTriangle, Check, ChevronLeft, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { useMemo } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -11,12 +11,41 @@ import { AvatarStack } from '../../shared/AvatarStack';
 import { fmtDate, todayIso } from '../../shared/format';
 import { useLang, useT, type Lang } from '../../shared/i18n';
 import { addDays, statusOf, type TimelineCard, type TimelineStatus } from '../timeline/timeline-model';
-import { addMonths, buildMonth, parseMonth, type CalendarBar, type CalendarDay } from './calendar-model';
+import { addMonths, buildMonth, parseMonth, weekCount, type CalendarBar, type CalendarDay } from './calendar-model';
 
-// Compact rows so a month shows six cards a day before folding the rest into "+n".
+// Lanes per week when the grid cannot be measured (first paint, tests); once measured, the grid fills the window
+// and each week takes as many lanes as fit, folding the rest into "+n".
 const LANES = 6;
-const HEAD = '1.625rem'; // the day-number row
-const STEP = '1.375rem'; // one lane: a 1.25rem bar and its gap
+const HEAD = 26; // px, the day-number row
+const STEP = 22; // px, one lane: a 20px bar and its gap
+const WEEKDAYS = 31; // px, the weekday header row plus the grid's top and bottom border
+const MIN_ROW = HEAD + 2 * STEP; // below this the page scrolls rather than show fewer than two lanes
+
+/**
+ * Height from the grid's top edge to the bottom of the window, so the whole month shows without scrolling.
+ * Null while hidden (the phone agenda is shown instead) or not yet laid out.
+ */
+function useFitHeight(ref: RefObject<HTMLDivElement | null>, ready: boolean) {
+  const [height, setHeight] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => {
+      const r = el.getBoundingClientRect();
+      setHeight(r.width ? Math.floor(window.innerHeight - (r.top + window.scrollY) - 16) : null);
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    // The header above can change height after load (wrapping buttons, the archived banner).
+    const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    ro?.observe(document.body);
+    return () => {
+      window.removeEventListener('resize', measure);
+      ro?.disconnect();
+    };
+  }, [ref, ready]);
+  return height;
+}
 
 const TEXT = {
   th: {
@@ -105,7 +134,7 @@ function Bar({ bar, href }: { bar: CalendarBar; href: string }) {
       style={{
         left: `calc(${(bar.col / 7) * 100}% + ${bar.startsBefore ? 0 : 3}px)`,
         width: `calc(${(bar.span / 7) * 100}% - ${(bar.startsBefore ? 0 : 3) + (bar.endsAfter ? 0 : 3)}px)`,
-        top: `calc(${HEAD} + ${bar.lane} * ${STEP})`,
+        top: HEAD + bar.lane * STEP,
         borderColor: token(bar.status),
         background: `color-mix(in srgb, ${token(bar.status)} 18%, var(--background))`,
       }}
@@ -175,7 +204,16 @@ export function CalendarView({ projectId }: { projectId: number }) {
   const make = useHref();
   const today = todayIso();
   const month = parseMonth(search.get('month'), today);
-  const model = useMemo(() => (board.data ? buildMonth(board.data.cards, month, today, LANES) : null), [board.data, month, today]);
+  const grid = useRef<HTMLDivElement>(null);
+  const fit = useFitHeight(grid, !!board.data);
+  const rows = weekCount(month);
+  const rowHeight = fit === null ? HEAD + LANES * STEP : Math.max(MIN_ROW, Math.floor((fit - WEEKDAYS) / rows));
+  // A lane's own 2px gap below its bar doubles as the cell's bottom padding.
+  const lanes = Math.floor((rowHeight - HEAD) / STEP);
+  const model = useMemo(
+    () => (board.data ? buildMonth(board.data.cards, month, today, lanes) : null),
+    [board.data, month, today, lanes],
+  );
   const users = useMemo(() => new Map(board.data?.users.map((u) => [u.id, u]) ?? []), [board.data]);
   const cardHref = (id: number) => `${make({})}&card=${id}`;
   const agendaDays = useMemo(() => {
@@ -186,7 +224,7 @@ export function CalendarView({ projectId }: { projectId: number }) {
   const title = MONTH_FORMAT[lang].format(utc(`${month}-01`));
 
   return (
-    <section aria-label={t.month} className="flex flex-col gap-3 px-4 pb-6">
+    <section aria-label={t.month} className="flex flex-col gap-3 px-4 pb-4">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <h2 aria-live="polite" className="min-w-40 text-lg font-semibold">
           {title}
@@ -208,6 +246,14 @@ export function CalendarView({ projectId }: { projectId: number }) {
             </Link>
           </Button>
         </div>
+        {/* Notes sit up here, not under the grid, so the grid can run to the bottom of the window. */}
+        {model && (model.agenda.length === 0 || model.undated.length > 0) && (
+          <p className="text-xs text-muted-foreground">
+            {[model.agenda.length === 0 && t.empty, model.undated.length > 0 && t.undated(model.undated.length)]
+              .filter(Boolean)
+              .join(' · ')}
+          </p>
+        )}
         <ul aria-label={t.legend} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground sm:ml-auto">
           {(['todo', 'active', 'overdue', 'done'] as const).map((s) => (
             <li key={s} className="flex items-center gap-1.5">
@@ -223,7 +269,7 @@ export function CalendarView({ projectId }: { projectId: number }) {
       ) : (
         <>
           {/* Desktop and tablet: the month grid. */}
-          <div className="overflow-hidden rounded-lg border bg-card max-sm:hidden">
+          <div ref={grid} className="overflow-hidden rounded-lg border bg-card max-sm:hidden">
             <div aria-hidden className="grid grid-cols-7 border-b bg-muted/50 text-xs font-medium text-muted-foreground">
               {WEEK.map((d, i) => (
                 <div key={d} className={`px-2 py-1.5 ${i >= 5 ? 'text-muted-foreground/70' : ''}`}>
@@ -235,7 +281,7 @@ export function CalendarView({ projectId }: { projectId: number }) {
               <div
                 key={w.days[0].iso}
                 className="relative border-b last:border-b-0"
-                style={{ height: `calc(${HEAD} + ${LANES} * ${STEP} + 0.25rem)` }}
+                style={{ height: rowHeight }}
               >
                 <div className="absolute inset-0 grid grid-cols-7">
                   {w.days.map((d, i) => (
@@ -271,7 +317,6 @@ export function CalendarView({ projectId }: { projectId: number }) {
 
           {/* Phone: seven columns would leave each bar a few pixels wide, so the month reads as an agenda. */}
           <div className="sm:hidden">
-            {model.agenda.length === 0 && <p className="py-6 text-sm text-muted-foreground">{t.empty}</p>}
             <ol className="flex flex-col gap-3">
               {agendaDays.map(([day, items]) => (
                 <li key={day}>
@@ -310,8 +355,6 @@ export function CalendarView({ projectId }: { projectId: number }) {
             </ol>
           </div>
 
-          {model.agenda.length === 0 && <p className="text-sm text-muted-foreground max-sm:hidden">{t.empty}</p>}
-          {model.undated.length > 0 && <p className="text-xs text-muted-foreground">{t.undated(model.undated.length)}</p>}
         </>
       )}
     </section>
