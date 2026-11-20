@@ -26,6 +26,7 @@ func (d *data) clone() *data {
 		mentions:      maps.Clone(d.mentions),
 		userRoles:     maps.Clone(d.userRoles),
 		userCache:     maps.Clone(d.userCache),
+		skills:        cloneMap(d.skills, slices.Clone[[]string]),
 		activity:      cloneEvents(d.activity),
 		seq:           maps.Clone(d.seq),
 	}

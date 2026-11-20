@@ -8,6 +8,7 @@ export const routes = {
   myTasks: `${BASE}/my-tasks`,
   dashboard: `${BASE}/dashboard`,
   reports: `${BASE}/reports`,
+  team: `${BASE}/team`,
   board: (projectId: number | string) => `${BASE}/${projectId}`,
   card: (projectId: number | string, cardId: number | string) => `${BASE}/${projectId}?card=${cardId}`,
 };

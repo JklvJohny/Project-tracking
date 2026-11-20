@@ -28,6 +28,7 @@ tags:
   - name: comments
   - name: documents
   - name: dashboard
+  - name: team
   - name: ops
 paths:
   /healthz:
@@ -56,6 +57,37 @@ paths:
       responses:
         '200': { $ref: '#/components/responses/MyTasks' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+  /team:
+    get:
+      tags: [team]
+      operationId: getTeam
+      summary: Everyone in the department (from user-service) by name, with their skills and open-work counts across every live project (counts only, so projects the caller cannot see are not revealed). Open = assigned, not completed, in an active list of a non-archived project; overdue = dueDate before today; dueSoon = dueDate from today to 6 days ahead. Today is the Asia/Bangkok date.
+      responses:
+        '200': { $ref: '#/components/responses/Team' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /team/{userID}/skills:
+    parameters:
+      - $ref: '#/components/parameters/userID'
+    put:
+      tags: [team]
+      operationId: setSkills
+      summary: Replace a person's skills. Any signed-in user may edit anyone's. Each tag is trimmed with inner spaces squeezed; blanks are dropped and case-insensitive duplicates keep the first spelling. At most 30 tags of 40 characters; an empty list clears them.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [skills]
+              additionalProperties: false
+              properties:
+                skills: { type: array, maxItems: 30, items: { type: string, maxLength: 40 } }
+      responses:
+        '200': { $ref: '#/components/responses/Skills' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
   /users:
     get:
       tags: [me]
@@ -1026,6 +1058,30 @@ components:
             properties:
               success: { const: true }
               data: { $ref: '#/components/schemas/Dashboard' }
+    Team:
+      description: The department with skills and workload.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [success, data]
+            properties:
+              success: { const: true }
+              data: { $ref: '#/components/schemas/Team' }
+    Skills:
+      description: The person's skills as saved.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [success, data]
+            properties:
+              success: { const: true }
+              data:
+                type: object
+                required: [skills]
+                properties:
+                  skills: { type: array, items: { type: string } }
     MyTasks:
       description: The caller's open tasks.
       content:
@@ -1513,6 +1569,25 @@ components:
               dueDate: { type: string, format: date }
               daysLeft: { type: integer, description: Days from today to dueDate; negative when overdue. }
               assignees: { type: array, items: { $ref: '#/components/schemas/User' } }
+    Team:
+      type: object
+      required: [asOf, people]
+      properties:
+        asOf: { type: string, format: date, description: Today in Asia/Bangkok. }
+        people:
+          type: array
+          items: { $ref: '#/components/schemas/TeamPerson' }
+    TeamPerson:
+      type: object
+      required: [userId, name, avatarUrl, skills, open, overdue, dueSoon]
+      properties:
+        userId: { type: integer, format: int64 }
+        name: { type: string }
+        avatarUrl: { type: string }
+        skills: { type: array, items: { type: string }, description: In the order saved. }
+        open: { type: integer, minimum: 0 }
+        overdue: { type: integer, minimum: 0 }
+        dueSoon: { type: integer, minimum: 0 }
     MyTasks:
       type: object
       required: [asOf, tasks]

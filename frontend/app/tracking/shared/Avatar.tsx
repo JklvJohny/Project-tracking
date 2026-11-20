@@ -3,12 +3,13 @@
 export const AVATAR_COLORS = 6;
 
 export type AvatarUser = { id: number; name: string; avatarUrl?: string | null };
-export type AvatarSize = 'xs' | 'sm' | 'md';
+export type AvatarSize = 'xs' | 'sm' | 'md' | 'lg';
 
 export const AVATAR_SIZE: Record<AvatarSize, string> = {
   xs: 'h-5 w-5 text-[9px]',
   sm: 'h-6 w-6 text-[10px]',
   md: 'h-8 w-8 text-[11px]',
+  lg: 'h-12 w-12 text-base',
 };
 
 export const avatarColorIndex = (id: number) => Math.abs(id) % AVATAR_COLORS;

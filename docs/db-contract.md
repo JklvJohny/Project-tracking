@@ -799,6 +799,22 @@ Backs Reports › Templates (`internal/document/templates.go`). Table `report_te
 **`List`**
 - SQL obligation: SELECT ... FROM report_templates WHERE deleted_at IS NULL ORDER BY lower(category), lower(name), id (`idx_report_templates_live`). The memory store compares with `strings.ToLower`; see parked item 2 for the case-folding rule.
 
+### TeamRepo
+
+Backs the Team page (`internal/team`). Table `user_skills (user_id bigint, skill text, position int, PRIMARY KEY (user_id, skill))` with `ux_user_skills (user_id, lower(skill))`. No foreign key: people live in user-service; `user_id` is their id. Any signed-in user may edit anyone's skills (owner's decision, 2026-11-20). No `activity_events` row: that table is per project. The service trims tags, squeezes inner spaces, drops blanks and case-insensitive duplicates (first spelling wins), and caps at 30 tags of 40 characters before calling the repo.
+
+**`Skills`**
+- Does: every user's skills in saved order; users with none are absent.
+- SQL obligation: SELECT user_id, array_agg(skill ORDER BY position) FROM user_skills GROUP BY user_id.
+
+**`SetSkills`**
+- Does: replaces one person's set in one transaction; an empty slice deletes them all.
+- SQL obligation: DELETE FROM user_skills WHERE user_id = $1; INSERT INTO user_skills (user_id, skill, position) SELECT $1, s, ord FROM unnest($2::text[]) WITH ORDINALITY AS t(s, ord).
+
+**`Workload`**
+- Does: per assignee, open cards across every project (not archived, active list, non-archived project, completed_at IS NULL): total, overdue (due before today), due soon (today up to `soon`, exclusive). Assignees with nothing open are absent. The page shows counts only, never the cards, so a project the caller cannot see is not revealed.
+- SQL obligation: one grouped query driven by `card_assignees`; see the comment on `TeamRepo.Workload` in `internal/store/repos.go`.
+
 ### Blob store contract (`internal/blob`)
 
 Uploaded files are bytes in a `blob.Store`, never in the database and never in a public folder. The service writes the blob first and the row second inside `Store.Update`; if the row write fails it deletes the blob. Delete is soft: only `deleted_at` is set, the blob stays so restore works.

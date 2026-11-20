@@ -232,3 +232,10 @@ type TaskRow struct {
 	ChecklistTotal int
 	ChecklistDone  int
 }
+
+// Workload is one person's open cards across every live project.
+type Workload struct {
+	Open    int
+	Overdue int
+	DueSoon int
+}

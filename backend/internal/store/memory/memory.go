@@ -36,6 +36,7 @@ type data struct {
 	mentions      map[mentionKey]store.CommentMention
 	userRoles     map[int64]store.UserRole
 	userCache     map[int64]store.CachedUser
+	skills        map[int64][]string
 	activity      []store.ActivityEvent
 
 	// seq[table] is the last id issued for that table.
@@ -59,6 +60,7 @@ func newData() *data {
 		mentions:      map[mentionKey]store.CommentMention{},
 		userRoles:     map[int64]store.UserRole{},
 		userCache:     map[int64]store.CachedUser{},
+		skills:        map[int64][]string{},
 		seq:           map[string]int64{},
 	}
 }
@@ -95,6 +97,7 @@ func (s *Store) repos(d *data) store.Repos {
 		Documents: &documentRepo{d: d},
 		Templates: &templateRepo{d: d},
 		Dashboard: &dashboardRepo{d: d},
+		Team:      &teamRepo{d: d},
 	}
 }
 
@@ -127,4 +130,11 @@ func (s *Store) SeedUserRole(ur store.UserRole) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.d.userRoles[ur.UserID] = ur
+}
+
+// SeedSkills sets a person's skills directly (local seed data only).
+func (s *Store) SeedSkills(userID int64, skills ...string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.d.skills[userID] = skills
 }

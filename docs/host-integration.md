@@ -180,15 +180,15 @@ export const routes = {
   myTasks: `${BASE}/my-tasks`,                          // the caller's open cards across projects
   dashboard: `${BASE}/dashboard`,                       // Dashboard page (?project=<id> scopes it to one project)
   reports: `${BASE}/reports`,                           // Reports page (?project=<id> opens a folder)
+  team: `${BASE}/team`,                                 // Team page: people, skills, open work
   board: (projectId) => `${BASE}/${projectId}`,         // board
   card: (projectId, cardId) => `${BASE}/${projectId}?card=${cardId}`, // board with the card panel open
 };
 ```
 
-Add four sidebar items: `href: routes.dashboard` (label "Dashboard" / "แดชบอร์ด"), `href: routes.projects` (label
-"Projects" / "โปรเจกต์"), `href: routes.archived` (label "Archived projects" / "โปรเจกต์ที่เก็บถาวร") and
-`href: routes.reports` (label "Reports" / "รายงาน"). The tracking pages have no tab bar of their own; the host sidebar is the only way between
-them. Mark Dashboard as current for `/tracking/dashboard`, Projects for `/tracking` and `/tracking/<projectId>`, Archived projects for `/tracking/archived`, and Reports for `/tracking/reports`. The board and card links inside
+Add five sidebar items: `href: routes.dashboard` (label "Dashboard" / "แดชบอร์ด"), `href: routes.projects` (label
+"Projects" / "โปรเจกต์"), `href: routes.archived` (label "Archived projects" / "โปรเจกต์ที่เก็บถาวร"), `href: routes.reports` (label "Reports" / "รายงาน"), and `href: routes.team` (label "Team" / "ทีมงาน"). The tracking pages have no tab bar of their own; the host sidebar is the only way between
+them. Mark Dashboard as current for `/tracking/dashboard`, Projects for `/tracking` and `/tracking/<projectId>`, Archived projects for `/tracking/archived`, Reports for `/tracking/reports`, and Team for `/tracking/team`. The board and card links inside
 the tracking pages are built from the same file, so changing `BASE` there moves the whole feature to another mount
 point (and the route folder `app/tracking/` must move with it). Navigation inside tracking uses `<Link>`, never
 `router.push`.
@@ -219,3 +219,13 @@ the path starts with `/tracking`. `app/(dev)/DevShell.tsx` (`UserMenu`) shows th
 6. Open `/tracking/reports`, pick a folder, upload a PDF, double-click it to open the viewer, delete it and press
    Undo. A non-PDF and a file over 20 MB are rejected with a message.
 7. Open a board and press Timeline: bars appear grouped by assignee, and the splitter resizes the board and timeline.
+
+## 9. user-service adapter
+
+`backend/internal/users` is the only place tracking-service talks to user-service. Until it is wired, `users.NewStub()`
+returns eight fixed people. A real adapter implements all of `users.Provider`:
+
+- `Get(ids)`: profiles by id, unknown ids skipped.
+- `Search(q, limit)`: the member picker's free-text search.
+- `Department(limit)`: everyone in the department that uses tracking. The Team page (`GET /team`) lists exactly these
+  people, so it must not return the whole company.

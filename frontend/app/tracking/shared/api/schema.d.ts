@@ -55,6 +55,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/team": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Everyone in the department (from user-service) by name, with their skills and open-work counts across every live project (counts only, so projects the caller cannot see are not revealed). Open = assigned, not completed, in an active list of a non-archived project; overdue = dueDate before today; dueSoon = dueDate from today to 6 days ahead. Today is the Asia/Bangkok date. */
+        get: operations["getTeam"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/team/{userID}/skills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userID: components["parameters"]["userID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Replace a person's skills. Any signed-in user may edit anyone's. Each tag is trimmed with inner spaces squeezed; blanks are dropped and case-insensitive duplicates keep the first spelling. At most 30 tags of 40 characters; an empty list clears them. */
+        put: operations["setSkills"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/users": {
         parameters: {
             query?: never;
@@ -1149,6 +1185,25 @@ export interface components {
                 assignees: components["schemas"]["User"][];
             }[];
         };
+        Team: {
+            /**
+             * Format: date
+             * @description Today in Asia/Bangkok.
+             */
+            asOf: string;
+            people: components["schemas"]["TeamPerson"][];
+        };
+        TeamPerson: {
+            /** Format: int64 */
+            userId: number;
+            name: string;
+            avatarUrl: string;
+            /** @description In the order saved. */
+            skills: string[];
+            open: number;
+            overdue: number;
+            dueSoon: number;
+        };
         MyTasks: {
             /**
              * Format: date
@@ -1450,6 +1505,34 @@ export interface components {
                 };
             };
         };
+        /** @description The department with skills and workload. */
+        Team: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    /** @constant */
+                    success: true;
+                    data: components["schemas"]["Team"];
+                };
+            };
+        };
+        /** @description The person's skills as saved. */
+        Skills: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    /** @constant */
+                    success: true;
+                    data: {
+                        skills: string[];
+                    };
+                };
+            };
+        };
         /** @description The caller's open tasks. */
         MyTasks: {
             headers: {
@@ -1658,6 +1741,43 @@ export interface operations {
         responses: {
             200: components["responses"]["MyTasks"];
             401: components["responses"]["Unauthorized"];
+        };
+    };
+    getTeam: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Team"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    setSkills: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userID: components["parameters"]["userID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    skills: string[];
+                };
+            };
+        };
+        responses: {
+            200: components["responses"]["Skills"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationFailed"];
         };
     };
     searchUsers: {

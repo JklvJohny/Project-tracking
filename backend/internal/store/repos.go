@@ -24,6 +24,7 @@ type Repos struct {
 	Documents DocumentRepo
 	Templates TemplateRepo
 	Dashboard DashboardRepo
+	Team      TeamRepo
 }
 
 type CommentRepo interface {
@@ -489,4 +490,37 @@ type DashboardRepo interface {
 	// AND c.completed_at IS NULL ORDER BY c.due_date NULLS LAST, c.id
 	// (idx_checklist_card for the counts).
 	AssignedTo(ctx context.Context, userID int64, projectIDs []int64) ([]TaskRow, error)
+}
+
+// TeamRepo backs the Team page: each person's skills and how much open work
+// they carry. Skills are free text tags owned by tracking-service; the people
+// themselves come from user-service.
+type TeamRepo interface {
+	// Skills returns every user's skills in the order saved; users with none
+	// are absent from the map.
+	// SQL: SELECT user_id, array_agg(skill ORDER BY position) FROM user_skills GROUP BY user_id.
+	Skills(ctx context.Context) (map[int64][]string, error)
+
+	// SetSkills replaces userID's skills with skills, kept in order (the
+	// caller has trimmed and de-duplicated them). An empty slice removes all.
+	// SQL: DELETE FROM user_skills WHERE user_id = $1;
+	// INSERT INTO user_skills (user_id, skill, position)
+	// SELECT $1, s, ord FROM unnest($2::text[]) WITH ORDINALITY AS t(s, ord).
+	SetSkills(ctx context.Context, userID int64, skills []string) error
+
+	// Workload counts each assignee's open cards across every project, with
+	// the same "active" rules as DashboardRepo.Rows plus completed_at IS NULL.
+	// Overdue: due_date < today. DueSoon: today <= due_date < soon. Users with
+	// no open card are absent from the map.
+	// SQL: one query, grouped by assignee:
+	// SELECT a.user_id, count(*),
+	// count(*) FILTER (WHERE c.due_date < $1),
+	// count(*) FILTER (WHERE c.due_date >= $1 AND c.due_date < $2)
+	// FROM card_assignees a
+	// JOIN cards c ON c.id = a.card_id AND c.archived_at IS NULL AND c.completed_at IS NULL
+	// JOIN lists l ON l.id = c.list_id AND l.archived_at IS NULL
+	// JOIN boards b ON b.id = l.board_id
+	// JOIN projects p ON p.id = b.project_id AND p.archived_at IS NULL
+	// GROUP BY a.user_id.
+	Workload(ctx context.Context, today, soon Date) (map[int64]Workload, error)
 }

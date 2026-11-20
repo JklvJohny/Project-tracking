@@ -1,7 +1,7 @@
 'use client';
 // Local-only stand-in for the host app's sidebar, header and login. Never copied to the host.
 import { useQueryClient } from '@tanstack/react-query';
-import { Archive, BarChart3, FileText, FolderOpen, ListChecks, Moon, Settings, Sun, Upload, type LucideIcon } from 'lucide-react';
+import { Archive, BarChart3, FileText, FolderOpen, ListChecks, Moon, Settings, Sun, Upload, Users, type LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
@@ -61,26 +61,27 @@ const TEXT = {
   th: {
     nav: 'เมนูหลัก', app: 'แอปหลัก', section: 'ติดตามงาน', other: 'อื่นๆ', dashboard: 'แดชบอร์ด', projects: 'โปรเจกต์',
     archived: 'โปรเจกต์ที่เก็บถาวร',
-    import: 'นำเข้า', reports: 'รายงาน', settings: 'ตั้งค่า', soon: 'เร็ว ๆ นี้', lang: 'ภาษา', theme: 'สลับธีม',
+    import: 'นำเข้า', reports: 'รายงาน', team: 'ทีมงาน', settings: 'ตั้งค่า', soon: 'เร็ว ๆ นี้', lang: 'ภาษา', theme: 'สลับธีม',
     user: 'ผู้ใช้ (dev)', mobileNav: 'ไปที่', myTasks: 'งานของฉัน', account: 'บัญชีของฉัน',
     roles: { admin: 'ผู้ดูแลระบบ', manager: 'ผู้จัดการ', member: 'สมาชิก', viewer: 'ผู้ชม', 'no role': 'ผู้ใช้ทั่วไป' } as Record<string, string>,
   },
   en: {
     nav: 'Main menu', app: 'Host App', section: 'Tracking', other: 'Other', dashboard: 'Dashboard', projects: 'Projects',
     archived: 'Archived projects',
-    import: 'Import', reports: 'Reports', settings: 'Settings', soon: 'Soon', lang: 'Language', theme: 'Toggle theme',
+    import: 'Import', reports: 'Reports', team: 'Team', settings: 'Settings', soon: 'Soon', lang: 'Language', theme: 'Toggle theme',
     user: 'User (dev)', mobileNav: 'Go to', myTasks: 'My tasks', account: 'My account',
     roles: { admin: 'Admin', manager: 'Manager', member: 'Member', viewer: 'Viewer', 'no role': 'User' } as Record<string, string>,
   },
 };
 
-type NavItem = { key: 'dashboard' | 'projects' | 'archived' | 'import' | 'reports' | 'settings'; icon: LucideIcon; href?: string };
+type NavItem = { key: 'dashboard' | 'projects' | 'archived' | 'import' | 'reports' | 'team' | 'settings'; icon: LucideIcon; href?: string };
 const TRACKING_NAV: NavItem[] = [
   { key: 'dashboard', icon: BarChart3, href: routes.dashboard },
   { key: 'projects', icon: FolderOpen, href: routes.projects },
   { key: 'archived', icon: Archive, href: routes.archived },
   { key: 'import', icon: Upload },
   { key: 'reports', icon: FileText, href: routes.reports },
+  { key: 'team', icon: Users, href: routes.team },
 ];
 const OTHER_NAV: NavItem[] = [{ key: 'settings', icon: Settings }];
 
@@ -149,6 +150,7 @@ function Chrome({ children }: { children: ReactNode }) {
   const onDashboard = path === routes.dashboard || path.startsWith(`${routes.dashboard}/`);
   const onArchived = path === routes.archived;
   const onMyTasks = path === routes.myTasks;
+  const onTeam = path === routes.team;
   const me = DEV_USERS.find((u) => String(u.id) === userId) ?? DEV_USERS[1];
   const dark = resolvedTheme === 'dark';
 
@@ -169,7 +171,9 @@ function Chrome({ children }: { children: ReactNode }) {
           ? onDashboard
           : key === 'archived'
             ? onArchived
-            : path.startsWith(routes.projects) && !onReports && !onDashboard && !onArchived && !onMyTasks;
+            : key === 'team'
+              ? onTeam
+              : path.startsWith(routes.projects) && !onReports && !onDashboard && !onArchived && !onMyTasks && !onTeam;
     return (
       <Link
         key={key}
@@ -203,6 +207,9 @@ function Chrome({ children }: { children: ReactNode }) {
         </Link>
         <Link href={routes.reports} className="rounded px-2 py-1 font-medium hover:bg-accent sm:hidden">
           {t.reports}
+        </Link>
+        <Link href={routes.team} className="rounded px-2 py-1 font-medium hover:bg-accent sm:hidden">
+          {t.team}
         </Link>
         <div className="ml-auto flex items-center gap-3">
           {SHOW_USERS && devMode && (

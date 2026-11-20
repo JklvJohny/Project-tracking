@@ -36,6 +36,11 @@ erDiagram
         text avatar_url
         timestamptz synced_at
     }
+    user_skills {
+        bigint user_id PK "user-service id"
+        text skill PK "free text tag, 1-40 chars; unique per user case-insensitively"
+        int position "order the person listed them"
+    }
     projects {
         bigint id PK "identity"
         text name "UK lower(name) among non-archived"
@@ -289,6 +294,7 @@ CREATE INDEX ON notifications (user_id, created_at DESC);        -- P2, notifica
 CREATE INDEX ON notifications (user_id) WHERE read_at IS NULL;   -- P2, unread badge
 CREATE INDEX ON notifications (created_at);                      -- P2, daily 1-year cleanup
 CREATE INDEX idx_report_templates_live ON report_templates (lower(category), lower(name), id) WHERE deleted_at IS NULL; -- Reports > Templates list
+CREATE UNIQUE INDEX ux_user_skills ON user_skills (user_id, lower(skill)); -- one spelling per tag per person; the PK (user_id, skill) alone lets "Go" and "go" both in
 ```
 
 ## Business decisions (2026-11-17)

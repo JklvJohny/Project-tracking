@@ -79,6 +79,17 @@ func Seed(s *Store, up users.Provider, large bool) error {
 	at := s.now()
 	s.SeedUserRole(store.UserRole{UserID: uAdmin, Role: "admin", GrantedAt: at, GrantedBy: uAdmin})
 	s.SeedUserRole(store.UserRole{UserID: uPM, Role: "manager", GrantedAt: at, GrantedBy: uAdmin})
+	for id, sk := range map[int64][]string{
+		uAdmin:  {"Project management", "Budgeting", "Stakeholder reporting"},
+		uPM:     {"Project management", "Scrum", "UX research", "Copywriting"},
+		uMali:   {"React", "TypeScript", "Tailwind", "Accessibility"},
+		uKai:    {"Go", "PostgreSQL", "API design", "Docker"},
+		uPloy:   {"UI design", "Figma", "Design systems", "Illustration"},
+		uViewer: {"QA testing", "Documentation"},
+		uSam:    {"React", "Go", "CI/CD", "Performance"},
+	} {
+		s.SeedSkills(id, sk...)
+	}
 
 	// Project 1: Website Redesign. The service's default lists (To Do,
 	// In Progress, Review, Done) are renamed to the prototype's four.
