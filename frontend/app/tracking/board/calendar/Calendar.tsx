@@ -13,14 +13,16 @@ import { useLang, useT, type Lang } from '../../shared/i18n';
 import { addDays, statusOf, type TimelineCard, type TimelineStatus } from '../timeline/timeline-model';
 import { addMonths, buildMonth, parseMonth, type CalendarBar, type CalendarDay } from './calendar-model';
 
-const LANES = 4;
+// Compact rows so a month shows six cards a day before folding the rest into "+n".
+const LANES = 6;
+const HEAD = '1.625rem'; // the day-number row
+const STEP = '1.375rem'; // one lane: a 1.25rem bar and its gap
 
 const TEXT = {
   th: {
     prev: 'เดือนก่อนหน้า',
     next: 'เดือนถัดไป',
     today: 'วันนี้',
-    more: (n: number) => `+${n} เพิ่มเติม`,
     moreLabel: (n: number, day: string) => `อีก ${n} การ์ดในวันที่ ${day}`,
     empty: 'ไม่มีงานที่กำหนดวันในเดือนนี้',
     undated: (n: number) => `${n} การ์ดยังไม่มีวันที่`,
@@ -32,7 +34,6 @@ const TEXT = {
     prev: 'Previous month',
     next: 'Next month',
     today: 'Today',
-    more: (n: number) => `+${n} more`,
     moreLabel: (n: number, day: string) => `${n} more card${n === 1 ? '' : 's'} on ${day}`,
     empty: 'No scheduled work this month',
     undated: (n: number) => `${n} card${n === 1 ? ' has' : 's have'} no dates`,
@@ -98,13 +99,13 @@ function Bar({ bar, href }: { bar: CalendarBar; href: string }) {
       scroll={false}
       aria-label={aria}
       title={`${bar.card.title} · ${dates} · ${t.status[bar.status]}`}
-      className={`absolute flex h-6 items-center gap-1 overflow-hidden px-1.5 text-xs font-medium text-foreground shadow-sm hover:brightness-95 focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring ${
-        bar.startsBefore ? 'rounded-l-none' : 'rounded-l-sm border-l-4'
+      className={`absolute flex h-5 items-center gap-1 overflow-hidden px-1.5 text-[11px] leading-none font-medium text-foreground shadow-sm hover:brightness-95 focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring ${
+        bar.startsBefore ? 'rounded-l-none' : 'rounded-l-sm border-l-[3px]'
       } ${bar.endsAfter ? 'rounded-r-none' : 'rounded-r-sm'} ${bar.card.completedAt ? 'line-through decoration-muted-foreground/60' : ''}`}
       style={{
         left: `calc(${(bar.col / 7) * 100}% + ${bar.startsBefore ? 0 : 3}px)`,
         width: `calc(${(bar.span / 7) * 100}% - ${(bar.startsBefore ? 0 : 3) + (bar.endsAfter ? 0 : 3)}px)`,
-        top: `calc(1.875rem + ${bar.lane} * 1.75rem)`,
+        top: `calc(${HEAD} + ${bar.lane} * ${STEP})`,
         borderColor: token(bar.status),
         background: `color-mix(in srgb, ${token(bar.status)} 18%, var(--background))`,
       }}
@@ -127,9 +128,9 @@ function DayMore({ day, href }: { day: CalendarDay; href: (id: number) => string
         <button
           type="button"
           aria-label={t.moreLabel(day.hidden, long)}
-          className="rounded px-1.5 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+          className="h-5 rounded px-1.5 text-[11px] font-semibold text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
         >
-          {t.more(day.hidden)}
+          +{day.hidden}
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-80 p-2">
@@ -234,29 +235,30 @@ export function CalendarView({ projectId }: { projectId: number }) {
               <div
                 key={w.days[0].iso}
                 className="relative border-b last:border-b-0"
-                style={{ height: `calc(1.875rem + ${LANES} * 1.75rem + 1.5rem)` }}
+                style={{ height: `calc(${HEAD} + ${LANES} * ${STEP} + 0.25rem)` }}
               >
                 <div className="absolute inset-0 grid grid-cols-7">
                   {w.days.map((d, i) => (
                     <div
                       key={d.iso}
-                      className={`relative flex flex-col justify-between border-r last:border-r-0 ${
-                        d.inMonth ? (i >= 5 ? 'bg-muted/25' : '') : 'bg-muted/50'
-                      }`}
+                      className={`border-r last:border-r-0 ${d.inMonth ? (i >= 5 ? 'bg-muted/25' : '') : 'bg-muted/50'}`}
                     >
-                      <span
-                        className={`m-1 inline-flex size-6 items-center justify-center self-start rounded-full text-xs tabular-nums ${
-                          d.today
-                            ? 'bg-primary font-semibold text-primary-foreground'
-                            : d.inMonth
-                              ? 'font-medium'
-                              : 'text-muted-foreground/70'
-                        }`}
-                      >
-                        {d.today && <span className="sr-only">{t.today} </span>}
-                        {Number(d.iso.slice(8))}
-                      </span>
-                      <div className="mb-0.5 ml-0.5 h-5">{d.hidden > 0 && <DayMore day={d} href={cardHref} />}</div>
+                      {/* "+n" sits beside the day number so the whole cell below is lanes. */}
+                      <div className="flex items-center justify-between px-1 pt-1" style={{ height: HEAD }}>
+                        <span
+                          className={`inline-flex size-5 items-center justify-center rounded-full text-[11px] tabular-nums ${
+                            d.today
+                              ? 'bg-primary font-semibold text-primary-foreground'
+                              : d.inMonth
+                                ? 'font-medium'
+                                : 'text-muted-foreground/70'
+                          }`}
+                        >
+                          {d.today && <span className="sr-only">{t.today} </span>}
+                          {Number(d.iso.slice(8))}
+                        </span>
+                        {d.hidden > 0 && <DayMore day={d} href={cardHref} />}
+                      </div>
                     </div>
                   ))}
                 </div>

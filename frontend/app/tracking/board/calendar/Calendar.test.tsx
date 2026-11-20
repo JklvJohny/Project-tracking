@@ -25,7 +25,7 @@ const snap: B = {
   cards: [
     card({ id: 1, title: 'Build API', assigneeIds: [1], startDate: '2026-11-13', dueDate: '2026-11-19' }),
     card({ id: 2, title: 'Late task', dueDate: '2026-11-10' }),
-    ...[3, 4, 5, 6, 7].map((id) => card({ id, title: `Busy ${id}`, dueDate: '2026-11-25' })),
+    ...[3, 4, 5, 6, 7, 9, 10, 11].map((id) => card({ id, title: `Busy ${id}`, dueDate: '2026-11-25' })),
     card({ id: 8, title: 'No dates card' }),
   ],
   labels: [],
@@ -74,10 +74,10 @@ describe('CalendarView', () => {
 
   it('a busy day folds the overflow into "+n more", which lists every card of that day', async () => {
     mount();
-    const more = await screen.findByRole('button', { name: /^1 more card on Wednesday, November 25$/ });
+    const more = await screen.findByRole('button', { name: /^2 more cards on Wednesday, November 25$/ });
     fireEvent.click(more);
     const pop = await screen.findByRole('dialog');
-    expect(within(pop).getAllByRole('link')).toHaveLength(5);
+    expect(within(pop).getAllByRole('link')).toHaveLength(8);
   });
 
   it('speaks Thai with a Buddhist-era month', async () => {
