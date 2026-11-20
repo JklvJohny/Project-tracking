@@ -1,5 +1,6 @@
 'use client';
-import { FileText, Folder } from 'lucide-react';
+import { FileText, Folder, FolderOpen, LayoutTemplate } from 'lucide-react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -14,10 +15,15 @@ import { DocumentTable } from './DocumentTable';
 import { FolderList } from './FolderList';
 import { UploadZone } from './UploadZone';
 import { useDeleteDocument, useDocuments } from './queries';
+import { Templates } from './Templates';
+import { routes } from '../shared/routes';
 
 const TEXT = {
   th: {
     title: 'รายงาน',
+    sections: 'ส่วนของหน้ารายงาน',
+    projectReports: 'รายงานโปรเจกต์',
+    templates: 'แม่แบบรายงาน',
     select: 'เลือกโปรเจกต์',
     selectHint: 'เลือกโปรเจกต์ทางซ้ายเพื่อดูเอกสาร',
     docs: (n: number) => `${n} เอกสาร`,
@@ -31,6 +37,9 @@ const TEXT = {
   },
   en: {
     title: 'Reports',
+    sections: 'Reports sections',
+    projectReports: 'Project reports',
+    templates: 'Report templates',
     select: 'Select a project',
     selectHint: 'Choose a project on the left to see its documents.',
     docs: (n: number) => `${n} document${n === 1 ? '' : 's'}`,
@@ -112,7 +121,9 @@ function ReportsView() {
   const t = useT(TEXT);
   const { lang } = useLang();
   const projects = useProjects();
-  const raw = Number(useSearchParams().get('project'));
+  const params = useSearchParams();
+  const raw = Number(params.get('project'));
+  const onTemplates = params.get('tab') === 'templates';
   const list = projects.data ?? [];
   const cur = list.find((p) => p.id === raw);
 
@@ -129,10 +140,32 @@ function ReportsView() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-5 sm:px-6 sm:py-6">
-      <div className="mb-5">
+      <div className="mb-4">
         <h1 className="text-2xl font-semibold tracking-tight">{t.title}</h1>
       </div>
-      {projects.isError ? (
+      {/* Two sections of one page; the URL (?tab=templates) decides which shows. */}
+      <nav aria-label={t.sections} className="mb-4 flex gap-1 border-b">
+        {[
+          { key: 'projects', href: routes.reports, label: t.projectReports, icon: FolderOpen, current: !onTemplates },
+          { key: 'templates', href: `${routes.reports}?tab=templates`, label: t.templates, icon: LayoutTemplate, current: onTemplates },
+        ].map(({ key, href, label, icon: Icon, current }) => (
+          <Link
+            key={key}
+            href={href}
+            scroll={false}
+            aria-current={current ? 'page' : undefined}
+            className={`-mb-px inline-flex items-center gap-2 border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+              current ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Icon className="size-4" aria-hidden />
+            {label}
+          </Link>
+        ))}
+      </nav>
+      {onTemplates ? (
+        <Templates />
+      ) : projects.isError ? (
         <div role="alert" className="flex flex-col items-start gap-3 rounded-lg border p-6">
           <p className="text-sm">{errorMessage(projects.error, lang)}</p>
           <Button variant="outline" onClick={() => projects.refetch()}>

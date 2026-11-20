@@ -22,6 +22,7 @@ type Repos struct {
 	Users     UserRepo
 	Activity  ActivityRepo
 	Documents DocumentRepo
+	Templates TemplateRepo
 	Dashboard DashboardRepo
 }
 
@@ -80,6 +81,34 @@ type DocumentRepo interface {
 	// SQL: SELECT ... FROM documents WHERE project_id = $1 AND deleted_at IS NULL
 	// ORDER BY created_at DESC, id DESC (idx_documents_project).
 	ByProject(ctx context.Context, projectID int64) ([]Document, error)
+}
+
+type TemplateRepo interface {
+	// Create assigns ID and stores t as given.
+	// SQL: INSERT INTO report_templates (category, name, description, storage_key,
+	// filename, mime_type, size_bytes, uploaded_by, created_at, updated_at) ... RETURNING id.
+	Create(ctx context.Context, t ReportTemplate) (ReportTemplate, error)
+
+	// Get returns a template even when soft-deleted (the caller checks
+	// DeletedAt); ErrNotFound if absent.
+	// SQL: SELECT ... FROM report_templates WHERE id = $1.
+	Get(ctx context.Context, id int64) (ReportTemplate, error)
+
+	// SaveDetails writes category, name, description and updated_at; ErrNotFound
+	// if absent. The file columns never change.
+	// SQL: UPDATE report_templates SET category = $2, name = $3, description = $4,
+	// updated_at = $5 WHERE id = $1.
+	SaveDetails(ctx context.Context, t ReportTemplate) error
+
+	// SetDeleted sets deleted_at (nil restores); ErrNotFound if absent.
+	// SQL: UPDATE report_templates SET deleted_at = $2 WHERE id = $1.
+	SetDeleted(ctx context.Context, id int64, at *time.Time) error
+
+	// List returns every non-deleted template ordered by lower(category),
+	// lower(name), id.
+	// SQL: SELECT ... FROM report_templates WHERE deleted_at IS NULL
+	// ORDER BY lower(category), lower(name), id (idx_report_templates_live).
+	List(ctx context.Context) ([]ReportTemplate, error)
 }
 
 type ChecklistRepo interface {

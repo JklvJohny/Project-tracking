@@ -181,6 +181,20 @@ erDiagram
         timestamptz created_at
         timestamptz deleted_at
     }
+    report_templates {
+        bigint id PK "identity"
+        text category "free text, 1-60 chars"
+        text name "1-120 chars"
+        text description "0-500 chars"
+        text storage_key
+        text filename
+        text mime_type "docx | xlsx | pptx | pdf"
+        bigint size_bytes
+        bigint uploaded_by "user_id"
+        timestamptz created_at
+        timestamptz updated_at
+        timestamptz deleted_at
+    }
     import_jobs {
         bigint id PK "identity"
         bigint project_id FK
@@ -274,6 +288,7 @@ CREATE INDEX ON activity_events (project_id, created_at DESC);   -- P2, created 
 CREATE INDEX ON notifications (user_id, created_at DESC);        -- P2, notification list
 CREATE INDEX ON notifications (user_id) WHERE read_at IS NULL;   -- P2, unread badge
 CREATE INDEX ON notifications (created_at);                      -- P2, daily 1-year cleanup
+CREATE INDEX idx_report_templates_live ON report_templates (lower(category), lower(name), id) WHERE deleted_at IS NULL; -- Reports > Templates list
 ```
 
 ## Business decisions (2026-11-17)

@@ -22,6 +22,7 @@ func (d *data) clone() *data {
 		checklist:     maps.Clone(d.checklist),
 		comments:      cloneMap(d.comments, cloneComment),
 		documents:     cloneMap(d.documents, cloneDocument),
+		templates:     cloneMap(d.templates, cloneTemplate),
 		mentions:      maps.Clone(d.mentions),
 		userRoles:     maps.Clone(d.userRoles),
 		userCache:     maps.Clone(d.userCache),
@@ -65,6 +66,11 @@ func cloneCard(c store.Card) store.Card {
 func cloneComment(c store.Comment) store.Comment {
 	c.EditedAt, c.DeletedAt = ptr(c.EditedAt), ptr(c.DeletedAt)
 	return c
+}
+
+func cloneTemplate(t store.ReportTemplate) store.ReportTemplate {
+	t.DeletedAt = ptr(t.DeletedAt)
+	return t
 }
 
 func cloneDocument(d store.Document) store.Document {

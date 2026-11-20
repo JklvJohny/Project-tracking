@@ -166,6 +166,23 @@ type Document struct {
 	DeletedAt  *time.Time
 }
 
+// ReportTemplate is a department-wide report template file (not tied to a
+// project). Category is free text; the UI groups by it.
+type ReportTemplate struct {
+	ID          int64
+	Category    string
+	Name        string
+	Description string
+	StorageKey  string
+	Filename    string
+	MimeType    string
+	SizeBytes   int64
+	UploadedBy  int64
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	DeletedAt   *time.Time
+}
+
 type CommentMention struct {
 	CommentID int64
 	UserID    int64

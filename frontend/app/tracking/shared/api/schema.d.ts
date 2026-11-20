@@ -673,6 +673,82 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/report-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every non-deleted report template, ordered by category, then name (case-insensitive). Templates are department-wide, not per project; any signed-in user may read them. */
+        get: operations["listReportTemplates"];
+        put?: never;
+        /** Upload a template (any signed-in user). `.docx`, `.xlsx`, `.pptx` or `.pdf`, max 20 MiB; the content must match the extension (`PK` zip header for Office, `%PDF-` for PDF), else `file` = `unsupported_type`. Send the text fields BEFORE `file`; parts after the file are not read. An empty `name` defaults to the file name without its extension. */
+        post: operations["uploadReportTemplate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/report-templates/{templateID}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                templateID: components["parameters"]["templateID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Soft-delete (any signed-in user); the file is kept so restore works. */
+        delete: operations["deleteReportTemplate"];
+        options?: never;
+        head?: never;
+        /** Edit category, name or description (any signed-in user). The file is not replaceable here; upload a new template instead. Same rules as upload; a deleted template is 404. */
+        patch: operations["updateReportTemplate"];
+        trace?: never;
+    };
+    "/report-templates/{templateID}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                templateID: components["parameters"]["templateID"];
+            };
+            cookie?: never;
+        };
+        /** Stream the file as an attachment with its own MIME type. A deleted template is 404. */
+        get: operations["downloadReportTemplate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/report-templates/{templateID}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                templateID: components["parameters"]["templateID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Undo a delete (any signed-in user); restoring a live template is a no-op. */
+        post: operations["restoreReportTemplate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/dashboard": {
         parameters: {
             query?: never;
@@ -1100,6 +1176,32 @@ export interface components {
                 assignees: components["schemas"]["User"][];
             }[];
         };
+        /** @description A department-wide report template. The storage key is never sent. */
+        ReportTemplate: {
+            /** Format: int64 */
+            id: number;
+            category: string;
+            name: string;
+            description: string;
+            filename: string;
+            /** @enum {string} */
+            mimeType: "application/pdf" | "application/vnd.openxmlformats-officedocument.wordprocessingml.document" | "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" | "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+            /** Format: int64 */
+            sizeBytes: number;
+            /** Format: int64 */
+            uploadedBy: number;
+            /** @description Display name from the user cache; empty when the uploader is not cached. */
+            uploadedByName: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ReportTemplatePatch: {
+            category?: string;
+            name?: string;
+            description?: string;
+        };
         /** @description A project report. The storage key is never sent. */
         Document: {
             /** Format: int64 */
@@ -1387,6 +1489,43 @@ export interface components {
                 };
             };
         };
+        /** @description Non-deleted templates by category, then name. */
+        ReportTemplateList: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    /** @constant */
+                    success: true;
+                    data: components["schemas"]["ReportTemplate"][];
+                };
+            };
+        };
+        /** @description The template. */
+        ReportTemplate: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    /** @constant */
+                    success: true;
+                    data: components["schemas"]["ReportTemplate"];
+                };
+            };
+        };
+        /** @description The file bytes (not the JSON envelope), with its own Content-Type, `Content-Disposition attachment; filename*=UTF-8''<name>` and `X-Content-Type-Options nosniff`. */
+        ReportTemplateFile: {
+            headers: {
+                "Content-Disposition"?: string;
+                "X-Content-Type-Options"?: "nosniff";
+                [name: string]: unknown;
+            };
+            content: {
+                "application/octet-stream": string;
+            };
+        };
         /** @description The PDF bytes, not the JSON envelope. Sent with `Content-Disposition attachment; filename*=UTF-8''<name>` and `X-Content-Type-Options nosniff`. */
         DocumentFile: {
             headers: {
@@ -1475,6 +1614,7 @@ export interface components {
         itemID: number;
         commentID: number;
         documentID: number;
+        templateID: number;
     };
     requestBodies: never;
     headers: never;
@@ -2467,6 +2607,118 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    listReportTemplates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["ReportTemplateList"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    uploadReportTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** @description Free text; the UI groups by it. Trimmed; required. */
+                    category: string;
+                    name?: string;
+                    description?: string;
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            201: components["responses"]["ReportTemplate"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
+    deleteReportTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                templateID: components["parameters"]["templateID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Empty"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateReportTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                templateID: components["parameters"]["templateID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportTemplatePatch"];
+            };
+        };
+        responses: {
+            200: components["responses"]["ReportTemplate"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
+    downloadReportTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                templateID: components["parameters"]["templateID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["ReportTemplateFile"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    restoreReportTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                templateID: components["parameters"]["templateID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["ReportTemplate"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
     };
     getDashboard: {

@@ -778,6 +778,27 @@ ByProject(ctx context.Context, projectID int64) ([]Document, error)
 - Does: ByProject returns the project's non-deleted documents, newest first.
 - SQL obligation: SELECT ... FROM documents WHERE project_id = $1 AND deleted_at IS NULL ORDER BY created_at DESC, id DESC (idx_documents_project).
 
+### TemplateRepo
+
+Backs Reports › Templates (`internal/document/templates.go`). Table `report_templates`: `id, category, name, description, storage_key, filename, mime_type, size_bytes, uploaded_by, created_at, updated_at, deleted_at`, department-wide (no `project_id`), with `idx_report_templates_live (lower(category), lower(name), id) WHERE deleted_at IS NULL`. Any signed-in user may upload, edit, delete and restore (owner's decision, 2026-11-20); deletes are soft so Undo works, and the blob is kept. There is no `activity_events` row: that table is per project. Blob keys are `templates/<random hex><ext>`.
+
+**`Create`**
+- SQL obligation: INSERT INTO report_templates (category, name, description, storage_key, filename, mime_type, size_bytes, uploaded_by, created_at, updated_at) ... RETURNING id.
+
+**`Get`**
+- Does: returns a template even when soft-deleted (the service hides it); ErrNotFound if absent.
+- SQL obligation: SELECT ... FROM report_templates WHERE id = $1.
+
+**`SaveDetails`**
+- Does: writes category, name, description and updated_at only; the file columns never change.
+- SQL obligation: UPDATE report_templates SET category = $2, name = $3, description = $4, updated_at = $5 WHERE id = $1; ErrNotFound when no row.
+
+**`SetDeleted`**
+- SQL obligation: UPDATE report_templates SET deleted_at = $2 WHERE id = $1 (nil restores); ErrNotFound when no row.
+
+**`List`**
+- SQL obligation: SELECT ... FROM report_templates WHERE deleted_at IS NULL ORDER BY lower(category), lower(name), id (`idx_report_templates_live`). The memory store compares with `strings.ToLower`; see parked item 2 for the case-folding rule.
+
 ### Blob store contract (`internal/blob`)
 
 Uploaded files are bytes in a `blob.Store`, never in the database and never in a public folder. The service writes the blob first and the row second inside `Store.Update`; if the row write fails it deletes the blob. Delete is soft: only `deleted_at` is set, the blob stays so restore works.

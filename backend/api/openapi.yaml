@@ -756,6 +756,86 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+  /report-templates:
+    get:
+      tags: [templates]
+      operationId: listReportTemplates
+      summary: Every non-deleted report template, ordered by category, then name (case-insensitive). Templates are department-wide, not per project; any signed-in user may read them.
+      responses:
+        '200': { $ref: '#/components/responses/ReportTemplateList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [templates]
+      operationId: uploadReportTemplate
+      summary: Upload a template (any signed-in user). `.docx`, `.xlsx`, `.pptx` or `.pdf`, max 20 MiB; the content must match the extension (`PK` zip header for Office, `%PDF-` for PDF), else `file` = `unsupported_type`. Send the text fields BEFORE `file`; parts after the file are not read. An empty `name` defaults to the file name without its extension.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [category, file]
+              properties:
+                category: { type: string, maxLength: 60, description: Free text; the UI groups by it. Trimmed; required. }
+                name: { type: string, maxLength: 120 }
+                description: { type: string, maxLength: 500 }
+                file: { type: string, format: binary }
+      responses:
+        '201': { $ref: '#/components/responses/ReportTemplate' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /report-templates/{templateID}:
+    parameters:
+      - $ref: '#/components/parameters/templateID'
+    patch:
+      tags: [templates]
+      operationId: updateReportTemplate
+      summary: Edit category, name or description (any signed-in user). The file is not replaceable here; upload a new template instead. Same rules as upload; a deleted template is 404.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReportTemplatePatch' }
+      responses:
+        '200': { $ref: '#/components/responses/ReportTemplate' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    delete:
+      tags: [templates]
+      operationId: deleteReportTemplate
+      summary: Soft-delete (any signed-in user); the file is kept so restore works.
+      responses:
+        '200': { $ref: '#/components/responses/Empty' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /report-templates/{templateID}/file:
+    parameters:
+      - $ref: '#/components/parameters/templateID'
+    get:
+      tags: [templates]
+      operationId: downloadReportTemplate
+      summary: Stream the file as an attachment with its own MIME type. A deleted template is 404.
+      responses:
+        '200': { $ref: '#/components/responses/ReportTemplateFile' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /report-templates/{templateID}/restore:
+    parameters:
+      - $ref: '#/components/parameters/templateID'
+    post:
+      tags: [templates]
+      operationId: restoreReportTemplate
+      summary: Undo a delete (any signed-in user); restoring a live template is a no-op.
+      responses:
+        '200': { $ref: '#/components/responses/ReportTemplate' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /dashboard:
     get:
       tags: [dashboard]
@@ -784,6 +864,7 @@ components:
     itemID: { name: itemID, in: path, required: true, schema: { type: integer, format: int64, minimum: 1 } }
     commentID: { name: commentID, in: path, required: true, schema: { type: integer, format: int64, minimum: 1 } }
     documentID: { name: documentID, in: path, required: true, schema: { type: integer, format: int64, minimum: 1 } }
+    templateID: { name: templateID, in: path, required: true, schema: { type: integer, format: int64, minimum: 1 } }
   responses:
     Health:
       description: Service is up.
@@ -975,6 +1056,34 @@ components:
             properties:
               success: { const: true }
               data: { $ref: '#/components/schemas/Document' }
+    ReportTemplateList:
+      description: Non-deleted templates by category, then name.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [success, data]
+            properties:
+              success: { const: true }
+              data: { type: array, items: { $ref: '#/components/schemas/ReportTemplate' } }
+    ReportTemplate:
+      description: The template.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [success, data]
+            properties:
+              success: { const: true }
+              data: { $ref: '#/components/schemas/ReportTemplate' }
+    ReportTemplateFile:
+      description: The file bytes (not the JSON envelope), with its own Content-Type, `Content-Disposition attachment; filename*=UTF-8''<name>` and `X-Content-Type-Options nosniff`.
+      headers:
+        Content-Disposition: { schema: { type: string } }
+        X-Content-Type-Options: { schema: { type: string, const: nosniff } }
+      content:
+        application/octet-stream:
+          schema: { type: string, format: binary }
     DocumentFile:
       description: The PDF bytes, not the JSON envelope. Sent with `Content-Disposition attachment; filename*=UTF-8''<name>` and `X-Content-Type-Options nosniff`.
       headers:
@@ -1427,6 +1536,35 @@ components:
               checklistTotal: { type: integer }
               checklistDone: { type: integer }
               assignees: { type: array, description: Everyone on the card, the caller included, by user id., items: { $ref: '#/components/schemas/User' } }
+    ReportTemplate:
+      type: object
+      description: A department-wide report template. The storage key is never sent.
+      required: [id, category, name, description, filename, mimeType, sizeBytes, uploadedBy, uploadedByName, createdAt, updatedAt]
+      properties:
+        id: { type: integer, format: int64 }
+        category: { type: string }
+        name: { type: string }
+        description: { type: string }
+        filename: { type: string }
+        mimeType:
+          type: string
+          enum:
+            - application/pdf
+            - application/vnd.openxmlformats-officedocument.wordprocessingml.document
+            - application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+            - application/vnd.openxmlformats-officedocument.presentationml.presentation
+        sizeBytes: { type: integer, format: int64 }
+        uploadedBy: { type: integer, format: int64 }
+        uploadedByName: { type: string, description: Display name from the user cache; empty when the uploader is not cached. }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ReportTemplatePatch:
+      type: object
+      additionalProperties: false
+      properties:
+        category: { type: string, maxLength: 60 }
+        name: { type: string, maxLength: 120 }
+        description: { type: string, maxLength: 500 }
     Document:
       type: object
       description: A project report. The storage key is never sent.
