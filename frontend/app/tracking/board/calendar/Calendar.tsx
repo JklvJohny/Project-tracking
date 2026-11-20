@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useBoard } from '../../shared/api/queries';
+import type { components } from '../../shared/api/schema';
 import { AvatarStack } from '../../shared/AvatarStack';
 import { fmtDate, todayIso } from '../../shared/format';
 import { useLang, useT, type Lang } from '../../shared/i18n';
@@ -15,7 +16,10 @@ import { addMonths, buildMonth, parseMonth, weekCount, type CalendarBar, type Ca
 
 // Lanes per week when the grid cannot be measured (first paint, tests); once measured, the grid fills the window
 // and each week takes as many lanes as fit, folding the rest into "+n".
+type S = components['schemas'];
+
 const LANES = 6;
+const FIXED_LANES = 4; // lanes per week when fit is off (the profile)
 const HEAD = 26; // px, the day-number row
 const STEP = 22; // px, one lane: a 20px bar and its gap
 const WEEKDAYS = 31; // px, the weekday header row plus the grid's top and bottom border
@@ -197,25 +201,41 @@ function DayMore({ day, href }: { day: CalendarDay; href: (id: number) => string
 }
 
 export function CalendarView({ projectId }: { projectId: number }) {
+  const board = useBoard(projectId);
+  const make = useHref();
+  const users = useMemo(() => new Map(board.data?.users.map((u) => [u.id, u]) ?? []), [board.data]);
+  return <MonthCalendar cards={board.data?.cards} users={users} cardHref={(id) => `${make({})}&card=${id}`} className="px-4 pb-4" />;
+}
+
+type MonthCalendarProps = {
+  /** undefined while loading. */
+  cards: TimelineCard[] | undefined;
+  /** Assignees shown in the phone agenda. */
+  users: Map<number, S['User']>;
+  cardHref: (cardId: number) => string;
+  /** Size the month to the window (the board); off where the calendar sits below other content (the profile). */
+  fit?: boolean;
+  className?: string;
+};
+
+/** A month of cards: a grid on desktop, an agenda on phones. The month is ?month=YYYY-MM on the current page. */
+export function MonthCalendar({ cards, users, cardHref, fit = true, className = '' }: MonthCalendarProps) {
   const t = useT(TEXT);
   const { lang } = useLang();
   const search = useSearchParams();
-  const board = useBoard(projectId);
   const make = useHref();
   const today = todayIso();
   const month = parseMonth(search.get('month'), today);
   const grid = useRef<HTMLDivElement>(null);
-  const fit = useFitHeight(grid, !!board.data);
+  const measured = useFitHeight(grid, !!cards);
+  const fitHeight = fit ? measured : null;
   const rows = weekCount(month);
-  const rowHeight = fit === null ? HEAD + LANES * STEP : Math.max(MIN_ROW, Math.floor((fit - WEEKDAYS) / rows));
+  // Not fitted, the month sits under other content: four lanes a week keeps it compact; the rest fold into "+n".
+  const rowHeight =
+    fitHeight === null ? HEAD + (fit ? LANES : FIXED_LANES) * STEP : Math.max(MIN_ROW, Math.floor((fitHeight - WEEKDAYS) / rows));
   // A lane's own 2px gap below its bar doubles as the cell's bottom padding.
   const lanes = Math.floor((rowHeight - HEAD) / STEP);
-  const model = useMemo(
-    () => (board.data ? buildMonth(board.data.cards, month, today, lanes) : null),
-    [board.data, month, today, lanes],
-  );
-  const users = useMemo(() => new Map(board.data?.users.map((u) => [u.id, u]) ?? []), [board.data]);
-  const cardHref = (id: number) => `${make({})}&card=${id}`;
+  const model = useMemo(() => (cards ? buildMonth(cards, month, today, lanes) : null), [cards, month, today, lanes]);
   const agendaDays = useMemo(() => {
     const byDay = new Map<string, NonNullable<typeof model>['agenda']>();
     for (const a of model?.agenda ?? []) byDay.set(a.first, [...(byDay.get(a.first) ?? []), a]);
@@ -224,7 +244,7 @@ export function CalendarView({ projectId }: { projectId: number }) {
   const title = MONTH_FORMAT[lang].format(utc(`${month}-01`));
 
   return (
-    <section aria-label={t.month} className="flex flex-col gap-3 px-4 pb-4">
+    <section aria-label={t.month} className={`flex flex-col gap-3 ${className}`}>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <h2 aria-live="polite" className="min-w-40 text-lg font-semibold">
           {title}

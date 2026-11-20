@@ -23,6 +23,7 @@ import (
 	"tracking-service/internal/document"
 	"tracking-service/internal/events"
 	"tracking-service/internal/httpx"
+	"tracking-service/internal/profile"
 	"tracking-service/internal/project"
 	"tracking-service/internal/store/memory"
 	"tracking-service/internal/team"
@@ -50,7 +51,13 @@ func run() error {
 		log.Fatal("no production authenticator wired")
 	}
 	st := memory.New(clock.UTC)
-	userProvider := users.NewStub()
+	// Every service sees tracking avatars in place of user-service ones; profile keeps the raw provider.
+	rawUsers := users.NewStub()
+	avatars := profile.NewIndex()
+	if err := avatars.Load(context.Background(), st); err != nil {
+		return err
+	}
+	userProvider := avatars.Wrap(rawUsers)
 	if cfg.Env == "local" {
 		if err := memory.Seed(st, userProvider, cfg.SeedLarge); err != nil {
 			return err
@@ -67,6 +74,7 @@ func run() error {
 	docs := document.New(st, blobs, userProvider, clock.UTC)
 	dash := dashboard.New(st, clock.UTC)
 	teams := team.New(st, userProvider, clock.UTC)
+	profiles := profile.New(st, blobs, rawUsers, avatars, clock.UTC)
 	if cfg.Env == "local" {
 		if err := seedReports(docs); err != nil {
 			return err
@@ -85,6 +93,7 @@ func run() error {
 				document.Mount(r, docs)
 				dashboard.Mount(r, dash)
 				team.Mount(r, teams)
+				profile.Mount(r, profiles)
 			})
 		}),
 		ReadHeaderTimeout: 5 * time.Second,

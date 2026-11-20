@@ -39,6 +39,7 @@ type data struct {
 	skills        map[int64][]string
 	catalog       map[string]store.CatalogSkill // by lower(name)
 	categories    map[int64]store.SkillCategory
+	avatars       map[int64]store.UserAvatar
 	activity      []store.ActivityEvent
 
 	// seq[table] is the last id issued for that table.
@@ -65,6 +66,7 @@ func newData() *data {
 		skills:        map[int64][]string{},
 		catalog:       map[string]store.CatalogSkill{},
 		categories:    map[int64]store.SkillCategory{},
+		avatars:       map[int64]store.UserAvatar{},
 		seq:           map[string]int64{},
 	}
 }
@@ -102,6 +104,7 @@ func (s *Store) repos(d *data) store.Repos {
 		Templates: &templateRepo{d: d},
 		Dashboard: &dashboardRepo{d: d},
 		Team:      &teamRepo{d: d},
+		Avatars:   &avatarRepo{d: d},
 	}
 }
 

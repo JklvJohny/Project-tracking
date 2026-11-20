@@ -61,7 +61,8 @@ describe('DevShell dev mode shortcuts', () => {
     vi.stubEnv('NEXT_PUBLIC_ENV', 'local');
     vi.resetModules();
     const client = await import('../tracking/shared/api/client');
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ success: true, data: {} })));
+    // A new Response per call: a body reads once, and the account menu fetches /me too.
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ success: true, data: {} })));
     vi.stubGlobal('fetch', fetchMock);
     const { DevShell } = await import('./DevShell');
     render(
@@ -70,7 +71,7 @@ describe('DevShell dev mode shortcuts', () => {
       </DevShell>,
     );
     await client.api('/me');
-    const headers = new Headers(fetchMock.mock.calls[0][1].headers);
+    const headers = new Headers(fetchMock.mock.calls[0][1]?.headers);
     expect(headers.get('X-User-ID')).toBe('6');
     vi.unstubAllGlobals();
   });

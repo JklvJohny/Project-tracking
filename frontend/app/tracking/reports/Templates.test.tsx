@@ -143,6 +143,7 @@ describe('Template preview', () => {
     click.mockRestore();
   });
 
+  // 20 s: ExcelJS is a large dynamic import and can take seconds to load under the full parallel suite.
   it('an .xlsx shows as a table with its sheets, merges and text', async () => {
     const { default: ExcelJS } = await import('exceljs');
     const wb = new ExcelJS.Workbook();
@@ -157,19 +158,20 @@ describe('Template preview', () => {
     await screen.findByRole('table');
     fireEvent.click(screen.getByRole('button', { name: 'Preview Q1 plan' }));
     const dialog = await screen.findByRole('dialog', { name: 'Q1 plan' });
-    const title = await within(dialog).findByText('Quarter plan', {}, { timeout: 5000 });
+    const title = await within(dialog).findByText('Quarter plan', {}, { timeout: 15_000 });
     expect(title.closest('td')!.getAttribute('colspan')).toBe('3');
     expect(within(dialog).getByText('42')).toBeTruthy();
     fireEvent.click(within(dialog).getByRole('tab', { name: 'Notes' }));
     expect(within(dialog).getByText('see attached')).toBeTruthy();
-  });
+  }, 20_000);
 
+  // 20 s: ExcelJS is a large dynamic import and can take seconds to load under the full parallel suite.
   it('a file that will not open says so and offers the download', async () => {
     blobMock.mockResolvedValue(new Blob(['not a zip']));
     await screen.findByRole('table');
     fireEvent.click(screen.getByRole('button', { name: 'Preview Q1 plan' }));
     const dialog = await screen.findByRole('dialog', { name: 'Q1 plan' });
-    expect((await within(dialog).findByRole('alert', {}, { timeout: 5000 })).textContent).toMatch(/could not be previewed/);
+    expect((await within(dialog).findByRole('alert', {}, { timeout: 15_000 })).textContent).toMatch(/could not be previewed/);
     expect(within(dialog).getAllByRole('button', { name: /Download/ }).length).toBeGreaterThan(0);
-  });
+  }, 20_000);
 });

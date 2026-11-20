@@ -55,6 +55,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Upload the caller's profile picture (multipart field `file`). JPEG, PNG or WebP up to 5 MiB and 40 megapixels; anything else is `file` = `unsupported_type` / `too_large` / `required`. The server crops it to the centre square and stores a 256x256 JPEG redrawn from the pixels (EXIF and other embedded data are dropped). Every tracking view then carries the new avatarUrl in place of the user-service one. */
+        put: operations["setMyAvatar"];
+        post?: never;
+        /** Remove the caller's tracking picture; the user-service avatar (returned, possibly empty) shows again. */
+        delete: operations["deleteMyAvatar"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users/{userID}/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userID: components["parameters"]["userID"];
+            };
+            cookie?: never;
+        };
+        /** A tracking profile picture as image/jpeg, for any signed-in user. The URL in avatarUrl carries ?v=<version>, so responses are cacheable for good (private). */
+        get: operations["getAvatar"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/team": {
         parameters: {
             query?: never;
@@ -1606,6 +1643,22 @@ export interface components {
                 };
             };
         };
+        /** @description The avatar URL now in effect. */
+        AvatarUrl: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    /** @constant */
+                    success: true;
+                    data: {
+                        /** @description Empty when the person has no picture anywhere. */
+                        avatarUrl: string;
+                    };
+                };
+            };
+        };
         /** @description The person's skills as saved. */
         Skills: {
             headers: {
@@ -1829,6 +1882,69 @@ export interface operations {
         responses: {
             200: components["responses"]["MyTasks"];
             401: components["responses"]["Unauthorized"];
+        };
+    };
+    setMyAvatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            200: components["responses"]["AvatarUrl"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
+    deleteMyAvatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["AvatarUrl"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getAvatar: {
+        parameters: {
+            query?: {
+                v?: string;
+            };
+            header?: never;
+            path: {
+                userID: components["parameters"]["userID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The picture. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
     };
     getTeam: {

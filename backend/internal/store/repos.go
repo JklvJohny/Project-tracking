@@ -25,6 +25,7 @@ type Repos struct {
 	Templates TemplateRepo
 	Dashboard DashboardRepo
 	Team      TeamRepo
+	Avatars   AvatarRepo
 }
 
 type CommentRepo interface {
@@ -566,4 +567,26 @@ type TeamRepo interface {
 	// ErrNotFound if none. People who list the skill keep it.
 	// SQL: DELETE FROM skill_catalog WHERE lower(name) = lower($1).
 	RemoveFromCatalog(ctx context.Context, name string) error
+}
+
+// AvatarRepo holds the profile pictures uploaded in tracking, one per user.
+// Table user_avatars (user_id bigint PRIMARY KEY, storage_key text NOT NULL,
+// updated_at timestamptz NOT NULL). No foreign key: people live in user-service.
+type AvatarRepo interface {
+	// Get returns userID's avatar; ErrNotFound if they have none.
+	// SQL: SELECT user_id, storage_key, updated_at FROM user_avatars WHERE user_id = $1.
+	Get(ctx context.Context, userID int64) (UserAvatar, error)
+
+	// All returns every avatar, for the in-process index loaded at start-up.
+	// SQL: SELECT user_id, storage_key, updated_at FROM user_avatars.
+	All(ctx context.Context) ([]UserAvatar, error)
+
+	// Set stores a, replacing the user's previous one.
+	// SQL: INSERT INTO user_avatars (user_id, storage_key, updated_at) VALUES ($1, $2, $3)
+	// ON CONFLICT (user_id) DO UPDATE SET storage_key = EXCLUDED.storage_key, updated_at = EXCLUDED.updated_at.
+	Set(ctx context.Context, a UserAvatar) error
+
+	// Delete removes userID's avatar; ErrNotFound if there was none.
+	// SQL: DELETE FROM user_avatars WHERE user_id = $1.
+	Delete(ctx context.Context, userID int64) error
 }

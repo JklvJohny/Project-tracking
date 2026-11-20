@@ -29,6 +29,7 @@ tags:
   - name: documents
   - name: dashboard
   - name: team
+  - name: profile
   - name: ops
 paths:
   /healthz:
@@ -57,6 +58,54 @@ paths:
       responses:
         '200': { $ref: '#/components/responses/MyTasks' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+  /me/avatar:
+    put:
+      tags: [profile]
+      operationId: setMyAvatar
+      summary: Upload the caller's profile picture (multipart field `file`). JPEG, PNG or WebP up to 5 MiB and 40 megapixels; anything else is `file` = `unsupported_type` / `too_large` / `required`. The server crops it to the centre square and stores a 256x256 JPEG redrawn from the pixels (EXIF and other embedded data are dropped). Every tracking view then carries the new avatarUrl in place of the user-service one.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '200': { $ref: '#/components/responses/AvatarUrl' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    delete:
+      tags: [profile]
+      operationId: deleteMyAvatar
+      summary: Remove the caller's tracking picture; the user-service avatar (returned, possibly empty) shows again.
+      responses:
+        '200': { $ref: '#/components/responses/AvatarUrl' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /users/{userID}/avatar:
+    parameters:
+      - $ref: '#/components/parameters/userID'
+    get:
+      tags: [profile]
+      operationId: getAvatar
+      summary: A tracking profile picture as image/jpeg, for any signed-in user. The URL in avatarUrl carries ?v=<version>, so responses are cacheable for good (private).
+      parameters:
+        - name: v
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        '200':
+          description: The picture.
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /team:
     get:
       tags: [team]
@@ -1170,6 +1219,20 @@ components:
             properties:
               success: { const: true }
               data: { $ref: '#/components/schemas/Team' }
+    AvatarUrl:
+      description: The avatar URL now in effect.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [success, data]
+            properties:
+              success: { const: true }
+              data:
+                type: object
+                required: [avatarUrl]
+                properties:
+                  avatarUrl: { type: string, description: Empty when the person has no picture anywhere. }
     Skills:
       description: The person's skills as saved.
       content:

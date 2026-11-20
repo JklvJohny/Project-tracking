@@ -1,11 +1,9 @@
 'use client';
-import { useQuery } from '@tanstack/react-query';
 import { CalendarClock, CalendarDays, CalendarOff, CalendarRange, ListChecks, TriangleAlert, type LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
-import { api } from '../shared/api/client';
-import { useMe } from '../shared/api/queries';
+import { useMe, useMyTasks } from '../shared/api/queries';
 import type { components } from '../shared/api/schema';
 import { AvatarStack } from '../shared/AvatarStack';
 import { errorMessage } from '../shared/errors';
@@ -17,8 +15,6 @@ type MyTasks = components['schemas']['MyTasks'];
 type Task = MyTasks['tasks'][number];
 type Group = 'overdue' | 'today' | 'week' | 'later' | 'none';
 const GROUPS: Group[] = ['overdue', 'today', 'week', 'later', 'none'];
-
-const myTasksKey = ['my-tasks'] as const;
 
 const TEXT = {
   th: {
@@ -99,8 +95,7 @@ export default function MyTasksPage() {
   const t = useT(TEXT);
   const { lang } = useLang();
   const me = useMe();
-  // Cards change on other pages; always refetch on arrival instead of trusting a 15 s old copy.
-  const q = useQuery({ queryKey: myTasksKey, queryFn: () => api<MyTasks>('/me/tasks'), staleTime: 0 });
+  const q = useMyTasks();
   const meId = me.data?.user?.id;
 
   let body: ReactNode;

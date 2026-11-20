@@ -29,6 +29,7 @@ func (d *data) clone() *data {
 		skills:        cloneMap(d.skills, slices.Clone[[]string]),
 		catalog:       cloneMap(d.catalog, cloneCatalogSkill),
 		categories:    maps.Clone(d.categories),
+		avatars:       maps.Clone(d.avatars),
 		activity:      cloneEvents(d.activity),
 		seq:           maps.Clone(d.seq),
 	}

@@ -258,3 +258,11 @@ type SkillCategory struct {
 	CreatedBy int64
 	CreatedAt time.Time
 }
+
+// UserAvatar is a profile picture uploaded in tracking. It replaces the
+// user-service avatar on every tracking page; the bytes live in the blob store.
+type UserAvatar struct {
+	UserID     int64
+	StorageKey string
+	UpdatedAt  time.Time
+}

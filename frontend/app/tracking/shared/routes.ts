@@ -11,6 +11,7 @@ export const routes = {
   reports: `${BASE}/reports`,
   team: `${BASE}/team`,
   settings: `${BASE}/settings`,
+  profile: `${BASE}/profile`,
   board: (projectId: number | string) => `${BASE}/${projectId}`,
   card: (projectId: number | string, cardId: number | string) => `${BASE}/${projectId}?card=${cardId}`,
 };

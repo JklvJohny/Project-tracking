@@ -1,7 +1,7 @@
 'use client';
 // Local-only stand-in for the host app's sidebar, header and login. Never copied to the host.
 import { useQueryClient } from '@tanstack/react-query';
-import { BarChart3, FileText, FolderOpen, ListChecks, Moon, Settings, Sun, Upload, Users, type LucideIcon } from 'lucide-react';
+import { BarChart3, FileText, FolderOpen, ListChecks, Moon, Settings, Sun, Upload, UserRound, Users, type LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
@@ -13,6 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useMe } from '../tracking/shared/api/queries';
 import { Avatar } from '../tracking/shared/Avatar';
 import { useLang, useT, useTheme } from '../tracking/shared/i18n';
 import { TrackingProvider } from '../tracking/shared/provider';
@@ -61,13 +62,13 @@ const TEXT = {
   th: {
     nav: 'เมนูหลัก', app: 'แอปหลัก', section: 'ติดตามงาน', other: 'อื่นๆ', dashboard: 'แดชบอร์ด', projects: 'โปรเจกต์',
     import: 'นำเข้า', reports: 'รายงาน', team: 'ทีมงาน', settings: 'ตั้งค่า', soon: 'เร็ว ๆ นี้', lang: 'ภาษา', theme: 'สลับธีม',
-    user: 'ผู้ใช้ (dev)', mobileNav: 'ไปที่', myTasks: 'งานของฉัน', account: 'บัญชีของฉัน',
+    user: 'ผู้ใช้ (dev)', mobileNav: 'ไปที่', myTasks: 'งานของฉัน', profile: 'โปรไฟล์', account: 'บัญชีของฉัน',
     roles: { admin: 'ผู้ดูแลระบบ', manager: 'ผู้จัดการ', member: 'สมาชิก', viewer: 'ผู้ชม', 'no role': 'ผู้ใช้ทั่วไป' } as Record<string, string>,
   },
   en: {
     nav: 'Main menu', app: 'Host App', section: 'Tracking', other: 'Other', dashboard: 'Dashboard', projects: 'Projects',
     import: 'Import', reports: 'Reports', team: 'Team', settings: 'Settings', soon: 'Soon', lang: 'Language', theme: 'Toggle theme',
-    user: 'User (dev)', mobileNav: 'Go to', myTasks: 'My tasks', account: 'My account',
+    user: 'User (dev)', mobileNav: 'Go to', myTasks: 'My tasks', profile: 'Profile', account: 'My account',
     roles: { admin: 'Admin', manager: 'Manager', member: 'Member', viewer: 'Viewer', 'no role': 'User' } as Record<string, string>,
   },
 };
@@ -148,6 +149,7 @@ function Chrome({ children }: { children: ReactNode }) {
   const onMyTasks = path === routes.myTasks;
   const onTeam = path === routes.team;
   const onSettings = path === routes.settings;
+  const onProfile = path === routes.profile;
   const me = DEV_USERS.find((u) => String(u.id) === userId) ?? DEV_USERS[1];
   const dark = resolvedTheme === 'dark';
 
@@ -170,7 +172,7 @@ function Chrome({ children }: { children: ReactNode }) {
             ? onTeam
             : key === 'settings'
               ? onSettings
-              : path.startsWith(routes.projects) && !onReports && !onDashboard && !onMyTasks && !onTeam && !onSettings;
+              : path.startsWith(routes.projects) && !onReports && !onDashboard && !onMyTasks && !onTeam && !onSettings && !onProfile;
     return (
       <Link
         key={key}
@@ -262,14 +264,20 @@ function Chrome({ children }: { children: ReactNode }) {
 }
 
 /** The avatar opens the account menu, as the host app's header does; My tasks lives here, not in the sidebar. */
-function UserMenu({ me, current }: { me: (typeof DEV_USERS)[number]; current: boolean }) {
+function UserMenu({ me: devUser, current }: { me: (typeof DEV_USERS)[number]; current: boolean }) {
   const t = useT(TEXT);
+  const path = usePathname() ?? '';
+  const meQ = useMe();
+  // The picture comes from the server (it may have been changed on the Profile page); the rest from the dev list.
+  const me = { ...devUser, avatarUrl: meQ.data?.user.id === devUser.id ? meQ.data.user.avatarUrl : undefined };
+  const onProfile = path === routes.profile;
+  const onTasks = path === routes.myTasks;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label={t.account}
         title={t.account}
-        className={`rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${current ? 'outline-2 outline-offset-2 outline-primary' : 'hover:opacity-90'}`}
+        className={`rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${current || onProfile ? 'outline-2 outline-offset-2 outline-primary' : 'hover:opacity-90'}`}
       >
         <Avatar user={me} size="md" />
       </DropdownMenuTrigger>
@@ -283,7 +291,13 @@ function UserMenu({ me, current }: { me: (typeof DEV_USERS)[number]; current: bo
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
-          <Link href={routes.myTasks} aria-current={current ? 'page' : undefined}>
+          <Link href={routes.profile} aria-current={onProfile ? 'page' : undefined}>
+            <UserRound aria-hidden />
+            {t.profile}
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href={routes.myTasks} aria-current={onTasks ? 'page' : undefined}>
             <ListChecks aria-hidden />
             {t.myTasks}
           </Link>

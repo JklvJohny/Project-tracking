@@ -20,6 +20,7 @@ import (
 	"tracking-service/internal/document"
 	"tracking-service/internal/events"
 	"tracking-service/internal/httpx"
+	"tracking-service/internal/profile"
 	"tracking-service/internal/project"
 	"tracking-service/internal/store/memory"
 	"tracking-service/internal/team"
@@ -42,6 +43,7 @@ func TestOpenAPI_CoversEveryRoute(t *testing.T) {
 		document.Mount(r, document.New(st, nil, users.NewStub(), time.Now))
 		dashboard.Mount(r, dashboard.New(st, time.Now))
 		team.Mount(r, team.New(st, up, time.Now))
+		profile.Mount(r, profile.New(st, nil, up, profile.NewIndex(), time.Now))
 	})
 
 	got := map[string]bool{}

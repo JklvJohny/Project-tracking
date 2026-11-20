@@ -12,9 +12,13 @@ export const qk = {
   archived: (id: number) => ['archived', id] as const,
   card: (id: number) => ['card', id] as const,
   comments: (id: number) => ['comments', id] as const,
+  myTasks: ['my-tasks'] as const,
 };
 
 export const useMe = () => useQuery({ queryKey: qk.me, queryFn: () => api<S['Me']>('/me') });
+
+// Cards change on other pages; always refetch on arrival instead of trusting a 15 s old copy.
+export const useMyTasks = () => useQuery({ queryKey: qk.myTasks, queryFn: () => api<S['MyTasks']>('/me/tasks'), staleTime: 0 });
 
 export const useProjects = () => useQuery({ queryKey: qk.projects, queryFn: () => api<S['ProjectListItem'][]>('/projects') });
 

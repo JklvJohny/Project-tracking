@@ -847,6 +847,24 @@ Table `skill_categories (id bigint identity PRIMARY KEY, name text, created_by b
 - Does: removes the category; its skills become uncategorised (the foreign key's ON DELETE SET NULL), people's tags are untouched.
 - SQL obligation: DELETE FROM skill_categories WHERE id = $1; ErrNotFound when no row.
 
+### AvatarRepo
+
+Backs the profile picture uploaded on the Profile page (`internal/profile`). Table `user_avatars (user_id bigint PRIMARY KEY, storage_key text NOT NULL, updated_at timestamptz NOT NULL)`. No foreign key: people live in user-service. The bytes are a 256x256 JPEG in the blob store (`avatars/<user_id>/<nanos>.jpg`), redrawn by the service from the upload, never the uploaded file itself. Setting a picture also rewrites that person's `user_cache.avatar_url` in the same transaction, so pages that read the cache show it at once.
+
+Services call `users.Provider` inside `Store.Update`, so the provider wrapper that swaps in tracking avatars (`profile.Index`) does not read the store per call: it keeps `user_id -> URL` in process memory, filled by `All` at start-up. With more than one tracking-service instance, call `Index.Load` on a timer (a minute is plenty) so an upload on one instance reaches the others.
+
+**`Get`**
+- SQL obligation: SELECT user_id, storage_key, updated_at FROM user_avatars WHERE user_id = $1; ErrNotFound when no row.
+
+**`All`**
+- SQL obligation: SELECT user_id, storage_key, updated_at FROM user_avatars.
+
+**`Set`**
+- SQL obligation: INSERT INTO user_avatars (user_id, storage_key, updated_at) VALUES ($1, $2, $3) ON CONFLICT (user_id) DO UPDATE SET storage_key = EXCLUDED.storage_key, updated_at = EXCLUDED.updated_at.
+
+**`Delete`**
+- SQL obligation: DELETE FROM user_avatars WHERE user_id = $1; ErrNotFound when no row.
+
 ### Blob store contract (`internal/blob`)
 
 Uploaded files are bytes in a `blob.Store`, never in the database and never in a public folder. The service writes the blob first and the row second inside `Store.Update`; if the row write fails it deletes the blob. Delete is soft: only `deleted_at` is set, the blob stays so restore works.

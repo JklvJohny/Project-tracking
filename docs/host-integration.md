@@ -185,6 +185,7 @@ export const routes = {
   dashboard: `${BASE}/dashboard`,                       // Dashboard page (?project=<id> scopes it to one project)
   reports: `${BASE}/reports`,                           // Reports page (?project=<id> opens a folder)
   team: `${BASE}/team`,                                 // Team page: people, skills, open work
+  profile: `${BASE}/profile`,                           // the signed-in user's photo, workload, skills, calendar
   settings: `${BASE}/settings`,                         // Settings page: theme and dark palette (per browser)
   board: (projectId) => `${BASE}/${projectId}`,         // board
   card: (projectId, cardId) => `${BASE}/${projectId}?card=${cardId}`, // board with the card panel open
@@ -199,7 +200,8 @@ point (and the route folder `app/tracking/` must move with it). Navigation insid
 `router.push`.
 
 My tasks has no sidebar item. The signed-in user's avatar in the host header opens the account menu (a dropdown);
-add an item "My tasks" / "งานของฉัน" linking to `routes.myTasks`, with `aria-current="page"` on `/tracking/my-tasks`,
+add an item "Profile" / "โปรไฟล์" linking to `routes.profile` (`aria-current="page"` on `/tracking/profile`), an item
+"My tasks" / "งานของฉัน" linking to `routes.myTasks`, with `aria-current="page"` on `/tracking/my-tasks`,
 and an item "Settings" / "ตั้งค่า" linking to `routes.settings`. The dev sidebar also lists Settings under "Other";
 the host may put it in either place, or merge it into its own settings page if it has one.
 Keep the host's own items (profile, sign out) in the same menu. Do not mark Projects as current on that page, although
@@ -236,3 +238,10 @@ returns eight fixed people. A real adapter implements all of `users.Provider`:
 - `Search(q, limit)`: the member picker's free-text search.
 - `Department(limit)`: everyone in the department that uses tracking. The Team page (`GET /team`) lists exactly these
   people, so it must not return the whole company.
+
+`AvatarURL` from user-service is shown as an `<img>` when it is an `http(s)` URL. A picture uploaded on the Profile
+page is stored by tracking itself (`PUT /me/avatar`) and replaces the user-service one on every tracking page, through
+`profile.Index.Wrap` around the adapter in `main.go`; keep that wrapper when you swap the stub for the real adapter.
+The host's own header and pages still show the user-service picture. Tracking pictures are served at
+`/api/tracking/v1/users/<id>/avatar?v=<version>` behind auth; the Avatar component fetches them with the same headers
+as the API, so it works with the dev header and with the host's session cookie alike.

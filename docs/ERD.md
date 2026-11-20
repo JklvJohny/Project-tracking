@@ -54,6 +54,11 @@ erDiagram
         bigint created_by "user_id"
         timestamptz created_at
     }
+    user_avatars {
+        bigint user_id PK "user-service id; one picture per person"
+        text storage_key "blob key of a 256x256 JPEG"
+        timestamptz updated_at "also the URL version (?v=)"
+    }
     projects {
         bigint id PK "identity"
         text name "UK lower(name) among non-archived"
