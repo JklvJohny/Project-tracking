@@ -25,7 +25,6 @@ const TEXT = {
     on_hold: 'พักไว้',
     done: 'เสร็จสิ้น',
     archivedTitle: 'โปรเจกต์ที่เก็บถาวร',
-    archivedHint: 'ดูได้อย่างเดียว PM หรือแอดมินกู้คืนได้ด้วยปุ่มท้ายแถว',
     empty: 'ยังไม่มีโปรเจกต์',
     emptyHint: 'สร้างโปรเจกต์แรกเพื่อเริ่มต้น',
     emptyFiltered: 'ไม่มีโปรเจกต์ในสถานะนี้',
@@ -44,7 +43,6 @@ const TEXT = {
     on_hold: 'On hold',
     done: 'Done',
     archivedTitle: 'Archived projects',
-    archivedHint: 'Read-only. A PM or admin restores one with the button at the end of its row.',
     empty: 'No projects yet',
     emptyHint: 'Create your first project to get started.',
     emptyFiltered: 'No projects with this status',
@@ -81,22 +79,19 @@ function ArchivedSection({ projects, view }: { projects: ProjectRow[]; view: 'li
   }, [setOpen]);
   return (
     <section id="archived" aria-labelledby={`${ids}-h`} className="mt-8 flex scroll-mt-4 flex-col gap-3">
-      <div>
-        <h2 id={`${ids}-h`}>
-          <button
-            type="button"
-            aria-expanded={open}
-            aria-controls={`${ids}-list`}
-            onClick={() => setOpen(!open)}
-            className="-ml-1.5 inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-base font-semibold hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"
-          >
-            <ChevronDown className={`size-4 transition-transform motion-reduce:transition-none ${open ? '' : '-rotate-90'}`} aria-hidden />
-            {t.archivedTitle}
-            <span className="rounded-full bg-muted px-1.5 text-xs font-normal text-muted-foreground tabular-nums">{projects.length}</span>
-          </button>
-        </h2>
-        {open && <p className="text-xs text-muted-foreground">{t.archivedHint}</p>}
-      </div>
+      <h2 id={`${ids}-h`}>
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={`${ids}-list`}
+          onClick={() => setOpen(!open)}
+          className="-ml-1.5 inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-base font-semibold hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"
+        >
+          <ChevronDown className={`size-4 transition-transform motion-reduce:transition-none ${open ? '' : '-rotate-90'}`} aria-hidden />
+          {t.archivedTitle}
+          <span className="rounded-full bg-muted px-1.5 text-xs font-normal text-muted-foreground tabular-nums">{projects.length}</span>
+        </button>
+      </h2>
       <div id={`${ids}-list`} hidden={!open}>
         {open && (view === 'grid' ? <ProjectsGrid projects={projects} /> : <ProjectsTable projects={projects} />)}
       </div>
