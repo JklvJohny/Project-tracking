@@ -118,12 +118,24 @@ describe('Team page', () => {
     fireEvent.click(toggle);
     expect(localStorage.getItem('pt-team-skills-open')).toBe('1');
     const bar = screen.getByRole('group', { name: 'Filter by skill' });
-    // By category, most common first within each; uncategorised last; an empty category says so.
+    // One folding row per category, all folded at first; uncategorised last.
+    // (The "+" popover triggers carry aria-expanded too; the group toggles are the ones with aria-controls.)
+    const groups = within(bar)
+      .getAllByRole('button', { expanded: false })
+      .filter((b) => b.hasAttribute('aria-controls') && b.textContent !== '');
+    expect(groups.map((b) => b.textContent)).toEqual(['Programming2', 'Network0', 'Uncategorised2']);
+    expect(within(bar).queryByRole('button', { pressed: false })).toBeNull();
+    for (const g of groups) fireEvent.click(g);
+    expect(JSON.parse(localStorage.getItem('pt-team-skill-groups-open')!)).toEqual(['c1', 'c2', 'none']);
+    // Open, the skills sit under their category, most common first; an empty one says so.
     expect(within(bar).getAllByRole('button', { pressed: false }).map((b) => b.textContent)).toEqual(['Go 2', 'Kotlin 0', 'PostgreSQL 1', 'React 1']);
     expect(within(within(bar).getByRole('list', { name: 'Programming' })).getAllByRole('listitem')).toHaveLength(2);
     expect(within(bar).getByText('No skills in this category yet')).toBeTruthy();
     fireEvent.click(within(bar).getByRole('button', { name: /^Go/ }));
     expect(screen.getByRole('status').textContent).toBe('Showing 2 of 3 people');
+    // Folded again, the category still says it holds a chosen filter.
+    fireEvent.click(within(bar).getByRole('button', { name: /^Programming/ }));
+    expect(within(bar).getByRole('button', { name: /^Programming/ }).textContent).toBe('Programming21 chosen');
     // A skill on a card adds to the filter too: Go AND React leaves Ann.
     fireEvent.click(within(card('Ann Lee')).getByRole('button', { name: 'React' }));
     expect(screen.queryByRole('heading', { name: 'Ben Ko' })).toBeNull();
@@ -210,6 +222,7 @@ describe('Skill list', () => {
   it('removes an unused skill from the list at once and offers Undo', async () => {
     await screen.findByRole('list', { name: 'Team members' });
     fireEvent.click(screen.getByRole('button', { name: /All skills/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Programming/, expanded: false }));
     // Only unused skills can be removed.
     expect(screen.queryByRole('button', { name: 'Remove Go from the skill list' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Remove Kotlin from the skill list' }));
@@ -236,7 +249,9 @@ describe('Skill categories', () => {
     await waitFor(() =>
       expect(apiMock).toHaveBeenCalledWith('/team/skills', { method: 'POST', json: { name: 'BGP', userIds: [], categoryId: 2 } }),
     );
-    expect(await within(screen.getByRole('group', { name: 'Filter by skill' })).findByRole('list', { name: 'Network' })).toBeTruthy();
+    // The category it went into opens, so the new chip is in sight.
+    const net = await within(screen.getByRole('group', { name: 'Filter by skill' })).findByRole('list', { name: 'Network' });
+    expect(within(net).getByRole('button', { name: /^BGP/ })).toBeTruthy();
   });
 
   it('an existing name with nobody ticked is still sent when it moves to another category', async () => {

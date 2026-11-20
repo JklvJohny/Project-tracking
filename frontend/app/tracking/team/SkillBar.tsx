@@ -1,6 +1,6 @@
 'use client';
 import { ChevronDown, FolderTree, Plus, X } from 'lucide-react';
-import { useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -37,6 +37,7 @@ const TEXT = {
     categories: 'หมวดหมู่',
     uncategorised: 'ไม่มีหมวดหมู่',
     emptyCategory: 'ยังไม่มีทักษะในหมวดนี้',
+    picked: (n: number) => `เลือก ${n}`,
     remove: (s: string) => `ลบ ${s} ออกจากรายการทักษะ`,
     unused: 'ยังไม่มีใครมีทักษะนี้',
     name: 'ชื่อทักษะ',
@@ -62,6 +63,7 @@ const TEXT = {
     categories: 'Categories',
     uncategorised: 'Uncategorised',
     emptyCategory: 'No skills in this category yet',
+    picked: (n: number) => `${n} chosen`,
     remove: (s: string) => `Remove ${s} from the skill list`,
     unused: 'Nobody has this skill yet',
     name: 'Skill name',
@@ -141,60 +143,119 @@ export function SkillBar({ skills, categories, chosen, people, onToggle }: Props
   );
 }
 
+export const GROUPS_OPEN_KEY = 'pt-team-skill-groups-open';
+
+/** Which categories are unfolded, remembered per viewer ('c<id>' or 'none'). All start folded. */
+function useOpenGroups(): [Set<string>, (key: string, open?: boolean) => void] {
+  const [open, setOpen] = useState<Set<string>>(() => new Set());
+  useEffect(() => {
+    try {
+      const v: unknown = JSON.parse(localStorage.getItem(GROUPS_OPEN_KEY) ?? '[]');
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- storage is only readable after mount
+      if (Array.isArray(v)) setOpen(new Set(v.filter((x): x is string => typeof x === 'string')));
+    } catch {
+      /* unreadable or blocked storage: everything stays folded */
+    }
+  }, []);
+  /** Flips the group, or sets it when `to` is given. */
+  const toggle = useCallback((key: string, to?: boolean) => {
+    setOpen((old) => {
+      const next = new Set(old);
+      if (to ?? !next.has(key)) next.add(key);
+      else next.delete(key);
+      try {
+        localStorage.setItem(GROUPS_OPEN_KEY, JSON.stringify([...next]));
+      } catch {
+        /* storage unavailable: the choice lasts for this visit */
+      }
+      return next;
+    });
+  }, []);
+  return [open, toggle];
+}
+
+/** One folding row per category; its skills sit underneath when it is open. */
 function SkillGroups({ skills, categories, chosen, people, onToggle }: Props) {
   const t = useT(TEXT);
   const remove = useRemoveSkill();
   const ids = useId();
+  const [openGroups, toggleGroup] = useOpenGroups();
   const picked = new Set(chosen.map((s) => s.toLocaleLowerCase()));
   return (
-    <div role="group" aria-label={t.list} className="flex flex-col gap-2 border-t pt-2.5">
+    <div role="group" aria-label={t.list} className="flex flex-col border-t pt-1.5">
       {groupSkills(skills, categories).map(({ category, skills: list }) => {
+        const key = category ? `c${category.id}` : 'none';
+        const open = openGroups.has(key);
         const label = category?.name ?? t.uncategorised;
-        const labelId = `${ids}-c${category?.id ?? 'none'}`;
+        const panelId = `${ids}-${key}`;
+        const nPicked = list.filter((s) => picked.has(s.name.toLocaleLowerCase())).length;
         return (
-          <div key={labelId} className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:gap-3">
-            <div className="flex min-h-6 items-center gap-1 sm:w-40 sm:shrink-0">
-              <span id={labelId} className={`truncate text-xs font-semibold ${category ? '' : 'text-muted-foreground'}`} title={label}>
-                {label}
-              </span>
-              {category && <AddSkill skills={skills} categories={categories} people={people} preset={category} />}
+          <div key={key} className="flex flex-col">
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                aria-expanded={open}
+                aria-controls={panelId}
+                onClick={() => toggleGroup(key)}
+                className="-ml-1.5 inline-flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-xs font-semibold hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"
+              >
+                <ChevronDown
+                  className={`size-3.5 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none ${open ? '' : '-rotate-90'}`}
+                  aria-hidden
+                />
+                <span className={`truncate ${category ? '' : 'text-muted-foreground'}`}>{label}</span>
+                <span className="rounded-full bg-muted px-1.5 text-[11px] font-normal text-muted-foreground tabular-nums">{list.length}</span>
+                {/* Folded, a group still says when it holds a filter in use. */}
+                {nPicked > 0 && (
+                  <span className="rounded-full bg-primary px-1.5 text-[11px] font-medium text-primary-foreground tabular-nums">
+                    {t.picked(nPicked)}
+                  </span>
+                )}
+              </button>
+              {category && (
+                // The new chip should be in sight: open the category it went into.
+                <AddSkill skills={skills} categories={categories} people={people} preset={category} onAdded={(id) => toggleGroup(id === null ? 'none' : `c${id}`, true)} />
+              )}
             </div>
-            {list.length === 0 ? (
-              <p className="flex min-h-6 items-center text-xs text-muted-foreground">{t.emptyCategory}</p>
-            ) : (
-              <ul aria-labelledby={labelId} className="flex flex-wrap gap-1.5">
-                {list.map(({ name, count }) => {
-                  const on = picked.has(name.toLocaleLowerCase());
-                  return (
-                    <li key={name} className="flex items-center">
-                      <button
-                        type="button"
-                        aria-pressed={on}
-                        title={count === 0 ? t.unused : undefined}
-                        onClick={() => onToggle(name)}
-                        className={`${chip} border ${count === 0 ? 'rounded-r-none border-r-0 border-dashed' : ''} ${
-                          on ? 'border-primary bg-primary text-primary-foreground' : 'bg-background hover:bg-accent'
-                        }`}
-                      >
-                        {name} <span className={`tabular-nums ${on ? 'opacity-80' : 'text-muted-foreground'}`}>{count}</span>
-                      </button>
-                      {/* Only an unused skill can leave the list: a used one stays while anyone has it. */}
-                      {count === 0 && (
-                        <button
-                          type="button"
-                          aria-label={t.remove(name)}
-                          title={t.remove(name)}
-                          onClick={() => remove.mutate(name)}
-                          className="inline-flex h-[22px] items-center rounded-r-full border border-dashed bg-background pr-1.5 pl-1 text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
-                        >
-                          <X className="size-3" aria-hidden />
-                        </button>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
+            <div id={panelId} hidden={!open} className="pt-0.5 pb-2 pl-5">
+              {open &&
+                (list.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">{t.emptyCategory}</p>
+                ) : (
+                  <ul aria-label={label} className="flex flex-wrap gap-1.5">
+                    {list.map(({ name, count }) => {
+                      const on = picked.has(name.toLocaleLowerCase());
+                      return (
+                        <li key={name} className="flex items-center">
+                          <button
+                            type="button"
+                            aria-pressed={on}
+                            title={count === 0 ? t.unused : undefined}
+                            onClick={() => onToggle(name)}
+                            className={`${chip} border ${count === 0 ? 'rounded-r-none border-r-0 border-dashed' : ''} ${
+                              on ? 'border-primary bg-primary text-primary-foreground' : 'bg-background hover:bg-accent'
+                            }`}
+                          >
+                            {name} <span className={`tabular-nums ${on ? 'opacity-80' : 'text-muted-foreground'}`}>{count}</span>
+                          </button>
+                          {/* Only an unused skill can leave the list: a used one stays while anyone has it. */}
+                          {count === 0 && (
+                            <button
+                              type="button"
+                              aria-label={t.remove(name)}
+                              title={t.remove(name)}
+                              onClick={() => remove.mutate(name)}
+                              className="inline-flex h-[22px] items-center rounded-r-full border border-dashed bg-background pr-1.5 pl-1 text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+                            >
+                              <X className="size-3" aria-hidden />
+                            </button>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ))}
+            </div>
           </div>
         );
       })}
@@ -202,10 +263,17 @@ function SkillGroups({ skills, categories, chosen, people, onToggle }: Props) {
   );
 }
 
-type AddProps = { skills: SkillCount[]; categories: Category[]; people: Person[]; preset: Category };
+type AddProps = {
+  skills: SkillCount[];
+  categories: Category[];
+  people: Person[];
+  preset: Category;
+  /** Called with the category the skill went into (the form can change it). */
+  onAdded?: (categoryId: number | null) => void;
+};
 
 /** The small "+" beside a category: the new-skill form, starting in that category. */
-function AddSkill({ skills, categories, people, preset }: AddProps) {
+function AddSkill({ skills, categories, people, preset, onAdded }: AddProps) {
   const t = useT(TEXT);
   const [open, setOpen] = useState(false);
   return (
@@ -224,14 +292,24 @@ function AddSkill({ skills, categories, people, preset }: AddProps) {
       <PopoverContent align="start" className="w-80 p-3">
         {/* Remounted on every open, so a cancelled draft does not come back. */}
         {open && (
-          <AddSkillForm skills={skills} categories={categories} people={people} preset={preset} onDone={() => setOpen(false)} />
+          <AddSkillForm
+            skills={skills}
+            categories={categories}
+            people={people}
+            preset={preset}
+            onDone={(categoryId) => {
+              setOpen(false);
+              if (categoryId !== undefined) onAdded?.(categoryId);
+            }}
+          />
         )}
       </PopoverContent>
     </Popover>
   );
 }
 
-function AddSkillForm({ skills, categories, people, preset, onDone }: AddProps & { onDone: () => void }) {
+/** onDone gets the category the skill was added to, or undefined when cancelled. */
+function AddSkillForm({ skills, categories, people, preset, onDone }: Omit<AddProps, 'onAdded'> & { onDone: (categoryId?: number | null) => void }) {
   const t = useT(TEXT);
   const { lang } = useLang();
   const add = useAddSkill();
@@ -258,7 +336,7 @@ function AddSkillForm({ skills, categories, people, preset, onDone }: AddProps &
     add.mutate(
       { name: clean, userIds: who, categoryId },
       {
-        onSuccess: onDone,
+        onSuccess: () => onDone(categoryId),
         onError: (e) => {
           const code = e instanceof ApiError ? (e.fields?.name ?? e.fields?.userIds ?? e.fields?.categoryId) : undefined;
           if (code && TEXT.en.errors[code]) fail(code);
@@ -355,7 +433,7 @@ function AddSkillForm({ skills, categories, people, preset, onDone }: AddProps &
         </ul>
       </fieldset>
       <div className="flex justify-end gap-2">
-        <Button type="button" variant="ghost" size="sm" onClick={onDone}>
+        <Button type="button" variant="ghost" size="sm" onClick={() => onDone()}>
           {t.cancel}
         </Button>
         <Button type="submit" size="sm" disabled={add.isPending}>
