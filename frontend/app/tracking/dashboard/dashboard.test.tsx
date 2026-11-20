@@ -1,8 +1,9 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, api } from '../shared/api/client';
 import { TrackingProvider } from '../shared/provider';
 import DashboardPage from './page';
+import { pickOption } from '../shared/test-select';
 
 vi.mock('../shared/api/client', async (orig) => ({ ...(await orig<object>()), api: vi.fn() }));
 let search = '';
@@ -96,11 +97,15 @@ describe('Dashboard', () => {
 
   it('the scope select writes ?project= and "All projects" clears it', async () => {
     setup();
-    const sel = (await screen.findByLabelText('Show data for')) as HTMLSelectElement;
-    await waitFor(() => expect(sel.options.length).toBe(3));
-    fireEvent.change(sel, { target: { value: '2' } });
+    const sel = await screen.findByRole('combobox', { name: 'Show data for' });
+    await screen.findByText('9');
+    await pickOption(sel, 'Mobile');
     expect(replace).toHaveBeenCalledWith('/tracking/dashboard?project=2', { scroll: false });
-    fireEvent.change(sel, { target: { value: 'all' } });
+    // The mocked router does not change the URL: start again already scoped.
+    cleanup();
+    search = 'project=2';
+    setup();
+    await pickOption(await screen.findByRole('combobox', { name: 'Show data for' }), 'All projects');
     expect(replace).toHaveBeenLastCalledWith('/tracking/dashboard', { scroll: false });
   });
 

@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { ApiError, api } from '../shared/api/client';
 import { TrackingProvider } from '../shared/provider';
 import { ProjectSettingsDialog } from './ProjectSettingsDialog';
+import { pickOption } from '../shared/test-select';
 
 vi.mock('../shared/api/client', async (orig) => ({ ...(await orig<object>()), api: vi.fn() }));
 const replace = vi.fn();
@@ -48,7 +49,7 @@ describe('ProjectSettingsDialog', () => {
     renderDialog();
     fireEvent.change(await screen.findByLabelText(/Project name/), { target: { value: 'Beta' } });
     fireEvent.change(screen.getByLabelText('Start date'), { target: { value: '' } });
-    fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'on_hold' } });
+    await pickOption(screen.getByRole('combobox', { name: 'Status' }), 'On hold');
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() =>
       expect(apiMock).toHaveBeenCalledWith('/projects/1', {

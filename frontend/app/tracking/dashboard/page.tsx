@@ -1,8 +1,9 @@
 'use client';
-import { BarChart3, ChevronDown, Upload } from 'lucide-react';
+import { BarChart3, Upload } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useProjects } from '../shared/api/queries';
 import { Avatar } from '../shared/Avatar';
 import { errorMessage } from '../shared/errors';
@@ -180,25 +181,19 @@ function DashboardView() {
           {asOf && <p className="text-sm text-muted-foreground">{t.asOf(fmtDate(asOf, lang))}</p>}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <label className="relative">
-            <span className="sr-only">{t.scope}</span>
-            <select
-              value={scope === null ? 'all' : String(scope)}
-              onChange={(e) => pick(e.target.value)}
-              className="h-9 max-w-[14rem] appearance-none rounded-md border bg-card pl-3 pr-8 text-sm hover:bg-accent"
-            >
-              <option value="all">{t.all}</option>
+          <Select value={scope === null ? 'all' : String(scope)} onValueChange={pick}>
+            <SelectTrigger aria-label={t.scope} className="h-9 w-auto max-w-[14rem] bg-card">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent align="end">
+              <SelectItem value="all">{t.all}</SelectItem>
               {live.map((p) => (
-                <option key={p.id} value={p.id}>
+                <SelectItem key={p.id} value={String(p.id)}>
                   {p.name}
-                </option>
+                </SelectItem>
               ))}
-            </select>
-            <ChevronDown
-              className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
-              aria-hidden="true"
-            />
-          </label>
+            </SelectContent>
+          </Select>
           <Button variant="outline" disabled title={t.soon}>
             <Upload aria-hidden />
             {t.import}

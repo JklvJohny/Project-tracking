@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { ApiError } from '../shared/api/client';
 import { useBoard } from '../shared/api/queries';
@@ -240,17 +241,24 @@ function SettingsForm({ projectId, onOpenChange }: { projectId: number; onOpenCh
         </div>
         <div>
           <label htmlFor="ps-status" className={label}>{t.status}</label>
-          <select
-            {...field('status')}
-            defaultValue={project.status}
-            className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-          >
-            {STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {t.statuses[s]}
-              </option>
-            ))}
-          </select>
+          {/* Radix renders a hidden native select from `name`, so the status still reaches the form's FormData. */}
+          <Select name="status" defaultValue={project.status} disabled={archived}>
+            <SelectTrigger
+              id="ps-status"
+              className="w-full"
+              aria-invalid={errors.status ? true : undefined}
+              aria-describedby={errors.status ? 'ps-status-err' : undefined}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {STATUSES.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {t.statuses[s]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           {err('status')}
         </div>
         {formError != null && (
