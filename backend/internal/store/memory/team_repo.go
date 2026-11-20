@@ -87,3 +87,69 @@ func (r *teamRepo) RemoveFromCatalog(_ context.Context, name string) error {
 	delete(r.d.catalog, k)
 	return nil
 }
+
+func (r *teamRepo) SetSkillCategory(_ context.Context, s store.CatalogSkill) error {
+	k := strings.ToLower(s.Name)
+	if e, ok := r.d.catalog[k]; ok {
+		e.CategoryID = s.CategoryID
+		r.d.catalog[k] = e
+		return nil
+	}
+	r.d.catalog[k] = s
+	return nil
+}
+
+func (r *teamRepo) Categories(_ context.Context) ([]store.SkillCategory, error) {
+	out := make([]store.SkillCategory, 0, len(r.d.categories))
+	for _, c := range r.d.categories {
+		out = append(out, c)
+	}
+	slices.SortFunc(out, func(a, b store.SkillCategory) int { return cmp.Compare(a.ID, b.ID) })
+	return out, nil
+}
+
+func (r *teamRepo) categoryNamed(name string, except int64) bool {
+	for _, c := range r.d.categories {
+		if c.ID != except && strings.EqualFold(c.Name, name) {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *teamRepo) CreateCategory(_ context.Context, c store.SkillCategory) (store.SkillCategory, error) {
+	if r.categoryNamed(c.Name, 0) {
+		return store.SkillCategory{}, store.ErrDuplicate
+	}
+	c.ID = r.d.nextID("skill_categories")
+	r.d.categories[c.ID] = c
+	return c, nil
+}
+
+func (r *teamRepo) RenameCategory(_ context.Context, id int64, name string) error {
+	c, ok := r.d.categories[id]
+	if !ok {
+		return store.ErrNotFound
+	}
+	if r.categoryNamed(name, id) {
+		return store.ErrDuplicate
+	}
+	c.Name = name
+	r.d.categories[id] = c
+	return nil
+}
+
+func (r *teamRepo) DeleteCategory(_ context.Context, id int64) error {
+	if _, ok := r.d.categories[id]; !ok {
+		return store.ErrNotFound
+	}
+	delete(r.d.categories, id)
+	// ON DELETE SET NULL.
+	for k, s := range r.d.catalog {
+		if s.CategoryID != nil && *s.CategoryID == id {
+			s.CategoryID = nil
+			r.d.catalog[k] = s
+		}
+	}
+	return nil
+}

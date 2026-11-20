@@ -24,6 +24,8 @@ const (
 	// maxPeople caps the directory read; one department is far smaller.
 	maxPeople = 500
 	soonDays  = 7
+	// maxCategories keeps the skill bar one screen tall.
+	maxCategories = 50
 )
 
 // bangkok is the business zone ("today" is a Bangkok date), as on the dashboard.
@@ -61,8 +63,22 @@ type View struct {
 	AsOf   string   `json:"asOf"`
 	People []Person `json:"people"`
 	// Catalog is the skills the department has named, including ones nobody
-	// lists yet, by name ignoring case.
-	Catalog []string `json:"catalog"`
+	// lists yet, by name ignoring case. A skill only on people's cards and in
+	// no category is not listed.
+	Catalog []CatalogEntry `json:"catalog"`
+	// Categories are in the order they were made.
+	Categories []Category `json:"categories"`
+}
+
+type CatalogEntry struct {
+	Name string `json:"name"`
+	// CategoryID is null for an uncategorised skill.
+	CategoryID *int64 `json:"categoryId"`
+}
+
+type Category struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
 }
 
 // List returns the department's people (from user-service) by name.
@@ -77,11 +93,15 @@ func (s *Service) List(ctx context.Context) (View, error) {
 	var skills map[int64][]string
 	var load map[int64]store.Workload
 	var catalog []store.CatalogSkill
+	var cats []store.SkillCategory
 	err = s.st.View(ctx, func(r store.Repos) error {
 		if skills, err = r.Team.Skills(ctx); err != nil {
 			return err
 		}
 		if catalog, err = r.Team.Catalog(ctx); err != nil {
+			return err
+		}
+		if cats, err = r.Team.Categories(ctx); err != nil {
 			return err
 		}
 		load, err = r.Team.Workload(ctx, today, soon)
@@ -90,9 +110,15 @@ func (s *Service) List(ctx context.Context) (View, error) {
 	if err != nil {
 		return View{}, err
 	}
-	out := View{AsOf: string(today), People: make([]Person, 0, len(people)), Catalog: make([]string, 0, len(catalog))}
+	out := View{
+		AsOf: string(today), People: make([]Person, 0, len(people)),
+		Catalog: make([]CatalogEntry, 0, len(catalog)), Categories: make([]Category, 0, len(cats)),
+	}
 	for _, c := range catalog {
-		out.Catalog = append(out.Catalog, c.Name)
+		out.Catalog = append(out.Catalog, CatalogEntry{Name: c.Name, CategoryID: c.CategoryID})
+	}
+	for _, c := range cats {
+		out.Categories = append(out.Categories, Category{ID: c.ID, Name: c.Name})
 	}
 	for _, u := range people {
 		sk := skills[u.ID]
@@ -161,10 +187,11 @@ func cleanSkills(raw []string) ([]string, error) {
 }
 
 // AddSkill names a skill for the department and, optionally, gives it to the
-// listed people in the same transaction. Adding a name that exists (ignoring
-// case) is not an error: the people still get it, under the existing
-// spelling. Anyone signed in may add.
-func (s *Service) AddSkill(ctx context.Context, caller int64, raw string, userIDs []int64) (View, error) {
+// listed people and puts it in categoryID, in the same transaction. Adding a
+// name that exists (ignoring case) is not an error: the people still get it,
+// under the existing spelling, and a given category moves it. Anyone signed
+// in may add.
+func (s *Service) AddSkill(ctx context.Context, caller int64, raw string, userIDs []int64, categoryID *int64) (View, error) {
 	name, err := cleanSkill(raw)
 	if err != nil {
 		return View{}, err
@@ -179,8 +206,18 @@ func (s *Service) AddSkill(ctx context.Context, caller int64, raw string, userID
 		}
 	}
 	err = s.st.Update(ctx, func(r store.Repos) error {
-		if _, err := r.Team.AddToCatalog(ctx, store.CatalogSkill{Name: name, CreatedBy: caller, CreatedAt: s.now()}); err != nil {
+		if err := categoryExists(ctx, r, categoryID); err != nil {
 			return err
+		}
+		entry := store.CatalogSkill{Name: name, CategoryID: categoryID, CreatedBy: caller, CreatedAt: s.now()}
+		added, err := r.Team.AddToCatalog(ctx, entry)
+		if err != nil {
+			return err
+		}
+		if !added && categoryID != nil {
+			if err := r.Team.SetSkillCategory(ctx, entry); err != nil {
+				return err
+			}
 		}
 		catalog, err := r.Team.Catalog(ctx)
 		if err != nil {
@@ -225,6 +262,136 @@ func (s *Service) RemoveSkill(ctx context.Context, name string) error {
 		return apperr.NotFound("skill")
 	}
 	return err
+}
+
+func categoryExists(ctx context.Context, r store.Repos, id *int64) error {
+	if id == nil {
+		return nil
+	}
+	cats, err := r.Team.Categories(ctx)
+	if err != nil {
+		return err
+	}
+	if !slices.ContainsFunc(cats, func(c store.SkillCategory) bool { return c.ID == *id }) {
+		return apperr.Validation(map[string]string{"categoryId": "unknown"})
+	}
+	return nil
+}
+
+// SetSkillCategory moves a skill, named ignoring case, into categoryID (nil:
+// uncategorised). The skill must be in the catalog or on someone's card; one
+// only on cards joins the catalog under the first spelling found.
+func (s *Service) SetSkillCategory(ctx context.Context, caller int64, raw string, categoryID *int64) (View, error) {
+	name, err := cleanSkill(raw)
+	if err != nil {
+		return View{}, err
+	}
+	err = s.st.Update(ctx, func(r store.Repos) error {
+		if err := categoryExists(ctx, r, categoryID); err != nil {
+			return err
+		}
+		known, err := knownSpelling(ctx, r, name)
+		if err != nil {
+			return err
+		}
+		if known == "" {
+			return apperr.NotFound("skill")
+		}
+		return r.Team.SetSkillCategory(ctx, store.CatalogSkill{Name: known, CategoryID: categoryID, CreatedBy: caller, CreatedAt: s.now()})
+	})
+	if err != nil {
+		return View{}, err
+	}
+	return s.List(ctx)
+}
+
+// knownSpelling finds name (ignoring case) in the catalog, then on people's
+// cards (lowest user id first, so the answer does not depend on map order).
+// "" if nobody uses it.
+func knownSpelling(ctx context.Context, r store.Repos, name string) (string, error) {
+	catalog, err := r.Team.Catalog(ctx)
+	if err != nil {
+		return "", err
+	}
+	for _, c := range catalog {
+		if strings.EqualFold(c.Name, name) {
+			return c.Name, nil
+		}
+	}
+	all, err := r.Team.Skills(ctx)
+	if err != nil {
+		return "", err
+	}
+	ids := make([]int64, 0, len(all))
+	for id := range all {
+		ids = append(ids, id)
+	}
+	slices.Sort(ids)
+	for _, id := range ids {
+		for _, sk := range all[id] {
+			if strings.EqualFold(sk, name) {
+				return sk, nil
+			}
+		}
+	}
+	return "", nil
+}
+
+// CreateCategory adds a skill category. Anyone signed in may add, as with
+// skills. Names follow the skill rules and are unique ignoring case.
+func (s *Service) CreateCategory(ctx context.Context, caller int64, raw string) (View, error) {
+	name, err := cleanSkill(raw)
+	if err != nil {
+		return View{}, err
+	}
+	err = s.st.Update(ctx, func(r store.Repos) error {
+		cats, err := r.Team.Categories(ctx)
+		if err != nil {
+			return err
+		}
+		if len(cats) >= maxCategories {
+			return apperr.Validation(map[string]string{"name": "too_many"})
+		}
+		_, err = r.Team.CreateCategory(ctx, store.SkillCategory{Name: name, CreatedBy: caller, CreatedAt: s.now()})
+		return err
+	})
+	if errors.Is(err, store.ErrDuplicate) {
+		return View{}, apperr.Validation(map[string]string{"name": "exists"})
+	}
+	if err != nil {
+		return View{}, err
+	}
+	return s.List(ctx)
+}
+
+// RenameCategory renames category id; changing only the case is allowed.
+func (s *Service) RenameCategory(ctx context.Context, id int64, raw string) (View, error) {
+	name, err := cleanSkill(raw)
+	if err != nil {
+		return View{}, err
+	}
+	err = s.st.Update(ctx, func(r store.Repos) error { return r.Team.RenameCategory(ctx, id, name) })
+	switch {
+	case errors.Is(err, store.ErrDuplicate):
+		return View{}, apperr.Validation(map[string]string{"name": "exists"})
+	case errors.Is(err, store.ErrNotFound):
+		return View{}, apperr.NotFound("category")
+	case err != nil:
+		return View{}, err
+	}
+	return s.List(ctx)
+}
+
+// DeleteCategory removes category id. Its skills stay, uncategorised.
+func (s *Service) DeleteCategory(ctx context.Context, id int64) (View, error) {
+	err := s.st.Update(ctx, func(r store.Repos) error { return r.Team.DeleteCategory(ctx, id) })
+	if errors.Is(err, store.ErrNotFound) {
+		return View{}, apperr.NotFound("category")
+	}
+	if err != nil {
+		return View{}, err
+	}
+	return s.List(ctx)
 }
 
 func uniq(ids []int64) []int64 {

@@ -243,6 +243,17 @@ type Workload struct {
 // CatalogSkill is a skill the department has named, whether or not anyone
 // lists it yet, so it can be offered and filtered on before it is used.
 type CatalogSkill struct {
+	Name string
+	// CategoryID is the skill's one category; nil is "uncategorised".
+	CategoryID *int64
+	CreatedBy  int64
+	CreatedAt  time.Time
+}
+
+// SkillCategory groups the department's skills (Programming, Network, ...).
+// Every skill sits in at most one.
+type SkillCategory struct {
+	ID        int64
 	Name      string
 	CreatedBy int64
 	CreatedAt time.Time

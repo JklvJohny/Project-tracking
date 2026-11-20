@@ -525,14 +525,42 @@ type TeamRepo interface {
 	Workload(ctx context.Context, today, soon Date) (map[int64]Workload, error)
 
 	// Catalog returns the department's named skills by lower(name), name.
-	// SQL: SELECT name, created_by, created_at FROM skill_catalog ORDER BY lower(name), name.
+	// SQL: SELECT name, category_id, created_by, created_at FROM skill_catalog ORDER BY lower(name), name.
 	Catalog(ctx context.Context) ([]CatalogSkill, error)
 
 	// AddToCatalog stores s unless a skill with the same name ignoring case
 	// exists, and reports whether it was added.
-	// SQL: INSERT INTO skill_catalog (name, created_by, created_at) VALUES ($1, $2, $3)
+	// SQL: INSERT INTO skill_catalog (name, category_id, created_by, created_at) VALUES ($1, $2, $3, $4)
 	// ON CONFLICT ((lower(name))) DO NOTHING; added = rows affected = 1.
 	AddToCatalog(ctx context.Context, s CatalogSkill) (bool, error)
+
+	// SetSkillCategory puts the skill named s.Name (ignoring case) in
+	// s.CategoryID (nil: none), adding it to the catalog first if it is only
+	// on people's cards. An existing entry keeps its spelling and creator.
+	// SQL: INSERT INTO skill_catalog (name, category_id, created_by, created_at) VALUES ($1, $2, $3, $4)
+	// ON CONFLICT ((lower(name))) DO UPDATE SET category_id = EXCLUDED.category_id.
+	SetSkillCategory(ctx context.Context, s CatalogSkill) error
+
+	// Categories returns the skill categories in the order they were made.
+	// SQL: SELECT id, name, created_by, created_at FROM skill_categories ORDER BY id.
+	Categories(ctx context.Context) ([]SkillCategory, error)
+
+	// CreateCategory stores c with a new ID; ErrDuplicate if the name exists
+	// ignoring case.
+	// SQL: INSERT INTO skill_categories (name, created_by, created_at) VALUES ($1, $2, $3) RETURNING id
+	// (ux_skill_categories_name violation -> ErrDuplicate).
+	CreateCategory(ctx context.Context, c SkillCategory) (SkillCategory, error)
+
+	// RenameCategory sets the name of category id; ErrNotFound if missing,
+	// ErrDuplicate if another category has the name ignoring case.
+	// SQL: UPDATE skill_categories SET name = $2 WHERE id = $1.
+	RenameCategory(ctx context.Context, id int64, name string) error
+
+	// DeleteCategory removes category id; its skills become uncategorised.
+	// ErrNotFound if missing.
+	// SQL: DELETE FROM skill_categories WHERE id = $1
+	// (skill_catalog.category_id is ON DELETE SET NULL).
+	DeleteCategory(ctx context.Context, id int64) error
 
 	// RemoveFromCatalog deletes the entry matching name ignoring case;
 	// ErrNotFound if none. People who list the skill keep it.

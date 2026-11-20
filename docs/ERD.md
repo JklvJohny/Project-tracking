@@ -10,6 +10,7 @@ PostgreSQL, schema `tracking`, owned only by `tracking-service`. Status: **propo
 erDiagram
     user_cache ||..o| user_roles : "user_id (no FK, external)"
     projects ||--o{ project_members : has
+    skill_categories |o--o{ skill_catalog : groups
     projects ||--|| boards : "has one"
     projects ||--o{ labels : defines
     boards ||--o{ lists : contains
@@ -43,6 +44,13 @@ erDiagram
     }
     skill_catalog {
         text name PK "1-40 chars; unique by lower(name)"
+        bigint category_id FK "nullable: uncategorised; ON DELETE SET NULL"
+        bigint created_by "user_id"
+        timestamptz created_at
+    }
+    skill_categories {
+        bigint id PK "identity; listed in this order"
+        text name "1-40 chars; unique by lower(name)"
         bigint created_by "user_id"
         timestamptz created_at
     }
@@ -301,6 +309,7 @@ CREATE INDEX ON notifications (created_at);                      -- P2, daily 1-
 CREATE INDEX idx_report_templates_live ON report_templates (lower(category), lower(name), id) WHERE deleted_at IS NULL; -- Reports > Templates list
 CREATE UNIQUE INDEX ux_user_skills ON user_skills (user_id, lower(skill)); -- one spelling per tag per person; the PK (user_id, skill) alone lets "Go" and "go" both in
 CREATE UNIQUE INDEX ux_skill_catalog ON skill_catalog (lower(name)); -- the department list: "Go" and "go" are one skill
+CREATE UNIQUE INDEX ux_skill_categories_name ON skill_categories (lower(name)); -- "Network" and "network" are one category
 ```
 
 ## Business decisions (2026-11-17)

@@ -38,6 +38,7 @@ type data struct {
 	userCache     map[int64]store.CachedUser
 	skills        map[int64][]string
 	catalog       map[string]store.CatalogSkill // by lower(name)
+	categories    map[int64]store.SkillCategory
 	activity      []store.ActivityEvent
 
 	// seq[table] is the last id issued for that table.
@@ -63,6 +64,7 @@ func newData() *data {
 		userCache:     map[int64]store.CachedUser{},
 		skills:        map[int64][]string{},
 		catalog:       map[string]store.CatalogSkill{},
+		categories:    map[int64]store.SkillCategory{},
 		seq:           map[string]int64{},
 	}
 }

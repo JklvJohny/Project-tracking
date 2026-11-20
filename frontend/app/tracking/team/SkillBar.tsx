@@ -1,18 +1,31 @@
 'use client';
-import { ChevronDown, Plus, X } from 'lucide-react';
+import { ChevronDown, FolderTree, Plus, X } from 'lucide-react';
 import { useId, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ApiError } from '../shared/api/client';
 import { Avatar } from '../shared/Avatar';
 import { errorMessage } from '../shared/errors';
 import { useLang, useT } from '../shared/i18n';
 import { useStoredOpen } from '../board/useStoredOpen';
-import { cleanSkills, MAX_SKILL, useAddSkill, useRemoveSkill, type Person } from './queries';
+import { CategoryDialog } from './CategoryDialog';
+import {
+  cleanSkills,
+  groupSkills,
+  MAX_SKILL,
+  useAddSkill,
+  useRemoveSkill,
+  type Category,
+  type Person,
+  type SkillCount,
+} from './queries';
 
 export const SKILLS_OPEN_KEY = 'pt-team-skills-open';
+/** Select value for "no category"; Radix Select items cannot have an empty value. */
+const NONE = 'none';
 
 const TEXT = {
   th: {
@@ -21,9 +34,14 @@ const TEXT = {
     chosen: 'ทักษะที่เลือก',
     unchoose: (s: string) => `เลิกกรองด้วย ${s}`,
     add: 'ทักษะใหม่',
+    addIn: (c: string) => `เพิ่มทักษะในหมวด ${c}`,
+    categories: 'หมวดหมู่',
+    uncategorised: 'ไม่มีหมวดหมู่',
+    emptyCategory: 'ยังไม่มีทักษะในหมวดนี้',
     remove: (s: string) => `ลบ ${s} ออกจากรายการทักษะ`,
     unused: 'ยังไม่มีใครมีทักษะนี้',
     name: 'ชื่อทักษะ',
+    category: 'หมวดหมู่',
     give: 'ให้กับ (ไม่บังคับ)',
     has: 'มีแล้ว',
     cancel: 'ยกเลิก',
@@ -33,7 +51,7 @@ const TEXT = {
       too_long: `ยาวได้ไม่เกิน ${MAX_SKILL} ตัวอักษร`,
       exists: 'มีทักษะนี้ในรายการแล้ว เลือกคนที่จะเพิ่มให้ หรือใช้ชื่ออื่น',
       too_many: 'บางคนที่เลือกมีทักษะครบ 30 แล้ว',
-      unknown: 'ไม่พบบางคนที่เลือก',
+      unknown: 'ไม่พบบางคนที่เลือก หรือหมวดหมู่ถูกลบไปแล้ว',
     } as Record<string, string>,
   },
   en: {
@@ -42,9 +60,14 @@ const TEXT = {
     chosen: 'Chosen skills',
     unchoose: (s: string) => `Stop filtering by ${s}`,
     add: 'New skill',
+    addIn: (c: string) => `Add a skill to ${c}`,
+    categories: 'Categories',
+    uncategorised: 'Uncategorised',
+    emptyCategory: 'No skills in this category yet',
     remove: (s: string) => `Remove ${s} from the skill list`,
     unused: 'Nobody has this skill yet',
     name: 'Skill name',
+    category: 'Category',
     give: 'Give to (optional)',
     has: 'has it',
     cancel: 'Cancel',
@@ -54,7 +77,7 @@ const TEXT = {
       too_long: `At most ${MAX_SKILL} characters`,
       exists: 'This skill is already listed. Pick people to give it to, or use another name.',
       too_many: 'Someone you picked already has 30 skills',
-      unknown: 'Someone you picked was not found',
+      unknown: 'Someone you picked, or the category, was not found',
     } as Record<string, string>,
   },
 };
@@ -62,19 +85,19 @@ const TEXT = {
 const chip = 'rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring';
 
 type Props = {
-  skills: { name: string; count: number }[];
+  skills: SkillCount[];
+  categories: Category[];
   chosen: string[];
   people: Person[];
   onToggle: (s: string) => void;
 };
 
-/** The team's skills as filter chips, folded away by default; also where a new skill is added to the list. */
-export function SkillBar({ skills, chosen, people, onToggle }: Props) {
+/** The team's skills as filter chips grouped by category, folded away by default; also where skills and categories are added. */
+export function SkillBar({ skills, categories, chosen, people, onToggle }: Props) {
   const t = useT(TEXT);
   const [open, setOpen] = useStoredOpen(SKILLS_OPEN_KEY, false);
-  const remove = useRemoveSkill();
+  const [managing, setManaging] = useState(false);
   const ids = useId();
-  const picked = new Set(chosen.map((s) => s.toLocaleLowerCase()));
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
@@ -107,78 +130,132 @@ export function SkillBar({ skills, chosen, people, onToggle }: Props) {
             ))}
           </ul>
         )}
-        <AddSkill skills={skills} people={people} />
+        <div className="ml-auto flex gap-2">
+          <Button variant="outline" size="sm" className="h-8" onClick={() => setManaging(true)}>
+            <FolderTree aria-hidden />
+            {t.categories}
+          </Button>
+          <AddSkill skills={skills} categories={categories} people={people} />
+        </div>
       </div>
       <div id={`${ids}-skills`} hidden={!open}>
-        {open && (
-          <ul aria-label={t.list} className="flex flex-wrap gap-1.5">
-            {skills.map(({ name, count }) => {
-              const on = picked.has(name.toLocaleLowerCase());
-              return (
-                <li key={name} className="flex items-center">
-                  <button
-                    type="button"
-                    aria-pressed={on}
-                    title={count === 0 ? t.unused : undefined}
-                    onClick={() => onToggle(name)}
-                    className={`${chip} border ${count === 0 ? 'rounded-r-none border-r-0 border-dashed' : ''} ${
-                      on ? 'border-primary bg-primary text-primary-foreground' : 'bg-background hover:bg-accent'
-                    }`}
-                  >
-                    {name} <span className={`tabular-nums ${on ? 'opacity-80' : 'text-muted-foreground'}`}>{count}</span>
-                  </button>
-                  {/* Only an unused skill can leave the list: a used one stays while anyone has it. */}
-                  {count === 0 && (
-                    <button
-                      type="button"
-                      aria-label={t.remove(name)}
-                      title={t.remove(name)}
-                      onClick={() => remove.mutate(name)}
-                      className="inline-flex h-[22px] items-center rounded-r-full border border-dashed bg-background pr-1.5 pl-1 text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
-                    >
-                      <X className="size-3" aria-hidden />
-                    </button>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        )}
+        {open && <SkillGroups skills={skills} categories={categories} chosen={chosen} people={people} onToggle={onToggle} />}
       </div>
+      <CategoryDialog open={managing} onOpenChange={setManaging} skills={skills} categories={categories} />
     </div>
   );
 }
 
-function AddSkill({ skills, people }: { skills: { name: string }[]; people: Person[] }) {
+function SkillGroups({ skills, categories, chosen, people, onToggle }: Props) {
+  const t = useT(TEXT);
+  const remove = useRemoveSkill();
+  const ids = useId();
+  const picked = new Set(chosen.map((s) => s.toLocaleLowerCase()));
+  return (
+    <div role="group" aria-label={t.list} className="flex flex-col gap-2 border-t pt-2.5">
+      {groupSkills(skills, categories).map(({ category, skills: list }) => {
+        const label = category?.name ?? t.uncategorised;
+        const labelId = `${ids}-c${category?.id ?? 'none'}`;
+        return (
+          <div key={labelId} className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:gap-3">
+            <div className="flex min-h-6 items-center gap-1 sm:w-40 sm:shrink-0">
+              <span id={labelId} className={`truncate text-xs font-semibold ${category ? '' : 'text-muted-foreground'}`} title={label}>
+                {label}
+              </span>
+              {category && <AddSkill skills={skills} categories={categories} people={people} preset={category} />}
+            </div>
+            {list.length === 0 ? (
+              <p className="flex min-h-6 items-center text-xs text-muted-foreground">{t.emptyCategory}</p>
+            ) : (
+              <ul aria-labelledby={labelId} className="flex flex-wrap gap-1.5">
+                {list.map(({ name, count }) => {
+                  const on = picked.has(name.toLocaleLowerCase());
+                  return (
+                    <li key={name} className="flex items-center">
+                      <button
+                        type="button"
+                        aria-pressed={on}
+                        title={count === 0 ? t.unused : undefined}
+                        onClick={() => onToggle(name)}
+                        className={`${chip} border ${count === 0 ? 'rounded-r-none border-r-0 border-dashed' : ''} ${
+                          on ? 'border-primary bg-primary text-primary-foreground' : 'bg-background hover:bg-accent'
+                        }`}
+                      >
+                        {name} <span className={`tabular-nums ${on ? 'opacity-80' : 'text-muted-foreground'}`}>{count}</span>
+                      </button>
+                      {/* Only an unused skill can leave the list: a used one stays while anyone has it. */}
+                      {count === 0 && (
+                        <button
+                          type="button"
+                          aria-label={t.remove(name)}
+                          title={t.remove(name)}
+                          onClick={() => remove.mutate(name)}
+                          className="inline-flex h-[22px] items-center rounded-r-full border border-dashed bg-background pr-1.5 pl-1 text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+                        >
+                          <X className="size-3" aria-hidden />
+                        </button>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+type AddProps = { skills: SkillCount[]; categories: Category[]; people: Person[]; preset?: Category };
+
+/** "New skill" in the toolbar, or, with preset, the small "+" beside a category that starts the form in it. */
+function AddSkill({ skills, categories, people, preset }: AddProps) {
   const t = useT(TEXT);
   const [open, setOpen] = useState(false);
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className="ml-auto h-8">
-          <Plus aria-hidden />
-          {t.add}
-        </Button>
+        {preset ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-6 shrink-0 text-muted-foreground"
+            aria-label={t.addIn(preset.name)}
+            title={t.addIn(preset.name)}
+          >
+            <Plus aria-hidden />
+          </Button>
+        ) : (
+          <Button variant="outline" size="sm" className="h-8">
+            <Plus aria-hidden />
+            {t.add}
+          </Button>
+        )}
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-80 p-3">
+      <PopoverContent align={preset ? 'start' : 'end'} className="w-80 p-3">
         {/* Remounted on every open, so a cancelled draft does not come back. */}
-        {open && <AddSkillForm skills={skills} people={people} onDone={() => setOpen(false)} />}
+        {open && (
+          <AddSkillForm skills={skills} categories={categories} people={people} preset={preset} onDone={() => setOpen(false)} />
+        )}
       </PopoverContent>
     </Popover>
   );
 }
 
-function AddSkillForm({ skills, people, onDone }: { skills: { name: string }[]; people: Person[]; onDone: () => void }) {
+function AddSkillForm({ skills, categories, people, preset, onDone }: AddProps & { onDone: () => void }) {
   const t = useT(TEXT);
   const { lang } = useLang();
   const add = useAddSkill();
   const [name, setName] = useState('');
   const [who, setWho] = useState<number[]>([]);
+  const [category, setCategory] = useState<string>(preset ? String(preset.id) : NONE);
   const [error, setError] = useState<string | null>(null);
   const field = useRef<HTMLInputElement>(null);
   const ids = useId();
   const clean = cleanSkills([name])[0] ?? '';
   const key = clean.toLocaleLowerCase();
+  const categoryId = category === NONE ? null : Number(category);
 
   const fail = (code: string) => {
     setError(code);
@@ -187,13 +264,15 @@ function AddSkillForm({ skills, people, onDone }: { skills: { name: string }[]; 
   const submit = () => {
     if (!clean) return fail('required');
     if (clean.length > MAX_SKILL) return fail('too_long');
-    if (who.length === 0 && skills.some((s) => s.name.toLocaleLowerCase() === key)) return fail('exists');
+    // An existing name is still worth sending when it gives the skill to someone or moves it to another category.
+    const existing = skills.find((s) => s.name.toLocaleLowerCase() === key);
+    if (existing && who.length === 0 && (categoryId === null || categoryId === existing.categoryId)) return fail('exists');
     add.mutate(
-      { name: clean, userIds: who },
+      { name: clean, userIds: who, categoryId },
       {
         onSuccess: onDone,
         onError: (e) => {
-          const code = e instanceof ApiError ? (e.fields?.name ?? e.fields?.userIds) : undefined;
+          const code = e instanceof ApiError ? (e.fields?.name ?? e.fields?.userIds ?? e.fields?.categoryId) : undefined;
           if (code && TEXT.en.errors[code]) fail(code);
           else setError(errorMessage(e, lang));
         },
@@ -233,6 +312,30 @@ function AddSkillForm({ skills, people, onDone }: { skills: { name: string }[]; 
             {t.errors[error] ?? error}
           </p>
         )}
+      </div>
+      <div className="flex flex-col gap-1">
+        <span id={`${ids}-cat`} className="text-xs font-medium">
+          {t.category}
+        </span>
+        <Select
+          value={category}
+          onValueChange={(v) => {
+            setCategory(v);
+            setError(null);
+          }}
+        >
+          <SelectTrigger aria-labelledby={`${ids}-cat`} className="h-8 w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={NONE}>{t.uncategorised}</SelectItem>
+            {categories.map((c) => (
+              <SelectItem key={c.id} value={String(c.id)}>
+                {c.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
       <fieldset className="flex flex-col gap-1">
         <legend className="mb-1 text-xs font-medium">{t.give}</legend>

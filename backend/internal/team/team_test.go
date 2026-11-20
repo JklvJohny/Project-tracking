@@ -244,7 +244,7 @@ func TestTeam_AddSkillToCatalogAndPeople(t *testing.T) {
 	if code != 200 {
 		t.Fatalf("POST = %d %v", code, body)
 	}
-	if c := catalog(body); len(c) != 1 || c[0] != "Kubernetes" {
+	if c := catalog(body); len(c) != 1 || c[0].(map[string]any)["name"] != "Kubernetes" || c[0].(map[string]any)["categoryId"] != nil {
 		t.Fatalf("catalog = %v", c)
 	}
 	if s := person(t, body, 2)["skills"].([]any); len(s) != 0 {
@@ -315,5 +315,97 @@ func TestTeam_RemoveSkillFromCatalogKeepsPeoplesTags(t *testing.T) {
 	}
 	if code, _ := e.call(1, "DELETE", "/team/skills?name=nope", ""); code != 404 {
 		t.Fatalf("missing = %d, want 404", code)
+	}
+}
+
+func categories(body map[string]any) []any {
+	return body["data"].(map[string]any)["categories"].([]any)
+}
+
+// categoryOf returns the categoryId the catalog lists for skill, or "absent".
+func categoryOf(body map[string]any, skill string) any {
+	for _, c := range catalog(body) {
+		if m := c.(map[string]any); m["name"] == skill {
+			return m["categoryId"]
+		}
+	}
+	return "absent"
+}
+
+func TestTeam_CategoriesGroupSkills(t *testing.T) {
+	e := newEnv(t)
+	code, body := e.call(2, "POST", "/team/categories", `{"name":" Programming "}`)
+	if code != 200 {
+		t.Fatalf("create = %d %v", code, body)
+	}
+	e.call(2, "POST", "/team/categories", `{"name":"Network"}`)
+	_, body = e.call(2, "POST", "/team/categories", `{"name":"DevOps"}`)
+	cs := categories(body)
+	if len(cs) != 3 || cs[0].(map[string]any)["name"] != "Programming" || cs[2].(map[string]any)["name"] != "DevOps" {
+		t.Fatalf("categories = %v, want in the order made", cs)
+	}
+	prog := cs[0].(map[string]any)["id"].(float64)
+	dev := cs[2].(map[string]any)["id"].(float64)
+
+	// A new skill goes straight into a category.
+	_, body = e.call(3, "POST", "/team/skills", `{"name":"Kubernetes","categoryId":`+strconv.Itoa(int(dev))+`}`)
+	if got := categoryOf(body, "Kubernetes"); got != dev {
+		t.Fatalf("Kubernetes category = %v, want %v", got, dev)
+	}
+	// A skill only on someone's card joins the catalog when it is put in a
+	// category, under the card's spelling.
+	e.call(3, "PUT", "/team/4/skills", `{"skills":["golang"]}`)
+	code, body = e.call(3, "PUT", "/team/skills/category", `{"name":"GOLANG","categoryId":`+strconv.Itoa(int(prog))+`}`)
+	if code != 200 || categoryOf(body, "golang") != prog {
+		t.Fatalf("set category = %d %v", code, body)
+	}
+	// Moving out of every category keeps it listed, uncategorised.
+	_, body = e.call(3, "PUT", "/team/skills/category", `{"name":"golang","categoryId":null}`)
+	if got := categoryOf(body, "golang"); got != nil {
+		t.Fatalf("golang category = %v, want null", got)
+	}
+	// Deleting a category leaves its skills, uncategorised.
+	code, body = e.call(1, "DELETE", "/team/categories/"+strconv.Itoa(int(dev)), "")
+	if code != 200 || len(categories(body)) != 2 || categoryOf(body, "Kubernetes") != nil {
+		t.Fatalf("delete = %d %v", code, body)
+	}
+	// Rename; changing only the case is not a clash with itself.
+	code, body = e.call(1, "PATCH", "/team/categories/"+strconv.Itoa(int(prog)), `{"name":"programming"}`)
+	if code != 200 || categories(body)[0].(map[string]any)["name"] != "programming" {
+		t.Fatalf("rename = %d %v", code, body)
+	}
+}
+
+func TestTeam_CategoryValidation(t *testing.T) {
+	e := newEnv(t)
+	e.call(1, "POST", "/team/categories", `{"name":"Network"}`)
+	_, body := e.call(1, "POST", "/team/categories", `{"name":"Security"}`)
+	sec := strconv.Itoa(int(categories(body)[1].(map[string]any)["id"].(float64)))
+	for _, c := range []struct {
+		method, path, body string
+		code               int
+		field, want        string
+	}{
+		{"POST", "/team/categories", `{"name":" "}`, 422, "name", "required"},
+		{"POST", "/team/categories", `{"name":"` + strings.Repeat("x", 41) + `"}`, 422, "name", "too_long"},
+		{"POST", "/team/categories", `{"name":"network"}`, 422, "name", "exists"},
+		{"PATCH", "/team/categories/" + sec, `{"name":"NETWORK"}`, 422, "name", "exists"},
+		{"PATCH", "/team/categories/99", `{"name":"X"}`, 404, "", ""},
+		{"DELETE", "/team/categories/99", ``, 404, "", ""},
+		{"DELETE", "/team/categories/x", ``, 400, "", ""},
+		{"PUT", "/team/skills/category", `{"name":"Nobody has this","categoryId":null}`, 404, "", ""},
+		{"PUT", "/team/skills/category", `{"name":"","categoryId":null}`, 422, "name", "required"},
+		{"POST", "/team/skills", `{"name":"Go","categoryId":99}`, 422, "categoryId", "unknown"},
+	} {
+		code, body := e.call(1, c.method, c.path, c.body)
+		fields, _ := body["fields"].(map[string]any)
+		if code != c.code || (c.field != "" && fields[c.field] != c.want) {
+			t.Errorf("%s %s %s: %d %v, want %d %s=%s", c.method, c.path, c.body, code, body, c.code, c.field, c.want)
+		}
+	}
+	// The refused add (unknown category) left no skill behind.
+	_, body = e.call(1, "GET", "/team", "")
+	if c := catalog(body); len(c) != 0 {
+		t.Fatalf("catalog = %v", c)
 	}
 }

@@ -27,7 +27,8 @@ func (d *data) clone() *data {
 		userRoles:     maps.Clone(d.userRoles),
 		userCache:     maps.Clone(d.userCache),
 		skills:        cloneMap(d.skills, slices.Clone[[]string]),
-		catalog:       maps.Clone(d.catalog),
+		catalog:       cloneMap(d.catalog, cloneCatalogSkill),
+		categories:    maps.Clone(d.categories),
 		activity:      cloneEvents(d.activity),
 		seq:           maps.Clone(d.seq),
 	}
@@ -88,4 +89,9 @@ func cloneEvents(in []store.ActivityEvent) []store.ActivityEvent {
 		out[i] = e
 	}
 	return out
+}
+
+func cloneCatalogSkill(s store.CatalogSkill) store.CatalogSkill {
+	s.CategoryID = ptr(s.CategoryID)
+	return s
 }

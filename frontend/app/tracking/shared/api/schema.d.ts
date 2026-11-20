@@ -90,6 +90,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/team/skills/category": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Put a skill (matched ignoring case) in one category, or none with categoryId null. A skill only on people's cards joins the department list under its first spelling. Anyone signed in. Returns the Team view. */
+        put: operations["setSkillCategory"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/team/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add a skill category. Names are trimmed with inner spaces squeezed, at most 40 characters, unique ignoring case (fields.name=exists); at most 50 categories (fields.name=too_many). Anyone signed in. Returns the Team view. */
+        post: operations["createSkillCategory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/team/categories/{categoryID}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                categoryID: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a skill category. Its skills stay, uncategorised. Returns the Team view. */
+        delete: operations["deleteSkillCategory"];
+        options?: never;
+        head?: never;
+        /** Rename a skill category, with the same rules as create; changing only the case is allowed. Returns the Team view. */
+        patch: operations["renameSkillCategory"];
+        trace?: never;
+    };
     "/team/{userID}/skills": {
         parameters: {
             query?: never;
@@ -1210,8 +1264,22 @@ export interface components {
              */
             asOf: string;
             people: components["schemas"]["TeamPerson"][];
-            /** @description Skills the department has named */
-            catalog: string[];
+            /** @description Skills the department has named or put in a category, including ones nobody lists yet, by name ignoring case. A skill only on people's cards and never categorised is not listed (it is uncategorised). */
+            catalog: {
+                name: string;
+                /** Format: int64 */
+                categoryId: number | null;
+            }[];
+            /** @description In the order they were made. */
+            categories: components["schemas"]["SkillCategory"][];
+        };
+        SkillCategory: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+        };
+        CategoryName: {
+            name: string;
         };
         TeamPerson: {
             /** Format: int64 */
@@ -1790,6 +1858,11 @@ export interface operations {
                     name: string;
                     /** @description People to give it to. Unknown ids are fields.userIds=unknown; anyone already at 30 skills is fields.userIds=too_many. */
                     userIds?: number[];
+                    /**
+                     * Format: int64
+                     * @description Category to put it in (an existing skill moves there). Unknown is fields.categoryId=unknown.
+                     */
+                    categoryId?: number | null;
                 };
             };
         };
@@ -1814,6 +1887,91 @@ export interface operations {
             200: components["responses"]["Empty"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    setSkillCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name: string;
+                    /**
+                     * Format: int64
+                     * @description Unknown is fields.categoryId=unknown.
+                     */
+                    categoryId: number | null;
+                };
+            };
+        };
+        responses: {
+            200: components["responses"]["Team"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
+    createSkillCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CategoryName"];
+            };
+        };
+        responses: {
+            200: components["responses"]["Team"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
+    deleteSkillCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                categoryID: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Team"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    renameSkillCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                categoryID: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CategoryName"];
+            };
+        };
+        responses: {
+            200: components["responses"]["Team"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationFailed"];
         };
     };
     setSkills: {

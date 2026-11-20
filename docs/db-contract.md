@@ -10,6 +10,7 @@ Ground rules:
 - Services never see SQL. They call the repo interfaces in `internal/store/repos.go` inside `Store.View` or `Store.Update`.
 - Every id is `int64` (`bigint`), user ids included. User ids have no foreign key (they come from user-service).
 - A missing row is `store.ErrNotFound`, never `sql.ErrNoRows` and never a nil value. Services map it to `not_found`.
+- A write that breaks a unique index the repo comment names returns `store.ErrDuplicate` (map Postgres `23505`). Services map it to a field error.
 - Dates are `DATE` and travel as `store.Date` (`"YYYY-MM-DD"`). Timestamps are `timestamptz`, handled in UTC: the services stamp every write with `clock.UTC` (wired in `main.go`), and the API emits them as `...Z`. Timestamps read back must be UTC too (run the session with `SET TIME ZONE 'UTC'`, or convert with `.UTC()` when scanning), or the JSON would carry the server's local offset.
 - Slices a repo returns (`CardChildren.AssigneeIDs`, `LabelIDs`, `Checklist`, mention ids, list results) are empty, never nil, when there are no rows. The services guard the ones the API emits, but the contract is "never nil".
 - Priority is `smallint` 0-3. The API never sees the number (`store.PriorityName`).
@@ -815,17 +816,36 @@ Backs the Team page (`internal/team`). Table `user_skills (user_id bigint, skill
 - Does: per assignee, open cards across every project (not archived, active list, non-archived project, completed_at IS NULL): total, overdue (due before today), due soon (today up to `soon`, exclusive). Assignees with nothing open are absent. The page shows counts only, never the cards, so a project the caller cannot see is not revealed.
 - SQL obligation: one grouped query driven by `card_assignees`; see the comment on `TeamRepo.Workload` in `internal/store/repos.go`.
 
-Table `skill_catalog (name text PRIMARY KEY, created_by bigint, created_at timestamptz)` with `ux_skill_catalog (lower(name))` is the department's list of named skills, so a skill can be offered and filtered on before anyone has it. Adding one with people (`POST /team/skills`) inserts the catalog row and appends the tag to each person's `user_skills` in the same transaction; removing it from the catalog leaves people's tags alone.
+Table `skill_catalog (name text PRIMARY KEY, category_id bigint NULL REFERENCES skill_categories(id) ON DELETE SET NULL, created_by bigint, created_at timestamptz)` with `ux_skill_catalog (lower(name))` is the department's list of named skills, so a skill can be offered and filtered on before anyone has it. Adding one with people (`POST /team/skills`) inserts the catalog row and appends the tag to each person's `user_skills` in the same transaction; removing it from the catalog leaves people's tags alone.
+
+Table `skill_categories (id bigint identity PRIMARY KEY, name text, created_by bigint, created_at timestamptz)` with `ux_skill_categories_name (lower(name))` groups skills (Programming, Network, ...). A skill is in at most one category, through `skill_catalog.category_id`; a skill only in `user_skills` has no category. Anyone signed in may add, rename or delete a category (owner's decision for skills, 2026-11-20). The service caps them at 50 and applies the skill name rules to category names.
 
 **`Catalog`**
-- SQL obligation: SELECT name, created_by, created_at FROM skill_catalog ORDER BY lower(name), name.
+- SQL obligation: SELECT name, category_id, created_by, created_at FROM skill_catalog ORDER BY lower(name), name.
 
 **`AddToCatalog`**
 - Does: inserts unless a name matching ignoring case exists; reports whether it inserted. The service then reuses the stored spelling.
-- SQL obligation: INSERT INTO skill_catalog (name, created_by, created_at) VALUES ($1, $2, $3) ON CONFLICT ((lower(name))) DO NOTHING.
+- SQL obligation: INSERT INTO skill_catalog (name, category_id, created_by, created_at) VALUES ($1, $2, $3, $4) ON CONFLICT ((lower(name))) DO NOTHING.
 
 **`RemoveFromCatalog`**
 - SQL obligation: DELETE FROM skill_catalog WHERE lower(name) = lower($1); ErrNotFound when no row.
+
+**`SetSkillCategory`**
+- Does: sets the category of the catalog entry matching the name ignoring case, inserting the entry when the skill is only on people's cards. An existing entry keeps its spelling, `created_by` and `created_at`. The service has checked that the category exists and that someone uses the skill.
+- SQL obligation: INSERT INTO skill_catalog (name, category_id, created_by, created_at) VALUES ($1, $2, $3, $4) ON CONFLICT ((lower(name))) DO UPDATE SET category_id = EXCLUDED.category_id.
+
+**`Categories`**
+- SQL obligation: SELECT id, name, created_by, created_at FROM skill_categories ORDER BY id.
+
+**`CreateCategory`**
+- SQL obligation: INSERT INTO skill_categories (name, created_by, created_at) VALUES ($1, $2, $3) RETURNING id. A `ux_skill_categories_name` violation (23505) returns `store.ErrDuplicate`.
+
+**`RenameCategory`**
+- SQL obligation: UPDATE skill_categories SET name = $2 WHERE id = $1; ErrNotFound when no row; a `ux_skill_categories_name` violation returns `store.ErrDuplicate`.
+
+**`DeleteCategory`**
+- Does: removes the category; its skills become uncategorised (the foreign key's ON DELETE SET NULL), people's tags are untouched.
+- SQL obligation: DELETE FROM skill_categories WHERE id = $1; ErrNotFound when no row.
 
 ### Blob store contract (`internal/blob`)
 

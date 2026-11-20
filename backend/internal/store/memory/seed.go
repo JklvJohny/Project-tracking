@@ -13,6 +13,7 @@ import (
 	"tracking-service/internal/project"
 	"tracking-service/internal/rank"
 	"tracking-service/internal/store"
+	"tracking-service/internal/team"
 	"tracking-service/internal/users"
 )
 
@@ -89,6 +90,9 @@ func Seed(s *Store, up users.Provider, large bool) error {
 		uSam:    {"React", "Go", "CI/CD", "Performance"},
 	} {
 		s.SeedSkills(id, sk...)
+	}
+	if err := seedCategories(ctx, team.New(s, up, s.now)); err != nil {
+		return err
 	}
 
 	// Project 1: Website Redesign. The service's default lists (To Do,
@@ -194,6 +198,34 @@ func Seed(s *Store, up users.Provider, large bool) error {
 
 	if large {
 		return seedLarge(ctx, s, projects, boards)
+	}
+	return nil
+}
+
+// seedCategories makes the department's skill categories; Yokogawa product,
+// Network and Cybersecurity start empty, and skills outside these stay
+// uncategorised.
+func seedCategories(ctx context.Context, t *team.Service) error {
+	for _, c := range []struct {
+		name   string
+		skills []string
+	}{
+		{"Programming", []string{"Go", "React", "TypeScript", "Tailwind", "PostgreSQL", "API design"}},
+		{"Yokogawa product", nil},
+		{"DevOps", []string{"Docker", "CI/CD"}},
+		{"Network", nil},
+		{"Cybersecurity", nil},
+	} {
+		v, err := t.CreateCategory(ctx, uAdmin, c.name)
+		if err != nil {
+			return fmt.Errorf("seed category %q: %w", c.name, err)
+		}
+		id := v.Categories[len(v.Categories)-1].ID
+		for _, sk := range c.skills {
+			if _, err := t.SetSkillCategory(ctx, uAdmin, sk, &id); err != nil {
+				return fmt.Errorf("seed skill category %q: %w", sk, err)
+			}
+		}
 	}
 	return nil
 }

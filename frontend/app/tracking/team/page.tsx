@@ -257,7 +257,7 @@ export default function TeamPage() {
                 </Select>
               </div>
             </div>
-            <SkillBar skills={skills} chosen={filter.skills} people={q.data.people} onToggle={toggle} />
+            <SkillBar skills={skills} categories={q.data.categories} chosen={filter.skills} people={q.data.people} onToggle={toggle} />
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
               <span role="status">{t.showing(shown.length, q.data.people.length)}</span>
               {filtering && (

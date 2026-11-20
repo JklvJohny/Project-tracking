@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { api, ApiError } from '../shared/api/client';
 import { TrackingProvider } from '../shared/provider';
 import TeamPage from './page';
-import { cleanSkills, type Person } from './queries';
+import { cleanSkills, groupSkills, type CatalogEntry, type Category, type Person } from './queries';
 
 vi.mock('../shared/api/client', async (orig) => ({ ...(await orig<object>()), api: vi.fn() }));
 vi.mock('sonner', async (orig) => ({
@@ -18,11 +18,18 @@ const person = (userId: number, name: string, skills: string[], open = 0, overdu
 });
 let people: Person[];
 let failPut = false;
-let catalog: string[];
+let catalog: CatalogEntry[];
+let categories: Category[];
 
-type Init = { method?: string; json?: { skills: string[]; name?: string; userIds?: number[] } };
+type Init = {
+  method?: string;
+  json?: { skills: string[]; name?: string; userIds?: number[]; categoryId?: number | null };
+};
+const view = () => ({ asOf: '2026-11-20', people, catalog, categories });
 beforeEach(() => {
   // Radix Checkbox measures itself.
+  Element.prototype.scrollIntoView = vi.fn();
+  Element.prototype.hasPointerCapture = vi.fn(() => false);
   globalThis.ResizeObserver ??= class {
     observe() {}
     unobserve() {}
@@ -30,7 +37,14 @@ beforeEach(() => {
   } as unknown as typeof ResizeObserver;
   failPut = false;
   localStorage.clear();
-  catalog = ['Kotlin'];
+  categories = [
+    { id: 1, name: 'Programming' },
+    { id: 2, name: 'Network' },
+  ];
+  catalog = [
+    { name: 'Kotlin', categoryId: 1 },
+    { name: 'Go', categoryId: 1 },
+  ];
   people = [
     person(3, 'Ann Lee', ['React', 'Go'], 5, 1, 2),
     person(4, 'Ben Ko', ['Go', 'PostgreSQL'], 1),
@@ -40,12 +54,31 @@ beforeEach(() => {
   vi.mocked(toast.error).mockReset();
   apiMock.mockImplementation((async (path: string, init?: Init) => {
     if (path === '/me') return { user: { id: 2, name: 'Napat K.', avatarUrl: '' }, isAdmin: false, canCreateProject: true };
-    if (path === '/team') return { asOf: '2026-11-20', people, catalog };
+    if (path === '/team') return view();
     if (path === '/team/skills' && init?.method === 'POST') {
-      const { name, userIds } = init.json!;
-      catalog = [...catalog, name!];
+      const { name, userIds, categoryId = null } = init.json!;
+      catalog = [...catalog, { name: name!, categoryId }];
       people = people.map((p) => (userIds!.includes(p.userId) ? { ...p, skills: [...p.skills, name!] } : p));
-      return { asOf: '2026-11-20', people, catalog };
+      return view();
+    }
+    if (path === '/team/skills/category') {
+      const { name, categoryId = null } = init!.json!;
+      catalog = [...catalog.filter((c) => c.name !== name), { name: name!, categoryId }];
+      return view();
+    }
+    if (path === '/team/categories') {
+      categories = [...categories, { id: 9, name: init!.json!.name! }];
+      return view();
+    }
+    const cat = /^\/team\/categories\/(\d+)$/.exec(path);
+    if (cat && init?.method === 'PATCH') {
+      categories = categories.map((c) => (c.id === Number(cat[1]) ? { ...c, name: init.json!.name! } : c));
+      return view();
+    }
+    if (cat && init?.method === 'DELETE') {
+      categories = categories.filter((c) => c.id !== Number(cat[1]));
+      catalog = catalog.map((c) => (c.categoryId === Number(cat[1]) ? { ...c, categoryId: null } : c));
+      return view();
     }
     if (init?.method === 'DELETE') return {};
     if (init?.method === 'PUT') {
@@ -84,9 +117,11 @@ describe('Team page', () => {
     expect(screen.queryByRole('list', { name: 'Filter by skill' })).toBeNull();
     fireEvent.click(toggle);
     expect(localStorage.getItem('pt-team-skills-open')).toBe('1');
-    const bar = screen.getByRole('list', { name: 'Filter by skill' });
-    // Most common first; a named skill nobody has comes last with 0.
-    expect(within(bar).getAllByRole('button', { pressed: false }).map((b) => b.textContent)).toEqual(['Go 2', 'PostgreSQL 1', 'React 1', 'Kotlin 0']);
+    const bar = screen.getByRole('group', { name: 'Filter by skill' });
+    // By category, most common first within each; uncategorised last; an empty category says so.
+    expect(within(bar).getAllByRole('button', { pressed: false }).map((b) => b.textContent)).toEqual(['Go 2', 'Kotlin 0', 'PostgreSQL 1', 'React 1']);
+    expect(within(within(bar).getByRole('list', { name: 'Programming' })).getAllByRole('listitem')).toHaveLength(2);
+    expect(within(bar).getByText('No skills in this category yet')).toBeTruthy();
     fireEvent.click(within(bar).getByRole('button', { name: /^Go/ }));
     expect(screen.getByRole('status').textContent).toBe('Showing 2 of 3 people');
     // A skill on a card adds to the filter too: Go AND React leaves Ann.
@@ -154,7 +189,7 @@ describe('Skill list', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: /Napat K\./ }));
     fireEvent.click(screen.getByRole('button', { name: 'Add' }));
     await waitFor(() =>
-      expect(apiMock).toHaveBeenCalledWith('/team/skills', { method: 'POST', json: { name: 'Rust', userIds: [2] } }),
+      expect(apiMock).toHaveBeenCalledWith('/team/skills', { method: 'POST', json: { name: 'Rust', userIds: [2], categoryId: null } }),
     );
     expect(await within(card('Napat')).findByRole('button', { name: 'Rust' })).toBeTruthy();
   });
@@ -176,7 +211,107 @@ describe('Skill list', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Remove Kotlin from the skill list' }));
     await waitFor(() => expect(screen.queryByRole('button', { name: /^Kotlin/ })).toBeNull());
     await waitFor(() => expect(apiMock).toHaveBeenCalledWith('/team/skills?name=Kotlin', { method: 'DELETE' }));
-    const [, opts] = vi.mocked(toast).mock.calls.at(-1)! as unknown as [string, { action: { label: string } }];
+    const [, opts] = vi.mocked(toast).mock.calls.at(-1)! as unknown as [string, { action: { label: string; onClick: () => void } }];
     expect(opts.action.label).toBe('Undo');
+    // Undo puts it back in its category.
+    opts.action.onClick();
+    await waitFor(() =>
+      expect(apiMock).toHaveBeenCalledWith('/team/skills', { method: 'POST', json: { name: 'Kotlin', userIds: [], categoryId: 1 } }),
+    );
+  });
+});
+
+describe('Skill categories', () => {
+  it('the + beside a category adds a skill straight into it', async () => {
+    await screen.findByRole('list', { name: 'Team members' });
+    fireEvent.click(screen.getByRole('button', { name: /All skills/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add a skill to Network' }));
+    expect((await screen.findByRole('combobox', { name: 'Category' })).textContent).toBe('Network');
+    fireEvent.change(screen.getByLabelText('Skill name'), { target: { value: 'BGP' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    await waitFor(() =>
+      expect(apiMock).toHaveBeenCalledWith('/team/skills', { method: 'POST', json: { name: 'BGP', userIds: [], categoryId: 2 } }),
+    );
+    expect(await within(screen.getByRole('group', { name: 'Filter by skill' })).findByRole('list', { name: 'Network' })).toBeTruthy();
+  });
+
+  it('an existing name with nobody ticked is still sent when it moves to another category', async () => {
+    await screen.findByRole('list', { name: 'Team members' });
+    fireEvent.click(screen.getByRole('button', { name: /All skills/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add a skill to Network' }));
+    fireEvent.change(await screen.findByLabelText('Skill name'), { target: { value: 'go' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    await waitFor(() =>
+      expect(apiMock).toHaveBeenCalledWith('/team/skills', { method: 'POST', json: { name: 'go', userIds: [], categoryId: 2 } }),
+    );
+  });
+
+  it('adds, renames and moves skills between categories in the dialog', async () => {
+    await screen.findByRole('list', { name: 'Team members' });
+    fireEvent.click(screen.getByRole('button', { name: 'Categories' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Skill categories' });
+    // Focus starts on the new-category field, not on an existing name a keystroke would change.
+    const name = within(dialog).getByRole('textbox', { name: 'New category' });
+    expect(document.activeElement).toBe(name);
+    // A clash is caught before the server.
+    fireEvent.change(name, { target: { value: ' network ' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add category' }));
+    expect(within(dialog).getByRole('alert').textContent).toBe('A category with this name exists');
+    fireEvent.change(name, { target: { value: 'Cybersecurity' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add category' }));
+    expect(await within(dialog).findByRole('textbox', { name: 'Name of category Cybersecurity' })).toBeTruthy();
+
+    // Rename on blur.
+    const net = within(dialog).getByRole('textbox', { name: 'Name of category Network' });
+    fireEvent.change(net, { target: { value: 'Networking' } });
+    fireEvent.blur(net);
+    await waitFor(() =>
+      expect(apiMock).toHaveBeenCalledWith('/team/categories/2', { method: 'PATCH', json: { name: 'Networking' } }),
+    );
+
+    // Move a skill that is only on people's cards.
+    const trigger = within(dialog).getByRole('combobox', { name: 'Category of PostgreSQL' });
+    expect(trigger.textContent).toBe('Uncategorised');
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    fireEvent.click(await screen.findByRole('option', { name: 'Programming' }));
+    await waitFor(() =>
+      expect(apiMock).toHaveBeenCalledWith('/team/skills/category', { method: 'PUT', json: { name: 'PostgreSQL', categoryId: 1 } }),
+    );
+    await waitFor(() =>
+      expect(within(dialog).getByRole('combobox', { name: 'Category of PostgreSQL' }).textContent).toBe('Programming'),
+    );
+  });
+
+  it('asks before deleting a category that has skills', async () => {
+    await screen.findByRole('list', { name: 'Team members' });
+    fireEvent.click(screen.getByRole('button', { name: 'Categories' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Skill categories' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete category Programming' }));
+    const ask = await screen.findByRole('alertdialog');
+    expect(ask.textContent).toMatch(/Its 2 skills move to "Uncategorised"/);
+    fireEvent.click(within(ask).getByRole('button', { name: 'Delete category' }));
+    await waitFor(() => expect(apiMock).toHaveBeenCalledWith('/team/categories/1', { method: 'DELETE' }));
+  });
+});
+
+describe('groupSkills', () => {
+  it('keeps category order, lists empty categories and puts uncategorised last', () => {
+    const g = groupSkills(
+      [
+        { name: 'Go', count: 2, categoryId: 2 },
+        { name: 'Excel', count: 1, categoryId: null },
+        { name: 'Old', count: 1, categoryId: 7 },
+      ],
+      [
+        { id: 1, name: 'Network' },
+        { id: 2, name: 'Programming' },
+      ],
+    );
+    expect(g.map((x) => [x.category?.name ?? null, x.skills.map((s) => s.name)])).toEqual([
+      ['Network', []],
+      ['Programming', ['Go']],
+      // A category that no longer exists counts as none.
+      [null, ['Excel', 'Old']],
+    ]);
   });
 });

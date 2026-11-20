@@ -13,6 +13,10 @@ import (
 // apperr.NotFound.
 var ErrNotFound = errors.New("store: not found")
 
+// ErrDuplicate is returned by a repo when a write breaks a unique index.
+// SQL: unique_violation (23505).
+var ErrDuplicate = errors.New("store: duplicate")
+
 // Store runs units of work against a consistent view of the data.
 //
 // View callbacks are read-only: never call a write method inside View.

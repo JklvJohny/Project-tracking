@@ -81,6 +81,7 @@ paths:
               properties:
                 name: { type: string, maxLength: 40, description: Trimmed with inner spaces squeezed; required. }
                 userIds: { type: array, items: { type: integer, format: int64 }, description: People to give it to. Unknown ids are fields.userIds=unknown; anyone already at 30 skills is fields.userIds=too_many. }
+                categoryId: { type: [integer, 'null'], format: int64, description: Category to put it in (an existing skill moves there). Unknown is fields.categoryId=unknown. }
       responses:
         '200': { $ref: '#/components/responses/Team' }
         '400': { $ref: '#/components/responses/BadRequest' }
@@ -97,6 +98,73 @@ paths:
           schema: { type: string }
       responses:
         '200': { $ref: '#/components/responses/Empty' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /team/skills/category:
+    put:
+      tags: [team]
+      operationId: setSkillCategory
+      summary: Put a skill (matched ignoring case) in one category, or none with categoryId null. A skill only on people's cards joins the department list under its first spelling. Anyone signed in. Returns the Team view.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, categoryId]
+              additionalProperties: false
+              properties:
+                name: { type: string, maxLength: 40 }
+                categoryId: { type: [integer, 'null'], format: int64, description: Unknown is fields.categoryId=unknown. }
+      responses:
+        '200': { $ref: '#/components/responses/Team' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /team/categories:
+    post:
+      tags: [team]
+      operationId: createSkillCategory
+      summary: Add a skill category. Names are trimmed with inner spaces squeezed, at most 40 characters, unique ignoring case (fields.name=exists); at most 50 categories (fields.name=too_many). Anyone signed in. Returns the Team view.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CategoryName' }
+      responses:
+        '200': { $ref: '#/components/responses/Team' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /team/categories/{categoryID}:
+    parameters:
+      - name: categoryID
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    patch:
+      tags: [team]
+      operationId: renameSkillCategory
+      summary: Rename a skill category, with the same rules as create; changing only the case is allowed. Returns the Team view.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CategoryName' }
+      responses:
+        '200': { $ref: '#/components/responses/Team' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    delete:
+      tags: [team]
+      operationId: deleteSkillCategory
+      summary: Delete a skill category. Its skills stay, uncategorised. Returns the Team view.
+      responses:
+        '200': { $ref: '#/components/responses/Team' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
   /team/{userID}/skills:
@@ -1605,13 +1673,37 @@ components:
               assignees: { type: array, items: { $ref: '#/components/schemas/User' } }
     Team:
       type: object
-      required: [asOf, people, catalog]
+      required: [asOf, people, catalog, categories]
       properties:
         asOf: { type: string, format: date, description: Today in Asia/Bangkok. }
         people:
           type: array
           items: { $ref: '#/components/schemas/TeamPerson' }
-        catalog: { type: array, items: { type: string }, description: Skills the department has named, including ones nobody lists yet, by name ignoring case. }
+        catalog:
+          type: array
+          description: Skills the department has named or put in a category, including ones nobody lists yet, by name ignoring case. A skill only on people's cards and never categorised is not listed (it is uncategorised).
+          items:
+            type: object
+            required: [name, categoryId]
+            properties:
+              name: { type: string }
+              categoryId: { type: [integer, 'null'], format: int64 }
+        categories:
+          type: array
+          description: In the order they were made.
+          items: { $ref: '#/components/schemas/SkillCategory' }
+    SkillCategory:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+    CategoryName:
+      type: object
+      required: [name]
+      additionalProperties: false
+      properties:
+        name: { type: string, maxLength: 40 }
     TeamPerson:
       type: object
       required: [userId, name, avatarUrl, skills, open, overdue, dueSoon]
