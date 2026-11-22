@@ -57,6 +57,35 @@
   --sidebar: #0c1323; --sidebar-foreground: #e2e8f0; --sidebar-accent: #1e293b; --sidebar-accent-foreground: #e2e8f0;
 }
 
+.dark[data-pt-dark='graphite'] {
+  --background: #1e1f22; --foreground: #e8e8ea;
+  --card: #27282c; --card-foreground: #e8e8ea; --popover: #27282c; --popover-foreground: #e8e8ea;
+  --secondary: #34353a; --secondary-foreground: #e8e8ea; --muted: #34353a; --muted-foreground: #a8a9b0;
+  --accent: #34353a; --accent-foreground: #e8e8ea; --ring: #6e7079;
+  --sidebar: #19191c; --sidebar-foreground: #e8e8ea; --sidebar-accent: #2e2f33; --sidebar-accent-foreground: #e8e8ea;
+}
+.dark[data-pt-dark='forest'] {
+  --background: #17201c; --foreground: #e3ebe6;
+  --card: #1f2a25; --card-foreground: #e3ebe6; --popover: #1f2a25; --popover-foreground: #e3ebe6;
+  --secondary: #2b3831; --secondary-foreground: #e3ebe6; --muted: #2b3831; --muted-foreground: #a0b4a9;
+  --accent: #2b3831; --accent-foreground: #e3ebe6; --ring: #5f7a6c;
+  --sidebar: #131a17; --sidebar-foreground: #e3ebe6; --sidebar-accent: #25322c; --sidebar-accent-foreground: #e3ebe6;
+}
+.dark[data-pt-dark='ocean'] {
+  --background: #14212a; --foreground: #e2ecf0;
+  --card: #1b2c35; --card-foreground: #e2ecf0; --popover: #1b2c35; --popover-foreground: #e2ecf0;
+  --secondary: #263a44; --secondary-foreground: #e2ecf0; --muted: #263a44; --muted-foreground: #9cb4bf;
+  --accent: #263a44; --accent-foreground: #e2ecf0; --ring: #5b7884;
+  --sidebar: #101b23; --sidebar-foreground: #e2ecf0; --sidebar-accent: #20333d; --sidebar-accent-foreground: #e2ecf0;
+}
+.dark[data-pt-dark='plum'] {
+  --background: #201b27; --foreground: #ebe6f0;
+  --card: #29232f; --card-foreground: #ebe6f0; --popover: #29232f; --popover-foreground: #ebe6f0;
+  --secondary: #362e3e; --secondary-foreground: #ebe6f0; --muted: #362e3e; --muted-foreground: #b2a7be;
+  --accent: #362e3e; --accent-foreground: #ebe6f0; --ring: #7a6c88;
+  --sidebar: #1b1621; --sidebar-foreground: #ebe6f0; --sidebar-accent: #302837; --sidebar-accent-foreground: #ebe6f0;
+}
+
 /* Compact type scale: tracking pages are dense (body 13px in index.html). */
 .tracking-root { font-size: 13px; }
 

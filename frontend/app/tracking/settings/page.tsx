@@ -21,8 +21,12 @@ const TEXT = {
     paletteNowLight: 'ตอนนี้ใช้ธีมสว่างอยู่ สีนี้จะเห็นเมื่อเปลี่ยนเป็นโหมดมืด',
     palettes: {
       slate: { name: 'เทาอมฟ้า', desc: 'นุ่มตา เหมาะกับใช้ทั้งวัน' },
+      graphite: { name: 'เทากราไฟต์', desc: 'เทากลาง ไม่อมสีใด' },
       warm: { name: 'เทาอุ่น', desc: 'โทนอบอุ่น ไม่มีสีฟ้า' },
       navy: { name: 'น้ำเงินเข้ม', desc: 'เข้มที่สุด โทนน้ำเงิน' },
+      ocean: { name: 'ฟ้าทะเล', desc: 'โทนฟ้าอมเขียว สบายตา' },
+      forest: { name: 'เขียวป่า', desc: 'โทนเขียวเข้ม ผ่อนคลาย' },
+      plum: { name: 'ม่วงพลัม', desc: 'โทนม่วงเข้ม นุ่มนวล' },
     } as Record<DarkPalette, { name: string; desc: string }>,
   },
   en: {
@@ -36,8 +40,12 @@ const TEXT = {
     paletteNowLight: 'The light theme is on; this shows once you switch to dark.',
     palettes: {
       slate: { name: 'Slate', desc: 'Soft blue-grey, easy for a full day' },
+      graphite: { name: 'Graphite', desc: 'Neutral grey with no tint' },
       warm: { name: 'Warm grey', desc: 'Warm tones, no blue' },
       navy: { name: 'Navy', desc: 'The darkest, deep blue' },
+      ocean: { name: 'Ocean', desc: 'Calm blue-green' },
+      forest: { name: 'Forest', desc: 'Deep, restful green' },
+      plum: { name: 'Plum', desc: 'Soft deep purple' },
     } as Record<DarkPalette, { name: string; desc: string }>,
   },
 };
@@ -102,7 +110,7 @@ export default function SettingsPage() {
           <p id={`${ids}-palette-hint`} className="text-xs text-muted-foreground">
             {resolvedTheme === 'light' ? t.paletteNowLight : t.paletteHint}
           </p>
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {DARK_PALETTES.map((p) => {
               const on = darkPalette === p;
               return (

@@ -33,6 +33,19 @@ describe('Settings', () => {
     expect((screen.getByRole('radio', { name: /^Warm grey/ }) as HTMLInputElement).checked).toBe(true);
   });
 
+  it('offers seven palettes, each with a name and a description', () => {
+    render(
+      <TrackingProvider lang="en">
+        <SettingsPage />
+      </TrackingProvider>,
+    );
+    const names = ['Slate', 'Graphite', 'Warm grey', 'Navy', 'Ocean', 'Forest', 'Plum'];
+    for (const n of names) expect(screen.getByRole('radio', { name: new RegExp(`^${n}`) })).toBeTruthy();
+    fireEvent.click(screen.getByRole('radio', { name: /^Plum/ }));
+    expect(document.documentElement.dataset.ptDark).toBe('plum');
+    expect(localStorage.getItem('pt-dark-palette')).toBe('plum');
+  });
+
   it('a stored palette is read back; an unknown one falls back to slate', () => {
     localStorage.setItem('pt-dark-palette', 'navy');
     const { unmount } = render(

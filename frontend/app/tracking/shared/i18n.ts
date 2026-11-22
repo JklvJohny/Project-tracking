@@ -4,8 +4,8 @@ import { createContext, useContext } from 'react';
 export type Lang = 'th' | 'en';
 export type Theme = 'light' | 'dark' | 'system';
 /** The surface colours used in dark mode (tracking.css). Light mode has one palette. */
-export type DarkPalette = 'slate' | 'warm' | 'navy';
-export const DARK_PALETTES: readonly DarkPalette[] = ['slate', 'warm', 'navy'];
+export type DarkPalette = 'slate' | 'graphite' | 'warm' | 'navy' | 'ocean' | 'forest' | 'plum';
+export const DARK_PALETTES: readonly DarkPalette[] = ['slate', 'graphite', 'warm', 'navy', 'ocean', 'forest', 'plum'];
 
 export type TrackingCtx = {
   lang: Lang;
