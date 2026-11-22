@@ -1,5 +1,5 @@
 'use client';
-import { AlarmClock, CircleCheck, Search, TriangleAlert, Users, X } from 'lucide-react';
+import { CircleCheck, Search, Users, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -80,15 +80,17 @@ function Workload({ p }: { p: Person }) {
   return (
     <ul aria-label={t.workload} className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-xs text-muted-foreground">
       <li className="font-medium text-foreground tabular-nums">{t.open(p.open)}</li>
+      {/* A small dot carries the colour; the words stay quiet, so a card full of late work does not shout. The
+          words say what it is, so the colour is never the only signal. */}
       {p.overdue > 0 && (
-        <li className="flex items-center gap-1 text-(--s-overdue) tabular-nums">
-          <TriangleAlert className="size-3.5" aria-hidden />
+        <li className="flex items-center gap-1.5 tabular-nums">
+          <span className="size-1.5 shrink-0 rounded-full bg-(--s-overdue)" aria-hidden />
           {t.overdue(p.overdue)}
         </li>
       )}
       {p.dueSoon > 0 && (
-        <li className="flex items-center gap-1 tabular-nums">
-          <AlarmClock className="size-3.5" aria-hidden />
+        <li className="flex items-center gap-1.5 tabular-nums">
+          <span className="size-1.5 shrink-0 rounded-full bg-(--p-high)" aria-hidden />
           {t.soon(p.dueSoon)}
         </li>
       )}
