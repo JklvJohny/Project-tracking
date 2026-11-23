@@ -127,7 +127,7 @@ export function StackedBars({ items, keys, caption }: { items: BarItem[]; keys: 
           {items.map((it) => (
             <tr key={it.id} className="border-b last:border-0">
               <th scope="row" className="py-1.5 pr-3 text-left font-normal">
-                {it.name}
+                <span className="flex min-w-0 items-center gap-2">{it.label}</span>
               </th>
               {keys.map((k) => (
                 <td key={k} className="px-2 py-1.5 text-right tabular-nums">

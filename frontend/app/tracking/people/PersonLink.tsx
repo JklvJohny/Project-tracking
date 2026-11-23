@@ -21,7 +21,7 @@ export function PersonLink({
   decorative?: boolean;
 }) {
   const me = useMe();
-  const own = me.data?.user.id === userId;
+  const own = me.data?.user?.id === userId;
   if (!own && me.data?.canViewPeople !== true) return <span className={className}>{children}</span>;
   return (
     <Link

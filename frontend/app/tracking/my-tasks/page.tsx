@@ -196,52 +196,57 @@ function TaskCard({ task, group, meId }: { task: Task; group: Group; meId: numbe
   const d = task.daysLeft;
   const when = d === null ? null : d < 0 ? t.late(-d) : d === 0 ? t.todayShort : t.soon(d);
   const pct = task.checklistTotal > 0 ? Math.round((task.checklistDone / task.checklistTotal) * 100) : 0;
+  // The card opens through a stretched link (a link cannot hold another link), so the pictures can open people.
   return (
-    <Link
-      href={routes.card(task.projectId, task.cardId)}
-      className="block px-3.5 py-3 transition-colors hover:bg-muted/40 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
-    >
-      <span
-        className="inline-block rounded px-1.5 py-0.5 text-[10px] leading-4 font-bold tracking-wide text-white uppercase"
-        style={{ background: `var(--pb-${task.priority})` }}
-      >
-        {priorityLabel(task.priority, lang)}
-      </span>
-      <span className="mt-1.5 block text-[15px] leading-snug font-semibold break-words">{task.title}</span>
-      <span className="mt-0.5 block truncate text-xs text-muted-foreground">{`${task.projectName} · ${task.listName}`}</span>
-      {task.checklistTotal > 0 && (
-        <span className="mt-2.5 flex items-center gap-2" title={t.progress(task.checklistDone, task.checklistTotal)}>
-          <span aria-hidden className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-            <span className="block h-full rounded-full bg-(--s-done)" style={{ width: `${pct}%` }} />
-          </span>
-          <span className="text-xs text-muted-foreground tabular-nums">
-            <span aria-hidden>
-              {task.checklistDone}/{task.checklistTotal}
-            </span>
-            <span className="sr-only">{t.progress(task.checklistDone, task.checklistTotal)}</span>
-          </span>
+    <div className="relative px-3.5 py-3 transition-colors hover:bg-muted/40">
+      <Link
+        href={routes.card(task.projectId, task.cardId)}
+        aria-label={task.title}
+        className="absolute inset-0 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+      />
+      <span className="pointer-events-none relative block">
+        <span
+          className="inline-block rounded px-1.5 py-0.5 text-[10px] leading-4 font-bold tracking-wide text-white uppercase"
+          style={{ background: `var(--pb-${task.priority})` }}
+        >
+          {priorityLabel(task.priority, lang)}
         </span>
-      )}
-      {(task.dueDate || others.length > 0) && (
-        <span className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1">
-          {task.dueDate && (
-            <>
-              <span
-                className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium whitespace-nowrap ${CHIP[group]}`}
-              >
-                {group === 'overdue' ? <TriangleAlert className="size-3.5" aria-hidden /> : <CalendarClock className="size-3.5" aria-hidden />}
-                {when}
+        <span className="mt-1.5 block text-[15px] leading-snug font-semibold break-words">{task.title}</span>
+        <span className="mt-0.5 block truncate text-xs text-muted-foreground">{`${task.projectName} · ${task.listName}`}</span>
+        {task.checklistTotal > 0 && (
+          <span className="mt-2.5 flex items-center gap-2" title={t.progress(task.checklistDone, task.checklistTotal)}>
+            <span aria-hidden className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+              <span className="block h-full rounded-full bg-(--s-done)" style={{ width: `${pct}%` }} />
+            </span>
+            <span className="text-xs text-muted-foreground tabular-nums">
+              <span aria-hidden>
+                {task.checklistDone}/{task.checklistTotal}
               </span>
-              <span className="text-xs whitespace-nowrap text-muted-foreground">{fmtDate(task.dueDate, lang)}</span>
-            </>
-          )}
-          {others.length > 0 && (
-            <span role="group" aria-label={t.with} className="ml-auto">
-              <AvatarStack users={others} max={3} />
+              <span className="sr-only">{t.progress(task.checklistDone, task.checklistTotal)}</span>
             </span>
-          )}
-        </span>
-      )}
-    </Link>
+          </span>
+        )}
+        {(task.dueDate || others.length > 0) && (
+          <span className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+            {task.dueDate && (
+              <>
+                <span
+                  className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium whitespace-nowrap ${CHIP[group]}`}
+                >
+                  {group === 'overdue' ? <TriangleAlert className="size-3.5" aria-hidden /> : <CalendarClock className="size-3.5" aria-hidden />}
+                  {when}
+                </span>
+                <span className="text-xs whitespace-nowrap text-muted-foreground">{fmtDate(task.dueDate, lang)}</span>
+              </>
+            )}
+            {others.length > 0 && (
+              <span role="group" aria-label={t.with} className="pointer-events-auto ml-auto">
+                <AvatarStack users={others} max={3} link />
+              </span>
+            )}
+          </span>
+        )}
+      </span>
+    </div>
   );
 }

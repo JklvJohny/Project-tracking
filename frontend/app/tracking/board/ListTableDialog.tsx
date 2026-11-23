@@ -148,7 +148,7 @@ export function ListTableDialog({ projectId, listId, onClose }: { projectId: num
                           {priorityLabel(c.priority, lang)}
                         </span>
                       </td>
-                      <td className={TD}>{assignees.length > 0 ? <AvatarStack users={assignees} max={4} /> : <Dash />}</td>
+                      <td className={TD}>{assignees.length > 0 ? <AvatarStack users={assignees} max={4} link /> : <Dash />}</td>
                       <td className={`${TD} whitespace-nowrap text-muted-foreground`}>
                         {c.startDate ? fmtDate(c.startDate, lang) : <Dash />}
                       </td>

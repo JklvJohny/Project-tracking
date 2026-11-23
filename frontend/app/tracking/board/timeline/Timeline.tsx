@@ -17,6 +17,7 @@ import {
   type TimelineRow,
   type TimelineStatus,
 } from './timeline-model';
+import { PersonLink } from '../../people/PersonLink';
 
 export const TIMELINE_OPEN_KEY = 'pt-timeline-open';
 const LEFT = '10rem';
@@ -170,11 +171,18 @@ function TimelineBody({ projectId }: { projectId: number }) {
             <div key={g.assignee?.id ?? 'none'} role="group" aria-label={g.assignee?.name ?? t.unassigned}>
               <div className="flex items-center gap-2 border-b bg-muted px-3 py-1.5">
                 {g.assignee ? (
-                  <Avatar user={g.assignee} size="sm" />
+                  <PersonLink userId={g.assignee.id} className="flex min-w-0 items-center gap-2">
+                    <Avatar user={g.assignee} size="sm" />
+                    <span className="truncate text-sm font-semibold" aria-hidden>
+                      {g.assignee.name}
+                    </span>
+                  </PersonLink>
                 ) : (
-                  <span aria-hidden className="size-6 rounded-full border border-dashed" />
+                  <>
+                    <span aria-hidden className="size-6 rounded-full border border-dashed" />
+                    <span className="truncate text-sm font-semibold">{t.unassigned}</span>
+                  </>
                 )}
-                <span className="truncate text-sm font-semibold">{g.assignee?.name ?? t.unassigned}</span>
                 <span className="ml-auto shrink-0 text-xs text-muted-foreground">{t.tasks(g.rows.length)}</span>
               </div>
               {g.rows.map((r) => (

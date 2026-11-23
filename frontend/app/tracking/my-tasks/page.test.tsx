@@ -44,9 +44,9 @@ describe('My tasks', () => {
     expect(within(await column('No due date')).getByText('Whenever')).toBeTruthy();
     // Every column stays, so the layout never shifts; an empty one says so.
     expect(within(await column('Later')).getByText('Nothing here')).toBeTruthy();
-    expect(screen.getByText('Late').closest('a')!.getAttribute('href')).toBe('/tracking/7?card=1');
+    expect(screen.getByRole('link', { name: 'Late' }).getAttribute('href')).toBe('/tracking/7?card=1');
     expect(screen.getByText('3d overdue')).toBeTruthy();
-    const soon = within(await column('Next 7 days')).getByText('Soon').closest('a')!;
+    const soon = within(await column('Next 7 days')).getByRole('link', { name: 'Soon' }).parentElement!;
     expect(within(soon).getByText('1 of 4 subtasks done')).toBeTruthy();
     // Only the other people on the card, never the caller.
     expect(within(soon).getByTitle('Ann')).toBeTruthy();

@@ -12,6 +12,7 @@ import { useConfirm } from '../shared/confirm';
 import { errorMessage } from '../shared/errors';
 import { useLang, useT } from '../shared/i18n';
 import { useShare, useShares, useUnshare, type Folder } from './queries';
+import { PersonLink } from '../people/PersonLink';
 
 const TEXT = {
   th: {
@@ -160,10 +161,12 @@ function ShareBody({ projectId }: { projectId: number }) {
               const name = s.name || `${t.unknown} #${s.userId}`;
               return (
                 <li key={s.userId} className="flex items-center gap-2 py-2 text-sm">
-                  <Avatar user={{ id: s.userId, name, avatarUrl: s.avatarUrl }} size="xs" />
-                  <span className="min-w-0 flex-1 truncate" aria-hidden>
-                    {name}
-                  </span>
+                  <PersonLink userId={s.userId} className="flex min-w-0 flex-1 items-center gap-2">
+                    <Avatar user={{ id: s.userId, name, avatarUrl: s.avatarUrl }} size="xs" />
+                    <span className="min-w-0 truncate" aria-hidden>
+                      {name}
+                    </span>
+                  </PersonLink>
                   <Button size="sm" variant="ghost" aria-label={t.stopWith(name)} disabled={unshare.isPending} onClick={() => onStop(s.userId, name)}>
                     {t.stop}
                   </Button>

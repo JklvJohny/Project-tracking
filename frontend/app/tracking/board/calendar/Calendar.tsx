@@ -349,12 +349,12 @@ export function MonthCalendar({ cards, users, cardHref, fit = true, className = 
                       const { dates, aria } = label(a.card, a.from, a.to, a.status, lang, t);
                       const people = a.card.assigneeIds.flatMap((id) => users.get(id) ?? []);
                       return (
-                        <li key={a.card.id}>
+                        <li key={a.card.id} className="flex items-center hover:bg-accent">
                           <Link
                             href={cardHref(a.card.id)}
                             scroll={false}
                             aria-label={aria}
-                            className="flex items-center gap-2.5 px-3 py-2 hover:bg-accent focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+                            className="flex min-w-0 flex-1 items-center gap-2.5 px-3 py-2 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
                           >
                             <span aria-hidden className="h-8 w-1 shrink-0 rounded-full" style={{ background: token(a.status) }} />
                             <span className="flex min-w-0 flex-1 flex-col">
@@ -364,8 +364,12 @@ export function MonthCalendar({ cards, users, cardHref, fit = true, className = 
                                 {dates} · {t.status[a.status]}
                               </span>
                             </span>
-                            {people.length > 0 && <AvatarStack users={people} max={3} size="xs" />}
                           </Link>
+                          {people.length > 0 && (
+                            <span className="shrink-0 pr-3">
+                              <AvatarStack users={people} max={3} size="xs" link />
+                            </span>
+                          )}
                         </li>
                       );
                     })}

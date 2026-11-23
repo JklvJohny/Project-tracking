@@ -11,6 +11,7 @@ import { routes } from '../shared/routes';
 import { impactOf, type Span } from './impact';
 import { ImpactView } from './ImpactView';
 import { usePerson } from './queries';
+import { PersonLink } from './PersonLink';
 
 const TEXT = {
   th: {
@@ -57,8 +58,11 @@ export function ImpactPanel({
         <Button variant="ghost" size="icon-sm" aria-label={t.back} title={t.back} onClick={onBack}>
           <ArrowLeft aria-hidden />
         </Button>
-        <Avatar user={{ id: userId, name, avatarUrl }} size="sm" />
-        <span className="min-w-0 flex-1 truncate text-sm font-medium">{name}</span>
+        {/* The same page as the "open" link beside it: a second way in for the pointer only. */}
+        <PersonLink userId={userId} decorative className="flex min-w-0 flex-1 items-center gap-2">
+          <Avatar user={{ id: userId, name, avatarUrl }} size="sm" />
+          <span className="min-w-0 truncate text-sm font-medium">{name}</span>
+        </PersonLink>
         <Link
           href={routes.person(userId)}
           className="inline-flex items-center gap-1 rounded text-xs text-primary hover:underline focus-visible:outline-2 focus-visible:outline-ring"

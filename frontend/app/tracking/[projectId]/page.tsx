@@ -92,6 +92,7 @@ function Header({ projectId }: { projectId: number }) {
                 users={board.data.members.map((m) => ({ id: m.userId, name: m.name, avatarUrl: m.avatarUrl }))}
                 max={5}
                 size="md"
+                link
               />
             </span>
           )}

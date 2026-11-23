@@ -210,8 +210,8 @@ export const CardPreview = memo(function CardPreview({
             </span>
           )}
           {assignees.length > 0 && (
-            <span role="group" aria-label={t.assignees} className="ml-auto">
-              <AvatarStack users={assignees} max={4} size="sm" />
+            <span role="group" aria-label={t.assignees} className="pointer-events-auto ml-auto" {...stopDrag}>
+              <AvatarStack users={assignees} max={4} size="sm" link />
             </span>
           )}
         </div>

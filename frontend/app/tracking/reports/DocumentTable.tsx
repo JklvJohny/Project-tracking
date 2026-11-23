@@ -6,6 +6,7 @@ import { Avatar } from '../shared/Avatar';
 import { fmtDate } from '../shared/format';
 import { useLang, useT } from '../shared/i18n';
 import type { Doc } from './queries';
+import { PersonLink } from '../people/PersonLink';
 
 const TEXT = {
   th: {
@@ -96,10 +97,12 @@ export function DocumentTable({ docs, canDelete, onOpen, onDelete }: Props) {
                   </td>
                   <td className="hidden whitespace-nowrap px-4 py-2.5 text-right tabular-nums text-muted-foreground sm:table-cell">{fmtSize(d.sizeBytes)}</td>
                   <td className="hidden px-4 py-2.5 md:table-cell">
-                    <span className="flex items-center gap-2">
+                    <PersonLink userId={d.uploadedBy} className="flex min-w-0 items-center gap-2">
                       <Avatar user={{ id: d.uploadedBy, name }} size="xs" />
-                      <span className="truncate">{name}</span>
-                    </span>
+                      <span className="truncate" aria-hidden>
+                        {name}
+                      </span>
+                    </PersonLink>
                   </td>
                   <td className="hidden whitespace-nowrap px-4 py-2.5 text-muted-foreground sm:table-cell">{fmtDate(d.createdAt, lang)}</td>
                   <td className="px-2 py-2.5 text-right">

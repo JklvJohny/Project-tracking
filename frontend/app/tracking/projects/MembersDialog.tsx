@@ -15,6 +15,7 @@ import { useLang, useT } from '../shared/i18n';
 import { routes } from '../shared/routes';
 import { useUserSearch } from '../shared/useUserSearch';
 import { dropProject, useAddMember, useMembers, useRemoveMember, useSetRole } from './project-mutations';
+import { PersonLink } from '../people/PersonLink';
 
 type S = components['schemas'];
 type Role = S['ProjectRole'];
@@ -195,7 +196,9 @@ function MembersBody({ projectId, onOpenChange }: { projectId: number; onOpenCha
           <ul className="divide-y">
             {list.map((m) => (
               <li key={m.userId} className="flex items-center justify-between gap-2 py-2">
-                <span className="min-w-0 truncate text-sm">{m.name}</span>
+                <PersonLink userId={m.userId} className="min-w-0 truncate text-sm">
+                  {m.name}
+                </PersonLink>
                 <span className="flex shrink-0 items-center gap-2">
                   <Select value={m.role} disabled={readOnly || setRole.isPending} onValueChange={(v) => onRole(m, v as Role)}>
                     <SelectTrigger aria-label={t.roleOf(m.name)} size="sm" className="w-36">

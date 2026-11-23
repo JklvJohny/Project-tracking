@@ -4,6 +4,7 @@ import { api, ApiError } from '../shared/api/client';
 import type { components } from '../shared/api/schema';
 import { TrackingProvider } from '../shared/provider';
 import { AssigneePicker } from '../card/AssigneePicker';
+import { AvatarStack } from '../shared/AvatarStack';
 import PersonPage from './[userId]/page';
 
 type S = components['schemas'];
@@ -143,6 +144,22 @@ describe('Assigning with impact', () => {
     view();
     expect((await screen.findByRole('link', { name: 'Napat K.' })).getAttribute('href')).toBe('/tracking/profile');
     expect(screen.queryByRole('link', { name: 'Kai W.' })).toBeNull();
+  });
+
+  it('a linked picture stack opens each person; an unlinked one stays plain', async () => {
+    const users = [
+      { id: 4, name: 'Kai W.', avatarUrl: '' },
+      { id: 2, name: 'Napat K.', avatarUrl: '' },
+    ];
+    render(
+      <TrackingProvider lang="en">
+        <AvatarStack users={users} link />
+        <AvatarStack users={[{ id: 5, name: 'Mai S.' }]} />
+      </TrackingProvider>,
+    );
+    expect((await screen.findByRole('link', { name: 'Kai W.' })).getAttribute('href')).toBe('/tracking/people/4');
+    expect(screen.getByRole('link', { name: 'Napat K.' }).getAttribute('href')).toBe('/tracking/profile');
+    expect(screen.queryByRole('link', { name: 'Mai S.' })).toBeNull();
   });
 
   it('without access to people, or for a card without dates, a pick assigns at once', async () => {

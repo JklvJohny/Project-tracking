@@ -40,10 +40,10 @@ export function Deadlines({ rows }: { rows: Dashboard['deadlines'] }) {
             ? 'text-amber-800 dark:text-amber-300'
             : 'text-muted-foreground';
         return (
-          <li key={r.cardId}>
+          <li key={r.cardId} className="flex items-center gap-3 rounded hover:bg-accent/50">
             <Link
               href={routes.card(r.projectId, r.cardId)}
-              className="flex items-center gap-3 rounded py-2.5 hover:bg-accent/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+              className="flex min-w-0 flex-1 items-center gap-3 rounded py-2.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
             >
               <span title={fmtDate(r.dueDate, lang)} className={`inline-flex w-28 shrink-0 items-center gap-1 text-xs font-medium ${tone}`}>
                 <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
@@ -53,14 +53,16 @@ export function Deadlines({ rows }: { rows: Dashboard['deadlines'] }) {
                 <span className="block truncate text-sm font-medium">{r.title}</span>
                 <span className="block truncate text-xs text-muted-foreground">{`${r.projectName} · ${r.listName}`}</span>
               </span>
-              {r.assignees.length ? (
-                <AvatarStack users={r.assignees} max={3} />
-              ) : (
-                <span className="shrink-0 rounded-full border border-dashed px-2 py-0.5 text-[11px] text-muted-foreground">
-                  {t.unassigned}
-                </span>
-              )}
             </Link>
+            {r.assignees.length ? (
+              <span className="shrink-0">
+                <AvatarStack users={r.assignees} max={3} link />
+              </span>
+            ) : (
+              <span className="shrink-0 rounded-full border border-dashed px-2 py-0.5 text-[11px] text-muted-foreground">
+                {t.unassigned}
+              </span>
+            )}
           </li>
         );
       })}
