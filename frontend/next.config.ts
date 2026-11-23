@@ -8,7 +8,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: '/api/tracking/:path*',
-        destination: `${process.env.TRACKING_API_URL ?? 'http://localhost:8081'}/api/tracking/:path*`,
+        destination: `${process.env.TRACKING_API_URL ?? 'http://127.0.0.1:8081'}/api/tracking/:path*`,
       },
     ];
   },

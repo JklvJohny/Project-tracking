@@ -8,7 +8,6 @@ import (
 	"errors"
 	"sort"
 	"time"
-	"unicode/utf8"
 
 	"tracking-service/internal/apperr"
 	"tracking-service/internal/authz"
@@ -210,9 +209,7 @@ func (s *Service) touchBoard(ctx context.Context, r store.Repos, projectID int64
 }
 
 func checkDescription(d string, fields map[string]string) {
-	if utf8.RuneCountInString(d) > maxDescription {
-		fields["description"] = "too_long"
-	}
+	validate.LongText("description", d, maxDescription, fields)
 }
 
 func (s *Service) List(ctx context.Context, userID int64) ([]ProjectListItem, error) {
@@ -327,6 +324,16 @@ func (ps profileSet) members(ms []store.Member) []UserView {
 	return out
 }
 
+// nameInUse turns the repo's duplicate-name error into the conflict the UI
+// knows. NameTaken is checked first; this covers two people saving the same
+// name at the same moment, which the unique index catches.
+func nameInUse(err error) error {
+	if errors.Is(err, store.ErrDuplicate) {
+		return apperr.Conflict(ConflictNameInUse)
+	}
+	return err
+}
+
 func (s *Service) Create(ctx context.Context, userID int64, in CreateProjectInput) (ProjectView, error) {
 	var out ProjectView
 	err := s.st.Update(ctx, func(r store.Repos) error {
@@ -366,7 +373,7 @@ func (s *Service) Create(ctx context.Context, userID int64, in CreateProjectInpu
 			StartDate: start, EndDate: end, CreatedBy: userID, CreatedAt: now, UpdatedAt: now,
 		})
 		if err != nil {
-			return err
+			return nameInUse(err)
 		}
 		b, err := r.Boards.Create(ctx, store.Board{ProjectID: p.ID, UpdatedAt: now})
 		if err != nil {
@@ -454,7 +461,7 @@ func (s *Service) Update(ctx context.Context, userID, id int64, in UpdateProject
 		}
 		p.UpdatedAt = s.now()
 		if err := r.Projects.Save(ctx, p); err != nil {
-			return err
+			return nameInUse(err)
 		}
 		// the board payload carries the project's name, status, dates and archivedAt
 		if err := s.touchBoard(ctx, r, p.ID); err != nil {
@@ -512,7 +519,7 @@ func (s *Service) setArchived(ctx context.Context, userID, id int64, archive boo
 		}
 		p.UpdatedAt = s.now()
 		if err := r.Projects.Save(ctx, p); err != nil {
-			return err
+			return nameInUse(err)
 		}
 		if err := s.touchBoard(ctx, r, p.ID); err != nil {
 			return err
@@ -694,6 +701,28 @@ func (s *Service) RemoveMember(ctx context.Context, userID, projectID, memberID 
 		}
 		if err := r.Members.Delete(ctx, projectID, memberID); err != nil {
 			return err
+		}
+		// Someone outside the project cannot hold its cards: left in place, their
+		// cards would keep counting on the Team page and show a name nobody can
+		// assign or remove any more.
+		cards, err := r.Cards.UnassignInProject(ctx, projectID, memberID)
+		if err != nil {
+			return err
+		}
+		now := s.now()
+		for _, id := range cards {
+			if err := r.Cards.Touch(ctx, id, now); err != nil {
+				return err
+			}
+			b, err := json.Marshal(map[string]any{"cardId": id, "userId": memberID})
+			if err != nil {
+				return err
+			}
+			if err := r.Activity.Append(ctx, store.ActivityEvent{
+				ProjectID: projectID, CardID: &id, ActorID: userID, Type: "card.unassigned", Payload: b, CreatedAt: now,
+			}); err != nil {
+				return err
+			}
 		}
 		if err := s.touchBoard(ctx, r, projectID); err != nil {
 			return err

@@ -11,7 +11,11 @@ info:
     Writes are all-or-nothing and return the updated entity. Ids are int64 (JSON numbers).
     Dates are `YYYY-MM-DD`, timestamps are RFC 3339 in UTC (`...Z`).
     An archived project is read-only: every write to it or to anything in it answers 409 with
-    error `project_archived`, except `POST /projects/{projectID}/restore`.
+    error `project_archived`, except `POST /projects/{projectID}/restore`. An archived list is
+    read-only too, with the cards in it (409).
+    A JSON request body must be sent as `Content-Type: application/json` (otherwise 400). A write a
+    browser marks `Sec-Fetch-Site: cross-site` answers 403 `forbidden`.
+    Free text may not contain a NUL character or invalid UTF-8 (`fields.<field>=invalid`).
 servers:
   - url: /api/tracking/v1
 security:
@@ -131,7 +135,7 @@ paths:
     post:
       tags: [team]
       operationId: addSkill
-      summary: Name a skill for the department (the Team page offers and filters on it even before anyone has it) and optionally give it to people, in one transaction. A name that exists ignoring case is reused with its first spelling; people who already have it are left alone. Anyone signed in. Returns the Team view.
+      summary: Name a skill for the department (the Team page offers and filters on it even before anyone has it) and optionally give it to people, in one transaction. A name that exists ignoring case is reused with its first spelling; people who already have it are left alone. At most 500 named skills (fields.name=too_many) and 500 people per request (fields.userIds=too_many). Anyone signed in. Returns the Team view.
       requestBody:
         required: true
         content:
@@ -752,7 +756,7 @@ paths:
     post:
       tags: [checklist]
       operationId: addChecklistItem
-      summary: Append an item. 409 on an archived card.
+      summary: Append an item. 409 on an archived card. At most 100 items per card (fields.text=too_many).
       requestBody:
         required: true
         content:

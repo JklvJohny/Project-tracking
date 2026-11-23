@@ -10,7 +10,7 @@ cd backend
 ENV=local go run -tags local ./cmd/tracking-service
 ```
 
-- Listens on `:8081` (`PORT` overrides it). Base path `/api/tracking/v1`; liveness at `/healthz`.
+- Listens on port `8081` (`PORT` overrides it). With `ENV=local` it listens on `127.0.0.1` only, because the local build trusts an `X-User-ID` header; elsewhere on every interface. `HOST` overrides either. Base path `/api/tracking/v1`; liveness at `/healthz`.
 - `ENV=local` needs the `local` build tag. The tag compiles the `X-User-ID` header authenticator, which must never ship in a production build. Without the tag the service exits at start.
 - With `ENV=local` the in-memory store is seeded on start: the prototype's two projects and, with `SEED_LARGE=1`, a third project `Load Test` (8 lists, 2,000 cards). Data is lost on restart.
 - Report PDFs (PDF only, at most 20 MB) are stored under `UPLOAD_DIR` (default `./uploads`, git-ignored; use a persistent volume when deployed); only metadata is in the store. `GET /projects` returns each project's `documentCount`, and a document carries `uploadedByName` from the user cache. With `ENV=local`, PDFs in `../reports/website-redesign/` and `../reports/mobile-app-v2/` are imported into projects 1 and 2 on start, when those folders exist.

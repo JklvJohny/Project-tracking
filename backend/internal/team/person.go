@@ -47,7 +47,9 @@ func (s *Service) Person(ctx context.Context, caller, userID int64) (PersonView,
 	u := found[0]
 	now := s.now().In(bangkok)
 	today := store.Date(now.Format(time.DateOnly))
-	soon := store.Date(now.AddDate(0, 0, soonDays).Format(time.DateOnly))
+	// "Due in 7 days" is today through today+7, as on the dashboard; soon is the
+	// first day after it (the repo bound is exclusive).
+	soon := store.Date(now.AddDate(0, 0, soonDays+1).Format(time.DateOnly))
 	out := PersonView{
 		AsOf:     string(today),
 		Person:   Person{UserID: u.ID, Name: u.Name, AvatarURL: u.AvatarURL, Skills: []string{}},

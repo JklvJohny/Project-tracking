@@ -161,3 +161,17 @@ func TestTemplates_LegacyOfficeFormats(t *testing.T) {
 		}
 	}
 }
+
+// With no name typed, the name comes from the file; a file name longer than a
+// name may be is cut to fit instead of failing with "name too long".
+func TestTemplates_LongFileNameBecomesAShortenedName(t *testing.T) {
+	e := newEnv(t)
+	long := strings.Repeat("ร", 150)
+	code, body := e.uploadTemplate(member, map[string]string{"category": "Budget"}, long+".docx", zip("w"))
+	if code != 201 {
+		t.Fatalf("upload = %d %v", code, body)
+	}
+	if n := data(body)["name"].(string); len([]rune(n)) != 120 {
+		t.Fatalf("name has %d characters, want 120", len([]rune(n)))
+	}
+}

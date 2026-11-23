@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"slices"
 	"sort"
 	"time"
 
@@ -76,6 +77,29 @@ func (r *cardRepo) RemoveAssignee(_ context.Context, cardID, userID int64) (bool
 	}
 	delete(r.d.cardAssignees, k)
 	return true, nil
+}
+
+func (r *cardRepo) UnassignInProject(_ context.Context, projectID, userID int64) ([]int64, error) {
+	out := []int64{}
+	for k := range r.d.cardAssignees {
+		if k.UserID != userID {
+			continue
+		}
+		c, ok := r.d.cards[k.CardID]
+		if !ok {
+			continue
+		}
+		l, ok := r.d.lists[c.ListID]
+		if !ok {
+			continue
+		}
+		if b, ok := r.d.boards[l.BoardID]; ok && b.ProjectID == projectID {
+			delete(r.d.cardAssignees, k)
+			out = append(out, k.CardID)
+		}
+	}
+	slices.Sort(out)
+	return out, nil
 }
 
 func (r *cardRepo) AddLabel(_ context.Context, cardID, labelID int64) (bool, error) {

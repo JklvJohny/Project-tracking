@@ -137,7 +137,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Name a skill for the department (the Team page offers and filters on it even before anyone has it) and optionally give it to people, in one transaction. A name that exists ignoring case is reused with its first spelling; people who already have it are left alone. Anyone signed in. Returns the Team view. */
+        /** Name a skill for the department (the Team page offers and filters on it even before anyone has it) and optionally give it to people, in one transaction. A name that exists ignoring case is reused with its first spelling; people who already have it are left alone. At most 500 named skills (fields.name=too_many) and 500 people per request (fields.userIds=too_many). Anyone signed in. Returns the Team view. */
         post: operations["addSkill"];
         /** Take a skill off the department list (matched ignoring case). People who list it keep it. The name is a query parameter because skills such as CI/CD contain a slash. */
         delete: operations["removeSkill"];
@@ -671,7 +671,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Append an item. 409 on an archived card. */
+        /** Append an item. 409 on an archived card. At most 100 items per card (fields.text=too_many). */
         post: operations["addChecklistItem"];
         delete?: never;
         options?: never;

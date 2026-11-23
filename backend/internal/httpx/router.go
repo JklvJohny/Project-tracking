@@ -16,7 +16,7 @@ const basePath = "/api/tracking/v1"
 // NewRouter wires shared middleware, /healthz, and mounts modules under the API base path.
 func NewRouter(mount func(chi.Router)) http.Handler {
 	r := chi.NewRouter()
-	r.Use(middleware.RequestID, recoverJSON, middleware.Compress(5), requestLog)
+	r.Use(middleware.RequestID, recoverJSON, middleware.Compress(5), requestLog, sameSiteWrites)
 	// chi's defaults are plain text; keep the envelope. 405 is reported as
 	// bad_request because the API has no 405 code.
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) { Fail(w, r, apperr.NotFound("route")) })
@@ -28,6 +28,25 @@ func NewRouter(mount func(chi.Router)) http.Handler {
 	})
 	r.Route(basePath, mount)
 	return r
+}
+
+// sameSiteWrites refuses a write a browser sends on behalf of another site
+// (Sec-Fetch-Site: cross-site), such as a hidden form posting a file upload.
+// Multipart uploads are "simple" requests with no CORS preflight, so this is
+// what stops them if the gateway signs people in with a cookie. Requests
+// without the header (other services, tools, old browsers) pass.
+func sameSiteWrites(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet, http.MethodHead, http.MethodOptions:
+		default:
+			if r.Header.Get("Sec-Fetch-Site") == "cross-site" {
+				Fail(w, r, apperr.Forbidden())
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // recoverJSON replaces chi's plain-text recoverer so panics keep the envelope.

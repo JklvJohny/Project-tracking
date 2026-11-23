@@ -17,6 +17,7 @@ import (
 	"tracking-service/internal/apperr"
 	"tracking-service/internal/blob"
 	"tracking-service/internal/store"
+	"tracking-service/internal/validate"
 )
 
 // Report templates are department-wide files people download, fill in and
@@ -99,6 +100,8 @@ func applyDetails(t *store.ReportTemplate, d TemplateDetails) error {
 		switch {
 		case required && s == "":
 			fields[field] = "required"
+		case !validate.Storable(s):
+			fields[field] = "invalid"
 		case utf8.RuneCountInString(s) > max:
 			fields[field] = "too_long"
 		default:
@@ -159,7 +162,12 @@ func (s *Service) UploadTemplate(ctx context.Context, userID int64, d TemplateDe
 		return TemplateView{}, apperr.Validation(map[string]string{"file": "unsupported_type"})
 	}
 	if d.Name == nil || strings.TrimSpace(*d.Name) == "" {
+		// The file name may be longer than a name may be: the user typed no
+		// name, so cut it rather than answer "name too long".
 		n := strings.TrimSuffix(clean, path.Ext(clean))
+		if rs := []rune(n); len(rs) > maxTplName {
+			n = strings.TrimSpace(string(rs[:maxTplName]))
+		}
 		d.Name = &n
 	}
 	t := store.ReportTemplate{UploadedBy: userID}

@@ -48,7 +48,7 @@ NEXT_PUBLIC_ENV=local npx next build && npx next start
 
 | Command | What it does |
 |---|---|
-| `npm run dev` | Dev server. |
+| `npm run dev` | Dev server, on `127.0.0.1` only (the dev shell sends an `X-User-ID` header, so it must not be reachable from the network). |
 | `npm run build` / `npm start` | Production build and server. |
 | `npm test` | Vitest (jsdom). |
 | `npx tsc --noEmit` | Type check. |

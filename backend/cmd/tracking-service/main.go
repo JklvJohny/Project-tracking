@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -83,7 +84,7 @@ func run() error {
 	// Later modules mount in the same group.
 
 	srv := &http.Server{
-		Addr: ":" + cfg.Port,
+		Addr: net.JoinHostPort(cfg.Host, cfg.Port),
 		Handler: httpx.NewRouter(func(r chi.Router) {
 			r.Group(func(r chi.Router) {
 				r.Use(auth.Middleware(authn))
@@ -97,6 +98,12 @@ func run() error {
 			})
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
+		// Whole-request limits, so a client that sends or reads very slowly
+		// cannot hold a connection (and a 20 MB upload's temp file) forever.
+		// Five minutes still lets a 20 MB report through a slow link.
+		ReadTimeout:  5 * time.Minute,
+		WriteTimeout: 5 * time.Minute,
+		IdleTimeout:  2 * time.Minute,
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -104,7 +111,7 @@ func run() error {
 	go refreshUserCache(ctx, projects)
 	errc := make(chan error, 1)
 	go func() { errc <- srv.ListenAndServe() }()
-	slog.Info("listening", "port", cfg.Port, "env", cfg.Env)
+	slog.Info("listening", "addr", srv.Addr, "env", cfg.Env)
 
 	select {
 	case err := <-errc:

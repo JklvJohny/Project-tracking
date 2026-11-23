@@ -4,6 +4,7 @@ package dashboard
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"tracking-service/internal/apperr"
@@ -111,7 +112,7 @@ func scope(ctx context.Context, r store.Repos, userID int64, projectID *int64) (
 }
 
 func notFound(err error) error {
-	if err == store.ErrNotFound {
+	if errors.Is(err, store.ErrNotFound) {
 		return apperr.NotFound("project")
 	}
 	return err

@@ -71,6 +71,7 @@ func TestFail_UnknownErrorIs500AndHidesMessage(t *testing.T) {
 
 func TestDecode_RejectsUnknownField(t *testing.T) {
 	r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"a":1,"zzz":2}`))
+	r.Header.Set("Content-Type", "application/json")
 	var dst struct {
 		A int `json:"a"`
 	}
@@ -127,6 +128,56 @@ func TestRouter_WrongMethodIsEnvelope400(t *testing.T) {
 		_ = json.Unmarshal(rec.Body.Bytes(), &env)
 		if rec.Code != 400 || env.Code != "bad_request" || env.Success {
 			t.Fatalf("%s: got %d %q", path, rec.Code, rec.Body.String())
+		}
+	}
+}
+
+// A body not declared as JSON is refused even when it parses: an HTML form on
+// another site can post text/plain that reads as JSON.
+func TestDecode_RequiresJSONContentType(t *testing.T) {
+	for ct, ok := range map[string]bool{
+		"application/json":                true,
+		"application/json; charset=utf-8": true,
+		"text/plain":                      false,
+		"":                                false,
+	} {
+		r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"a":1}`))
+		if ct != "" {
+			r.Header.Set("Content-Type", ct)
+		}
+		var dst struct {
+			A int `json:"a"`
+		}
+		if err := httpx.Decode(r, &dst); (err == nil) != ok {
+			t.Errorf("Content-Type %q: err = %v", ct, err)
+		}
+	}
+}
+
+// A browser write on behalf of another site is refused before any handler
+// runs; reads, same-site writes and clients without the header pass.
+func TestRouter_RefusesCrossSiteWrites(t *testing.T) {
+	h := httpx.NewRouter(func(r chi.Router) {
+		r.Get("/x", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+		r.Post("/x", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	})
+	for _, c := range []struct {
+		method, site string
+		want         int
+	}{
+		{http.MethodPost, "cross-site", http.StatusForbidden},
+		{http.MethodPost, "same-origin", http.StatusNoContent},
+		{http.MethodPost, "", http.StatusNoContent},
+		{http.MethodGet, "cross-site", http.StatusNoContent},
+	} {
+		req := httptest.NewRequest(c.method, "/api/tracking/v1/x", nil)
+		if c.site != "" {
+			req.Header.Set("Sec-Fetch-Site", c.site)
+		}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != c.want {
+			t.Errorf("%s %s = %d, want %d", c.method, c.site, rec.Code, c.want)
 		}
 	}
 }

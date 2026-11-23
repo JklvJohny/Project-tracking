@@ -75,10 +75,14 @@ type DocumentRepo interface {
 	// SQL: SELECT ... FROM documents WHERE id = $1.
 	Get(ctx context.Context, id int64) (Document, error)
 
-	// SetDeleted sets deleted_at (nil restores); ErrNotFound if absent. No
+	// SetDeleted sets deleted_at (nil restores) and reports whether the row
+	// changed state: one already deleted (or live) is left alone (false), so
+	// two people deleting at once log one event. ErrNotFound if absent. No
 	// other column changes.
-	// SQL: UPDATE documents SET deleted_at = $2 WHERE id = $1.
-	SetDeleted(ctx context.Context, id int64, at *time.Time) error
+	// SQL: UPDATE documents SET deleted_at = $2 WHERE id = $1
+	// AND (deleted_at IS NULL) = ($2::timestamptz IS NOT NULL); changed = rows
+	// affected is 1; on 0, SELECT 1 tells unchanged from ErrNotFound.
+	SetDeleted(ctx context.Context, id int64, at *time.Time) (bool, error)
 
 	// ByProject returns the project's non-deleted documents, newest first.
 	// SQL: SELECT ... FROM documents WHERE project_id = $1 AND deleted_at IS NULL
@@ -217,15 +221,20 @@ type ActivityRepo interface {
 
 type ProjectRepo interface {
 	// Create assigns ID and stores p as given (the service sets timestamps).
-	// SQL: INSERT INTO projects ... RETURNING id.
+	// ErrDuplicate when p is live and another live project has its name,
+	// ignoring case: the service checks NameTaken first, this catches a race.
+	// SQL: INSERT INTO projects ... RETURNING id (a unique violation on
+	// ux_projects_name is ErrDuplicate).
 	Create(ctx context.Context, p Project) (Project, error)
 
 	// Get returns ErrNotFound for a missing project.
 	// SQL: SELECT ... FROM projects WHERE id = $1.
 	Get(ctx context.Context, id int64) (Project, error)
 
-	// Save overwrites every column of an existing project; ErrNotFound if absent.
-	// SQL: UPDATE projects SET all columns WHERE id = $1.
+	// Save overwrites every column of an existing project; ErrNotFound if
+	// absent; ErrDuplicate as for Create (a rename or a restore can collide).
+	// SQL: UPDATE projects SET all columns WHERE id = $1 (a unique violation on
+	// ux_projects_name is ErrDuplicate).
 	Save(ctx context.Context, p Project) error
 
 	// All returns every project, archived included.
@@ -422,6 +431,14 @@ type CardRepo interface {
 	// removed = rows affected is 1.
 	RemoveAssignee(ctx context.Context, cardID, userID int64) (bool, error)
 
+	// UnassignInProject removes userID from every card of the project,
+	// archived ones included, and returns the ids of the cards that lost them,
+	// ascending. Used when the person leaves the project.
+	// SQL: DELETE FROM card_assignees ca USING cards c, lists l, boards b
+	// WHERE ca.card_id = c.id AND c.list_id = l.id AND l.board_id = b.id
+	// AND b.project_id = $1 AND ca.user_id = $2 RETURNING ca.card_id (sorted).
+	UnassignInProject(ctx context.Context, projectID, userID int64) ([]int64, error)
+
 	// AddLabel reports whether a row was added; an existing one is left alone
 	// (false). ErrNotFound if the card is absent.
 	// SQL: INSERT INTO card_labels (card_id, label_id) VALUES (...)
@@ -505,7 +522,10 @@ type TeamRepo interface {
 
 	// SetSkills replaces userID's skills with skills, kept in order (the
 	// caller has trimmed and de-duplicated them). An empty slice removes all.
-	// SQL: DELETE FROM user_skills WHERE user_id = $1;
+	// Two saves for one person at once must run one after the other, or the
+	// second insert hits ux_user_skills: take the person's lock first.
+	// SQL: SELECT pg_advisory_xact_lock(hashtextextended('user_skills:' || $1, 0));
+	// DELETE FROM user_skills WHERE user_id = $1;
 	// INSERT INTO user_skills (user_id, skill, position)
 	// SELECT $1, s, ord FROM unnest($2::text[]) WITH ORDINALITY AS t(s, ord).
 	SetSkills(ctx context.Context, userID int64, skills []string) error

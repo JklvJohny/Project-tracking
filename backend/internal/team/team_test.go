@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -164,7 +165,7 @@ func TestTeam_WorkloadCountsOpenCardsInLiveProjects(t *testing.T) {
 	done := now
 	err := e.st.Update(ctx, func(r store.Repos) error {
 		mk := func(archivedProject bool) (int64, error) {
-			p, err := r.Projects.Create(ctx, store.Project{Name: "P", Status: "active", CreatedBy: 1})
+			p, err := r.Projects.Create(ctx, store.Project{Name: fmt.Sprintf("P%v", archivedProject), Status: "active", CreatedBy: 1})
 			if err != nil {
 				return 0, err
 			}
@@ -209,7 +210,8 @@ func TestTeam_WorkloadCountsOpenCardsInLiveProjects(t *testing.T) {
 			{live, d("2026-11-17"), false}, // overdue (before Bangkok today)
 			{live, d("2026-11-18"), false}, // due today: soon
 			{live, d("2026-11-24"), false}, // soon (within 7 days)
-			{live, d("2026-11-25"), false}, // later
+			{live, d("2026-11-25"), false}, // soon: exactly 7 days, counted as on the dashboard
+			{live, d("2026-11-26"), false}, // later
 			{live, nil, false},             // no date
 			{live, d("2026-11-01"), true},  // completed: not counted
 			{gone, d("2026-11-01"), false}, // archived project: not counted
@@ -225,8 +227,8 @@ func TestTeam_WorkloadCountsOpenCardsInLiveProjects(t *testing.T) {
 	}
 	_, body := e.call(1, "GET", "/team", "")
 	p := person(t, body, 4)
-	if p["open"] != 5.0 || p["overdue"] != 1.0 || p["dueSoon"] != 2.0 {
-		t.Fatalf("workload = open %v overdue %v dueSoon %v, want 5/1/2", p["open"], p["overdue"], p["dueSoon"])
+	if p["open"] != 6.0 || p["overdue"] != 1.0 || p["dueSoon"] != 3.0 {
+		t.Fatalf("workload = open %v overdue %v dueSoon %v, want 6/1/3", p["open"], p["overdue"], p["dueSoon"])
 	}
 	if q := person(t, body, 1); q["open"] != 0.0 {
 		t.Fatalf("user 1 open = %v", q["open"])

@@ -315,7 +315,8 @@ func (s *Service) setDeleted(ctx context.Context, userID, docID int64, deleted b
 			now := s.now()
 			at, typ = &now, "document.deleted"
 		}
-		if err := r.Documents.SetDeleted(ctx, docID, at); err != nil {
+		changed, err := r.Documents.SetDeleted(ctx, docID, at)
+		if err != nil || !changed { // someone else got there first: nothing to log
 			return err
 		}
 		return s.record(ctx, r, d.ProjectID, userID, typ, docID)

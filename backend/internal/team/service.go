@@ -16,6 +16,7 @@ import (
 	"tracking-service/internal/clock"
 	"tracking-service/internal/store"
 	"tracking-service/internal/users"
+	"tracking-service/internal/validate"
 )
 
 const (
@@ -85,7 +86,9 @@ type Category struct {
 func (s *Service) List(ctx context.Context) (View, error) {
 	now := s.now().In(bangkok)
 	today := store.Date(now.Format(time.DateOnly))
-	soon := store.Date(now.AddDate(0, 0, soonDays).Format(time.DateOnly))
+	// "Due in 7 days" is today through today+7, as on the dashboard; soon is the
+	// first day after it (the repo bound is exclusive).
+	soon := store.Date(now.AddDate(0, 0, soonDays+1).Format(time.DateOnly))
 	people, err := s.up.Department(ctx, maxPeople)
 	if err != nil {
 		return View{}, err
@@ -170,6 +173,9 @@ func cleanSkills(raw []string) ([]string, error) {
 		if s == "" {
 			continue
 		}
+		if !validate.Storable(s) {
+			return nil, apperr.Validation(map[string]string{"skills": "invalid"})
+		}
 		if utf8.RuneCountInString(s) > maxSkill {
 			return nil, apperr.Validation(map[string]string{"skills": "too_long"})
 		}
@@ -186,6 +192,28 @@ func cleanSkills(raw []string) ([]string, error) {
 	return out, nil
 }
 
+// maxCatalog caps the department's named skills, like maxCategories caps
+// the categories: the Team page shows them all.
+const maxCatalog = 500
+
+// catalogHasRoom refuses a new name once the catalog is full; a name already
+// in it (ignoring case) always passes.
+func catalogHasRoom(ctx context.Context, r store.Repos, name string) error {
+	catalog, err := r.Team.Catalog(ctx)
+	if err != nil {
+		return err
+	}
+	for _, c := range catalog {
+		if strings.EqualFold(c.Name, name) {
+			return nil
+		}
+	}
+	if len(catalog) >= maxCatalog {
+		return apperr.Validation(map[string]string{"name": "too_many"})
+	}
+	return nil
+}
+
 // AddSkill names a skill for the department and, optionally, gives it to the
 // listed people and puts it in categoryID, in the same transaction. Adding a
 // name that exists (ignoring case) is not an error: the people still get it,
@@ -195,6 +223,11 @@ func (s *Service) AddSkill(ctx context.Context, caller int64, raw string, userID
 	name, err := cleanSkill(raw)
 	if err != nil {
 		return View{}, err
+	}
+	// No more people than the department has, checked before asking
+	// user-service about each of them.
+	if len(uniq(userIDs)) > maxPeople {
+		return View{}, apperr.Validation(map[string]string{"userIds": "too_many"})
 	}
 	if len(userIDs) > 0 {
 		found, err := s.up.Get(ctx, uniq(userIDs))
@@ -207,6 +240,9 @@ func (s *Service) AddSkill(ctx context.Context, caller int64, raw string, userID
 	}
 	err = s.st.Update(ctx, func(r store.Repos) error {
 		if err := categoryExists(ctx, r, categoryID); err != nil {
+			return err
+		}
+		if err := catalogHasRoom(ctx, r, name); err != nil {
 			return err
 		}
 		entry := store.CatalogSkill{Name: name, CategoryID: categoryID, CreatedBy: caller, CreatedAt: s.now()}
@@ -406,6 +442,8 @@ func cleanSkill(raw string) (string, error) {
 	switch {
 	case s == "":
 		return "", apperr.Validation(map[string]string{"name": "required"})
+	case !validate.Storable(s):
+		return "", apperr.Validation(map[string]string{"name": "invalid"})
 	case utf8.RuneCountInString(s) > maxSkill:
 		return "", apperr.Validation(map[string]string{"name": "too_long"})
 	}

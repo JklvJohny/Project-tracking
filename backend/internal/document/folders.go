@@ -243,13 +243,18 @@ func (s *Service) ShareWith(ctx context.Context, userID, projectID, target int64
 		} else if !errors.Is(err, store.ErrNotFound) {
 			return err
 		}
-		sh = store.FolderShare{ProjectID: projectID, UserID: target, SharedBy: userID, CreatedAt: s.now()}
-		err := r.Shares.Create(ctx, sh)
-		if errors.Is(err, store.ErrDuplicate) {
-			sh, err = r.Shares.Get(ctx, projectID, target)
+		// Look first: a duplicate insert aborts a PostgreSQL transaction, so the
+		// existing share could not be read after it.
+		existing, err := r.Shares.Get(ctx, projectID, target)
+		if err == nil {
+			sh = existing
+			return nil
+		}
+		if !errors.Is(err, store.ErrNotFound) {
 			return err
 		}
-		if err != nil {
+		sh = store.FolderShare{ProjectID: projectID, UserID: target, SharedBy: userID, CreatedAt: s.now()}
+		if err := r.Shares.Create(ctx, sh); err != nil {
 			return err
 		}
 		return s.recordShare(ctx, r, projectID, userID, "folder.shared", target)

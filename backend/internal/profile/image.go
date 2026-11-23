@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"image"
+	"image/color"
 	"image/jpeg"
 	_ "image/png" // registers the PNG decoder
 	"io"
@@ -19,10 +20,23 @@ const (
 	MaxUpload = 5 << 20
 	// Side is the stored avatar's width and height in pixels.
 	Side = 256
-	// maxPixels refuses images whose decoded size would be huge (a small file
-	// that expands to gigabytes); 40 MP covers any phone photo.
-	maxPixels = 40_000_000
+	// maxPixels refuses images whose decoded size would be huge: a 5 MB file
+	// can expand to hundreds of MB in memory. 24 MP covers a normal phone or
+	// camera photo; a 48 MP full-resolution shot has to be resized first.
+	maxPixels = 24_000_000
+	// maxPixelsWide is the cap for 16-bit images, which take twice the memory
+	// per pixel once decoded.
+	maxPixelsWide = 12_000_000
 )
+
+// decoding allows two decodes at a time, so a burst of uploads cannot add up
+// to more memory than two pictures need.
+var decoding = make(chan struct{}, 2)
+
+// wide reports whether m stores 16 bits per channel.
+func wide(m color.Model) bool {
+	return m == color.RGBA64Model || m == color.NRGBA64Model || m == color.Gray16Model
+}
 
 func fileErr(code string) error { return apperr.Validation(map[string]string{"file": code}) }
 
@@ -46,9 +60,15 @@ func normalize(r io.Reader) ([]byte, error) {
 	if err != nil || (format != "jpeg" && format != "png" && format != "webp") {
 		return nil, fileErr("unsupported_type")
 	}
-	if cfg.Width <= 0 || cfg.Height <= 0 || int64(cfg.Width)*int64(cfg.Height) > maxPixels {
+	limit := int64(maxPixels)
+	if wide(cfg.ColorModel) {
+		limit = maxPixelsWide
+	}
+	if cfg.Width <= 0 || cfg.Height <= 0 || int64(cfg.Width)*int64(cfg.Height) > limit {
 		return nil, fileErr("too_large")
 	}
+	decoding <- struct{}{}
+	defer func() { <-decoding }()
 	src, _, err := image.Decode(bytes.NewReader(raw))
 	if err != nil {
 		return nil, fileErr("unsupported_type")

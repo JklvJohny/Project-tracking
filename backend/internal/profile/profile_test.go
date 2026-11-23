@@ -233,3 +233,19 @@ func TestAvatar_IndexLoadsFromTheStore(t *testing.T) {
 		t.Fatalf("wrapped = %+v, want user 4 at %q", got, url)
 	}
 }
+
+// A 16-bit image takes twice the memory per pixel once decoded, so it has the
+// lower cap: 16 MP is fine at 8 bits and refused at 16.
+func TestAvatar_SixteenBitImagesHaveALowerPixelCap(t *testing.T) {
+	e := newEnv(t)
+	var wide, narrow bytes.Buffer
+	_ = png.Encode(&wide, image.NewGray16(image.Rect(0, 0, 4000, 4000)))
+	_ = png.Encode(&narrow, image.NewGray(image.Rect(0, 0, 4000, 4000)))
+	rec, body := e.upload(3, "wide.png", wide.Bytes())
+	if fields, _ := body["fields"].(map[string]any); rec.Code != 422 || fields["file"] != "too_large" {
+		t.Fatalf("16-bit 16 MP = %d %s", rec.Code, rec.Body)
+	}
+	if rec, _ := e.upload(3, "narrow.png", narrow.Bytes()); rec.Code != 200 {
+		t.Fatalf("8-bit 16 MP = %d %s", rec.Code, rec.Body)
+	}
+}

@@ -99,6 +99,10 @@ func lockedItem(ctx context.Context, r store.Repos, it store.ChecklistItem) (sto
 	return cur, err
 }
 
+// maxItems caps one card's checklist: a real one is a few dozen items, and
+// the board loads every card's counts, so the list must not grow without end.
+const maxItems = 100
+
 // AddItem appends an item at the end of the card's checklist.
 func (s *Service) AddItem(ctx context.Context, userID, cardID int64, text string) (ChecklistItemView, error) {
 	var out ChecklistItemView
@@ -115,6 +119,12 @@ func (s *Service) AddItem(ctx context.Context, userID, cardID int64, text string
 		pos, err := placeItem(ctx, r, cardID, 0, board.MoveInput{})
 		if err != nil {
 			return err
+		}
+		// Counted after placeItem, which holds the card's checklist lock.
+		if ps, err := r.Checklist.Positions(ctx, cardID); err != nil {
+			return err
+		} else if len(ps) >= maxItems {
+			return apperr.Validation(map[string]string{"text": "too_many"})
 		}
 		it, err := r.Checklist.Create(ctx, store.ChecklistItem{CardID: cardID, Text: text, Position: pos, UpdatedAt: s.now()})
 		if err != nil {

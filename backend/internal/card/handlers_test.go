@@ -39,6 +39,9 @@ func (e env) handler() http.Handler {
 
 func do(h http.Handler, user int64, method, path, body string) (*httptest.ResponseRecorder, map[string]any) {
 	req := httptest.NewRequest(method, "/api/tracking/v1"+path, strings.NewReader(body))
+	if body != "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	req.Header.Set("X-User-ID", strconv.FormatInt(user, 10))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)

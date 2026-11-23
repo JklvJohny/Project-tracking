@@ -20,3 +20,7 @@ func ParsePriority(s string) (p int16, ok bool) {
 	}
 	return 0, false
 }
+
+// PriorityMedium is what a new card starts with, as in the prototype and the
+// cards.priority column default.
+const PriorityMedium int16 = 1
