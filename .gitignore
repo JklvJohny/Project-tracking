@@ -8,3 +8,15 @@ backend/uploads/
 backend/tmp/
 # local sample PDFs for the Reports seed (ENV=local); never committed
 /reports/
+# Claude Code's per-machine settings (may hold local paths and permissions)
+.claude/settings.local.json
+# The remote is public: company documents never go in. The import template is
+# the one office file that belongs in the repo.
+*.pdf
+*.doc
+*.docx
+*.xls
+*.xlsx
+*.ppt
+*.pptx
+!templates/tracking-import-template.xlsx

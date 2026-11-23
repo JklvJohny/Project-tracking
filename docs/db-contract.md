@@ -11,7 +11,7 @@ Ground rules:
 - Every id is `int64` (`bigint`), user ids included. User ids have no foreign key (they come from user-service).
 - A missing row is `store.ErrNotFound`, never `sql.ErrNoRows` and never a nil value. Services map it to `not_found`.
 - A write that breaks a unique index the repo comment names returns `store.ErrDuplicate` (map Postgres `23505`). Services map it to a field error.
-- Dates are `DATE` and travel as `store.Date` (`"YYYY-MM-DD"`). Timestamps are `timestamptz`, handled in UTC: the services stamp every write with `clock.UTC` (wired in `main.go`), and the API emits them as `...Z`. Timestamps read back must be UTC too (run the session with `SET TIME ZONE 'UTC'`, or convert with `.UTC()` when scanning), or the JSON would carry the server's local offset.
+- Dates are `DATE` and travel as `store.Date` (`"YYYY-MM-DD"`). Timestamps are `timestamptz`, handled in UTC: the services stamp every write with `clock.UTC` (wired in `main.go`), and the API emits them as `...Z`. Timestamps read back must be UTC too: convert with `.UTC()` when scanning, or the JSON would carry the server's local offset. Do not rely on the session time zone for this: the `tracking_app` role's is `Asia/Bangkok` (see `schema.sql`), and pgx returns `time.Local` anyway.
 - Slices a repo returns (`CardChildren.AssigneeIDs`, `LabelIDs`, `Checklist`, mention ids, list results) are empty, never nil, when there are no rows. The services guard the ones the API emits, but the contract is "never nil".
 - Priority is `smallint` 0-3. The API never sees the number (`store.PriorityName`).
 - Position keys (`lists`, `cards`, `checklist_items`) are LexoRank text from `internal/rank`: base-36 digits `0-9a-z`.

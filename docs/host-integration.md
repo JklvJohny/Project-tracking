@@ -13,7 +13,7 @@ around it is a local harness (dev shell, user switcher, boilerplate) and is not 
 | `app/tracking/` (all of it) | `app/tracking/` | Pages, board, card panel, projects, `shared/`, `tracking.css`. Tests (`*.test.ts(x)`) can come along. |
 | `components/ui/` (only the parts below) | `components/ui/` | Copy these versions; never keep the host's file just because the name matches (see below). |
 
-shadcn parts the tracking code imports: `alert-dialog`, `avatar`, `button`, `checkbox`, `command`, `dialog`,
+shadcn parts the tracking code imports: `alert-dialog`, `button`, `checkbox`, `command`, `dialog`,
 `dropdown-menu`, `input`, `input-group`, `popover`, `select`, `sheet`, `skeleton`, `sonner`, `textarea`, `tooltip`.
 `input-group` is not imported by tracking directly: `command.tsx` imports it (and it imports `button`, `input` and
 `textarea`), so it must come along. `components/ui/sonner.tsx` imports `next-themes`; it only reads the theme, the host
@@ -36,7 +36,6 @@ Required component APIs (check each one in the host's file before keeping it):
 | `alert-dialog` | `AlertDialogAction` / `AlertDialogCancel` render buttons; `AlertDialogContent` with the default `size`. |
 | `command` | `CommandInput`, `CommandList`, `CommandEmpty`, `CommandGroup`, `CommandItem` (cmdk 1.x) and its `input-group` import. |
 | `select` | `SelectTrigger`, `SelectValue`, `SelectContent`, `SelectItem` (Radix Select). |
-| `avatar` | `Avatar`, `AvatarImage`, `AvatarFallback`. |
 | `popover`, `tooltip`, `checkbox`, `skeleton`, `input`, `textarea` | The standard shadcn exports; animations use the `data-open:` / `data-closed:` variants from `shadcn/tailwind.css` (section 4). |
 
 The match-prototype work added files only under `app/tracking/`, so the copy above already includes them:
@@ -64,6 +63,9 @@ Versions the harness was built and tested with. Use the same majors in the host.
 | `@dnd-kit/sortable` | ^10.0.0 | |
 | `@dnd-kit/utilities` | ^3.2.2 | |
 | `react-markdown` | ^10.1.0 | Description and comments. |
+| `remark-gfm` | ^4.0.1 | Tables, task lists and strikethrough in that Markdown (`card/Rendered.tsx`). |
+| `docx-preview` | ^0.4.1 | Word template preview in the browser (`reports/TemplatePreview.tsx`, loaded on demand). |
+| `exceljs` | ^4.4.0 | Excel template preview (`reports/TemplatePreview.tsx`, loaded on demand). |
 | `radix-ui` | ^1.8.1 | shadcn primitives. |
 | `cmdk` | ^1.1.1 | Assignee and member pickers (`command`). |
 | `sonner` | ^2.0.8 | Toasts. |
@@ -75,8 +77,15 @@ Versions the harness was built and tested with. Use the same majors in the host.
 | `shadcn` | ^4.23.0 | Its `shadcn/tailwind.css` provides the data-state variants the sheet, dialog and select animations use; imported from the host's global CSS (section 4). |
 | `tailwindcss` | 4.3.3 | The host must be on Tailwind 4: the components use v4 syntax such as `max-sm:hidden` and `text-(--s-done)`. |
 
-No package was added for Reports or Timeline. The PDF viewer is a plain `<iframe>` and the upload is `fetch` with
-`FormData`.
+The PDF viewer is a plain `<iframe>` and the upload is `fetch` with `FormData`. Word and Excel template previews
+need `docx-preview` and `exceljs` (above); both are dynamic imports, so they stay out of the first load.
+
+`exceljs` 4.4 declares `uuid ^8`, flagged by GHSA-w5hq-g745-h8pq. The harness forces a newer one in `package.json`; add the
+same to the host's `package.json`:
+
+```json
+"overrides": { "uuid": "^11.1.1" }
+```
 
 Dev only: `openapi-typescript` (`npm run gen:api` regenerates `app/tracking/shared/api/schema.d.ts` from
 `backend/api/openapi.yaml`; the generated file is committed, so the host does not need it to build).
@@ -138,7 +147,7 @@ tracking folder is mounted as a route segment. If the host mounts the pages anot
 `app/tracking/tracking.css` once from whatever layout wraps them. It holds only the series colours (`--s-*`,
 `--p-*`, `--pb-*`), the 13px type scale of `.tracking-root`, the drag styles and the `.card-row`
 `content-visibility` rule. In light mode all surface colours (`background`, `border`, `primary`, `muted`...) come from
-the host's shadcn theme. In dark mode the user's dark palette (Settings: slate, warm or navy; `<html data-pt-dark>`)
+the host's shadcn theme. In dark mode the user's dark palette (Settings: slate, graphite, warm, navy, ocean, forest or plum; `<html data-pt-dark>`)
 replaces `background`, `card`, `popover`, `muted`, `secondary`, `accent`, `ring` and the `sidebar*` tokens, so the host
 shell turns the same colour while tracking is mounted; `primary`, `border` and `destructive` stay the host's.
 
@@ -154,7 +163,7 @@ import { TrackingProvider } from './shared/provider';
 <TrackingProvider
   lang={hostLang}                       // 'th' | 'en'
   theme={hostTheme}                     // 'light' | 'dark' | 'system'
-  darkPalette={hostDarkPalette}         // optional: 'slate' | 'warm' | 'navy'
+  darkPalette={hostDarkPalette}         // optional: 'slate' | 'graphite' | 'warm' | 'navy' | 'ocean' | 'forest' | 'plum'
   getAuthHeaders={() => ({ Authorization: `Bearer ${token}` })}
 >
   {children}
@@ -165,7 +174,7 @@ import { TrackingProvider } from './shared/provider';
 |---|---|---|
 | `lang` | `'th' \| 'en'` | Controlled language. Omit it and the provider keeps its own value in `localStorage` key `pt-lang` (default `th`). Every user-facing string is looked up from it; user content is never translated. |
 | `theme` | `'light' \| 'dark' \| 'system'` | Controlled theme. Omit it and the provider uses `localStorage` key `pt-theme` (default `system`). The provider toggles the `dark` class on `<html>` and sets `<html lang>`. If the host already does both, pass its value and the result is the same. |
-| `darkPalette` | `'slate' \| 'warm' \| 'navy'` | Controlled dark-mode palette. Omit it and the provider uses `localStorage` key `pt-dark-palette` (default `slate`), set from the Settings page. The provider sets `data-pt-dark` on `<html>`; it only has an effect under `.dark`. |
+| `darkPalette` | `'slate' \| 'graphite' \| 'warm' \| 'navy' \| 'ocean' \| 'forest' \| 'plum'` | Controlled dark-mode palette. Omit it and the provider uses `localStorage` key `pt-dark-palette` (default `slate`), set from the Settings page. The provider sets `data-pt-dark` on `<html>`; it only has an effect under `.dark`. |
 | `getAuthHeaders` | `() => Record<string,string> \| Promise<Record<string,string>>` | Called before every request; its headers are merged into the request. This is where the host's auth goes. The local harness uses it to send `X-User-ID`; production sends the real credentials and the service validates them with the production authenticator. |
 
 A `TrackingProvider` nested inside another one is a no-op, so the host can mount one high up (for example around its

@@ -32,8 +32,9 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'tracking_app') THEN
     CREATE ROLE tracking_app LOGIN;
   END IF;
-  -- "Today" is Bangkok time, so current_date matches the user's day: without it
-  -- a card due yesterday shows as not overdue between 00:00 and 07:00 Thai time.
+  -- The services compute "today" in Go (Asia/Bangkok) and never use
+  -- current_date; this is a safety net so any SQL that does gets the Thai day,
+  -- not the UTC one (which is still yesterday until 07:00 Thai time).
   EXECUTE format('ALTER ROLE tracking_app IN DATABASE %I SET timezone = %L', current_database(), 'Asia/Bangkok');
   EXECUTE format('ALTER ROLE tracking_app IN DATABASE %I SET search_path = tracking', current_database());
 END
