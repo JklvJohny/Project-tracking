@@ -34,8 +34,18 @@ export function initials(name: string): string {
  * version, so a cached entry never goes stale; a failed fetch is forgotten so a later render can retry.
  */
 const blobUrls = new Map<string, Promise<string>>();
+// The newest URL seen for each picture (path without ?v=): when someone changes their photo, the old version's
+// object URL is released instead of staying in memory until the page closes.
+const latest = new Map<string, string>();
 
 function trackingAvatar(url: string): Promise<string> {
+  const path = url.split('?')[0];
+  const prev = latest.get(path);
+  if (prev && prev !== url) {
+    blobUrls.get(prev)?.then(URL.revokeObjectURL, () => {});
+    blobUrls.delete(prev);
+  }
+  latest.set(path, url);
   let p = blobUrls.get(url);
   if (!p) {
     p = apiBlob(url.slice(API_BASE.length)).then((b) => URL.createObjectURL(b));

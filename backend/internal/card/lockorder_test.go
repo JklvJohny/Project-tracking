@@ -153,6 +153,46 @@ func (r recComments) Create(ctx context.Context, c store.Comment) (store.Comment
 	return r.CommentRepo.Create(ctx, c)
 }
 
+func (r recComments) Save(ctx context.Context, c store.Comment) error {
+	r.n("Comments.Save")
+	return r.CommentRepo.Save(ctx, c)
+}
+
+func (r recChecklist) Save(ctx context.Context, it store.ChecklistItem) error {
+	r.n("Checklist.Save")
+	return r.ChecklistRepo.Save(ctx, it)
+}
+
+func (r recChecklist) Delete(ctx context.Context, id int64) error {
+	r.n("Checklist.Delete")
+	return r.ChecklistRepo.Delete(ctx, id)
+}
+
+func (r recChecklist) SetPositions(ctx context.Context, ps []store.IDPos) error {
+	r.n("Checklist.SetPositions")
+	return r.ChecklistRepo.SetPositions(ctx, ps)
+}
+
+func (r recCards) SetPositions(ctx context.Context, ps []store.IDPos) error {
+	r.n("Cards.SetPositions")
+	return r.CardRepo.SetPositions(ctx, ps)
+}
+
+func (r recCards) RemoveAssignee(ctx context.Context, c, u int64) (bool, error) {
+	r.n("Cards.RemoveAssignee")
+	return r.CardRepo.RemoveAssignee(ctx, c, u)
+}
+
+func (r recCards) UnassignInProject(ctx context.Context, p, u int64) ([]int64, error) {
+	r.n("Cards.UnassignInProject")
+	return r.CardRepo.UnassignInProject(ctx, p, u)
+}
+
+func (r recLists) SetPositions(ctx context.Context, ps []store.IDPos) error {
+	r.n("Lists.SetPositions")
+	return r.ListRepo.SetPositions(ctx, ps)
+}
+
 type recProjects struct {
 	store.ProjectRepo
 	n func(string)
@@ -181,6 +221,9 @@ func TestWrites_TakeBoardLockFirst(t *testing.T) {
 	const pm = 2 // pm of both seed projects; lists 1-4 and cards 1-12 are project 1
 
 	str := func(s string) *string { return &s }
+	yes := true
+	// Ids made by earlier steps, for the steps that edit or delete them.
+	var itemID, commentID, labelID int64
 	ops := []struct {
 		name string
 		do   func() error
@@ -197,12 +240,25 @@ func TestWrites_TakeBoardLockFirst(t *testing.T) {
 		{"RestoreCard", func() error { _, err := crd.Restore(ctx, pm, 1); return err }},
 		{"Assign", func() error { _, err := crd.Assign(ctx, pm, 2, 6); return err }},
 		{"AddLabel", func() error { _, err := crd.AddLabel(ctx, pm, 2, 6); return err }},
-		{"AddItem", func() error { _, err := crd.AddItem(ctx, pm, 2, "i"); return err }},
-		{"AddComment", func() error { _, err := crd.AddComment(ctx, pm, 2, "c"); return err }},
+		{"Unassign", func() error { _, err := crd.Unassign(ctx, pm, 2, 6); return err }},
+		{"RemoveLabel", func() error { _, err := crd.RemoveLabel(ctx, pm, 2, 6); return err }},
+		{"AddItem", func() error { it, err := crd.AddItem(ctx, pm, 2, "i"); itemID = it.ID; return err }},
+		{"UpdateItem", func() error { _, err := crd.UpdateItem(ctx, pm, itemID, card.ItemPatch{IsDone: &yes}); return err }},
+		{"MoveItem", func() error { _, err := crd.MoveItem(ctx, pm, itemID, board.MoveInput{}); return err }},
+		{"DeleteItem", func() error { return crd.DeleteItem(ctx, pm, itemID) }},
+		{"AddComment", func() error { c, err := crd.AddComment(ctx, pm, 2, "c"); commentID = c.ID; return err }},
+		{"EditComment", func() error { _, err := crd.EditComment(ctx, pm, commentID, "edited"); return err }},
+		{"DeleteComment", func() error { return crd.DeleteComment(ctx, pm, commentID) }},
 		{"CreateLabel", func() error {
-			_, err := proj.CreateLabel(ctx, pm, 1, project.LabelInput{Name: "Zed", Color: "red"})
+			l, err := proj.CreateLabel(ctx, pm, 1, project.LabelInput{Name: "Zed", Color: "red"})
+			labelID = l.ID
 			return err
 		}},
+		{"UpdateLabel", func() error {
+			_, err := proj.UpdateLabel(ctx, pm, labelID, project.LabelPatch{Color: str("blue")})
+			return err
+		}},
+		{"DeleteLabel", func() error { return proj.DeleteLabel(ctx, pm, labelID) }},
 		{"AddMember", func() error { _, err := proj.AddMember(ctx, pm, 2, 3, "member"); return err }},
 		{"SetRole", func() error { _, err := proj.SetRole(ctx, pm, 2, 3, "viewer"); return err }},
 		{"RemoveMember", func() error { return proj.RemoveMember(ctx, pm, 2, 3) }},
@@ -211,6 +267,7 @@ func TestWrites_TakeBoardLockFirst(t *testing.T) {
 			return err
 		}},
 		{"ArchiveProject", func() error { _, err := proj.Archive(ctx, pm, 2); return err }},
+		{"RestoreProject", func() error { _, err := proj.Restore(ctx, pm, 2); return err }},
 	}
 	for _, op := range ops {
 		log = log[:0]

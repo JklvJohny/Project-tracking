@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useQueryClient } from '@tanstack/react-query';
 import { memo } from 'react';
 import { usePathname } from 'next/navigation';
+import { useBoardHref } from './card-filter';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToggleChecklistItem } from '../card/mutations';
 import { prefetchCard } from '../shared/api/queries';
@@ -86,7 +87,7 @@ export const CardPreview = memo(function CardPreview({
   const assignees = card.assigneeIds.map((id) => users.find((u) => u.id === id)).filter((u) => !!u);
   const cardLabels = card.labelIds.map((id) => labels.find((l) => l.id === id)).filter((l) => !!l);
   const more = card.checklistTotal - card.checklistPreview.length;
-  const href = `${pathname}?card=${card.id}`;
+  const href = useBoardHref(pathname, 'card', card.id);
 
   // The whole row opens the card through a stretched link (Back closes the panel). The content wrappers let clicks
   // fall through to it (pointer-events-none); only the real controls take pointer events.

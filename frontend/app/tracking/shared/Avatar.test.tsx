@@ -50,6 +50,21 @@ describe('Avatar', () => {
   });
 });
 
+describe('Avatar pictures', () => {
+  it("a new version of someone's photo releases the old one from memory", async () => {
+    let n = 0;
+    URL.createObjectURL = vi.fn(() => `blob:av-${++n}`);
+    URL.revokeObjectURL = vi.fn();
+    vi.mocked(apiBlob).mockResolvedValue(new Blob(['x']));
+    const base = '/api/tracking/v1/users/9/avatar';
+    const view = render(<Avatar user={{ id: 9, name: 'Kai W.', avatarUrl: `${base}?v=1` }} />);
+    await waitFor(() => expect(view.container.querySelector('img')?.getAttribute('src')).toBe('blob:av-1'));
+    view.rerender(<Avatar user={{ id: 9, name: 'Kai W.', avatarUrl: `${base}?v=2` }} />);
+    await waitFor(() => expect(view.container.querySelector('img')?.getAttribute('src')).toBe('blob:av-2'));
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:av-1');
+  });
+});
+
 describe('AvatarStack', () => {
   it('shows max avatars and a +N overflow', () => {
     const users = [1, 2, 3, 4, 5, 6].map((id) => ({ id, name: `User ${id}` }));

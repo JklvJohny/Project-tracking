@@ -1,11 +1,12 @@
 'use client';
 import { ChevronDown } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
 import { useBoard } from '../shared/api/queries';
 import { useT } from '../shared/i18n';
 import { Board } from './Board';
 import { BoardFilters } from './BoardFilters';
-import { EMPTY_FILTER, isFiltering, matchesFilter, type CardFilter } from './card-filter';
+import { FILTER_KEYS, FilterQuery, filterFromQuery, filterToQuery, isFiltering, matchesFilter, type CardFilter } from './card-filter';
 import { todayIso } from '../shared/format';
 
 export const BOARD_OPEN_KEY = 'pt-board-open';
@@ -40,7 +41,19 @@ export function BoardSection({
   const t = useT(TEXT);
   const board = useBoard(projectId);
   const flip = () => onOpenChange(!open);
-  const [filter, setFilter] = useState<CardFilter>(EMPTY_FILTER);
+  const search = useSearchParams();
+  const [filter, setFilter] = useState<CardFilter>(() => filterFromQuery(search));
+  const filterQuery = useMemo(() => filterToQuery(filter).toString(), [filter]);
+  // The URL follows the filter, so a reload or a shared link keeps it. replaceState changes the address without a
+  // navigation (no refetch, no history entry per keystroke); the rest of the query (an open card, a list) is kept.
+  useEffect(() => {
+    const next = new URLSearchParams(window.location.search);
+    for (const k of FILTER_KEYS) next.delete(k);
+    for (const [k, v] of new URLSearchParams(filterQuery)) next.set(k, v);
+    const qs = next.toString();
+    const url = `${window.location.pathname}${qs ? `?${qs}` : ''}`;
+    if (url !== `${window.location.pathname}${window.location.search}`) window.history.replaceState(window.history.state, '', url);
+  }, [filterQuery]);
   const data = board.data;
   // null = no filter: the board keeps every card and drag and drop stays on.
   const visible = useMemo(() => {
@@ -64,7 +77,7 @@ export function BoardSection({
       </button>
       <div id="board-section-body" hidden={!open} className={fill ? 'flex min-h-0 flex-1 flex-col' : undefined}>
         {open && (
-          <>
+          <FilterQuery.Provider value={filterQuery}>
             {data && (
               <BoardFilters
                 value={filter}
@@ -76,7 +89,7 @@ export function BoardSection({
               />
             )}
             <Board projectId={projectId} fill={fill} visible={visible} />
-          </>
+          </FilterQuery.Provider>
         )}
       </div>
     </section>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CardSummary } from './board-cache';
-import { EMPTY_FILTER, isFiltering, matchesFilter, type CardFilter } from './card-filter';
+import { EMPTY_FILTER, filterFromQuery, filterToQuery, isFiltering, matchesFilter, type CardFilter } from './card-filter';
 
 const card = (over: Partial<CardSummary>): CardSummary => ({
   id: 1, listId: 1, title: 'Fix Login page', priority: 'high', startDate: null, dueDate: null, position: 'a',
@@ -42,5 +42,18 @@ describe('card filter', () => {
   it('filters by priority', () => {
     expect(matchesFilter(card({}), f({ priorities: ['low', 'high'] }), today)).toBe(true);
     expect(matchesFilter(card({}), f({ priorities: ['urgent'] }), today)).toBe(false);
+  });
+});
+
+describe('filter in the URL', () => {
+  it('round-trips, leaves out empty parts and drops what it does not know', () => {
+    const full: CardFilter = { q: 'login page', assignees: [0, 4], labels: [2], priorities: ['high', 'urgent'], due: ['overdue'] };
+    const qs = filterToQuery(full).toString();
+    expect(qs).toBe('q=login+page&who=0%2C4&label=2&priority=high%2Curgent&due=overdue');
+    expect(filterFromQuery(new URLSearchParams(qs))).toEqual(full);
+    expect(filterToQuery(EMPTY_FILTER).toString()).toBe('');
+    expect(filterFromQuery(new URLSearchParams('who=x,-1,3&priority=huge,low&due=soon'))).toEqual({
+      ...EMPTY_FILTER, assignees: [3], priorities: ['low'],
+    });
   });
 });

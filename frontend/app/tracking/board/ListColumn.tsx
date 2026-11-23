@@ -3,6 +3,7 @@ import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CheckCircle2, Archive, GripVertical } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useBoardHref } from './card-filter';
 import { memo, useRef, useState, type KeyboardEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -143,6 +144,7 @@ export const ListColumn = memo(function ListColumn({
   const { canDragCards, canDragLists } = useDndCtx();
   const { setColumn, columnStyle, setHandle, handleProps, setDrop, isDragging, isOver } = useSortableList(list.id);
   const pathname = usePathname();
+  const listHref = useBoardHref(pathname, 'list', list.id);
   const [renaming, setRenaming] = useState(false);
   // Enter/Escape unmount the focused input, which can fire blur: settled makes commit run once and never after Escape.
   const settled = useRef(false);
@@ -198,7 +200,7 @@ export const ListColumn = memo(function ListColumn({
         ) : (
           <h2 id={`list-h-${list.id}`} className="min-w-0 flex-1 truncate py-1 text-sm font-semibold">
             <Link
-              href={`${pathname}?list=${list.id}`}
+              href={listHref}
               scroll={false}
               draggable={false}
               title={t.openTable(list.name)}
