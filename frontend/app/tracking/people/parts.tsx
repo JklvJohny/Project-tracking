@@ -10,8 +10,8 @@ import { allSkills, groupSkills, useTeam } from '../team/queries';
 import type { Task } from './impact';
 
 const TEXT = {
-  th: { open: 'งานค้าง', overdue: 'เลยกำหนด', soon: 'ครบกำหนดใน 7 วัน', uncategorised: 'ไม่มีหมวดหมู่' },
-  en: { open: 'Open', overdue: 'Overdue', soon: 'Due in 7 days', uncategorised: 'Uncategorised' },
+  th: { open: 'งานค้าง', overdue: 'เลยกำหนด', soon: 'ครบกำหนดใน 7 วัน', uncategorised: 'ไม่มีหมวดหมู่', skillCount: 'ทักษะ' },
+  en: { open: 'Open', overdue: 'Overdue', soon: 'Due in 7 days', uncategorised: 'Uncategorised', skillCount: 'skills' },
 };
 
 function Stat({ icon: Icon, label, value, tone }: { icon: LucideIcon; label: string; value: number | undefined; tone?: string }) {
@@ -54,15 +54,25 @@ export function SkillsByCategory({ skills }: { skills: string[] }) {
       team.data?.categories ?? [],
     ).filter((g) => g.skills.length > 0);
   }, [skills, team.data]);
+  // One box per category, so a glance shows what kind of work someone covers before reading single skills.
   return (
-    <dl className="grid gap-x-4 gap-y-2 sm:grid-cols-[minmax(8rem,auto)_1fr]">
+    <dl className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,16rem),1fr))] gap-3">
       {groups.map(({ category, skills: list }) => (
-        <div key={category?.id ?? 'none'} className="contents">
-          <dt className={`pt-0.5 text-xs font-semibold ${category ? '' : 'text-muted-foreground'}`}>{category?.name ?? t.uncategorised}</dt>
+        <div key={category?.id ?? 'none'} className="flex flex-col gap-2 rounded-lg border bg-background p-3">
+          <dt className="flex items-center justify-between gap-2 text-sm font-semibold">
+            <span className={`min-w-0 truncate ${category ? '' : 'text-muted-foreground'}`}>{category?.name ?? t.uncategorised}</span>
+            <span className="shrink-0 rounded-full bg-muted px-2 text-xs font-medium text-muted-foreground tabular-nums">
+              {list.length}
+              <span className="sr-only"> {t.skillCount}</span>
+            </span>
+          </dt>
           <dd>
             <ul className="flex flex-wrap gap-1.5">
               {list.map((s) => (
-                <li key={s.name} className="rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-secondary-foreground">
+                <li
+                  key={s.name}
+                  className="rounded-md border border-primary/25 bg-primary/10 px-2.5 py-1 text-sm font-medium text-foreground"
+                >
                   {s.name}
                 </li>
               ))}

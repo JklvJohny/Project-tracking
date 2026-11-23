@@ -92,8 +92,8 @@ describe('Profile', () => {
     expect(within(work).getByText('Due in 7 days').nextSibling?.textContent).toBe('2');
     // Skills read like the Team page: Go under Programming, Scrum uncategorised.
     const skills = screen.getByRole('region', { name: 'Skills' });
-    expect(within(skills).getByText('Programming').nextSibling?.textContent).toBe('Go');
-    expect(within(skills).getByText('Uncategorised').nextSibling?.textContent).toBe('Scrum');
+    expect(within(skills).getByText('Programming').closest('dt')?.nextElementSibling?.textContent).toBe('Go');
+    expect(within(skills).getByText('Uncategorised').closest('dt')?.nextElementSibling?.textContent).toBe('Scrum');
     // The task is on the calendar and opens on its project's board.
     const bar = (await screen.findAllByRole('link', { name: /^Pricing page\./ }))[0];
     expect(bar.getAttribute('href')).toBe('/tracking/5?card=11');

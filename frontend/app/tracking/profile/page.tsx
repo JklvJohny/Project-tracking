@@ -42,7 +42,6 @@ const TEXT = {
     workload: 'งานของฉันตอนนี้',
     allTasks: 'ดูงานทั้งหมด',
     skills: 'ทักษะ',
-    skillsHint: 'แก้ที่นี่แล้วหน้าทีมงานจะเปลี่ยนตาม',
     noSkills: 'ยังไม่ได้ใส่ทักษะ',
     addSkills: 'เพิ่มทักษะ',
     calendar: 'ตารางงานของฉัน',
@@ -67,7 +66,6 @@ const TEXT = {
     workload: 'My work right now',
     allTasks: 'See all my tasks',
     skills: 'Skills',
-    skillsHint: 'Changes here show on the Team page too.',
     noSkills: 'No skills listed yet',
     addSkills: 'Add skills',
     calendar: 'My schedule',
@@ -195,13 +193,10 @@ function SkillsCard({ userId, name }: { userId: number; name: string }) {
 
   return (
     <section aria-labelledby="profile-skills" className="flex flex-col gap-3 rounded-xl border bg-card p-4">
-      <div className="flex items-start gap-2">
-        <div className="min-w-0 flex-1">
-          <h2 id="profile-skills" className="font-semibold">
-            {t.skills}
-          </h2>
-          <p className="text-xs text-muted-foreground">{t.skillsHint}</p>
-        </div>
+      <div className="flex items-center gap-2">
+        <h2 id="profile-skills" className="min-w-0 flex-1 font-semibold">
+          {t.skills}
+        </h2>
         {me && (
           <SkillsEditor
             name={name}

@@ -77,7 +77,7 @@ describe('Person page', () => {
     expect(within(projects).getByText('Beta').closest('a')).toBeNull();
     expect(within(projects).getByText('PM')).toBeTruthy();
     const skills = screen.getByRole('region', { name: 'Skills' });
-    expect((await within(skills).findByText('Programming')).nextSibling?.textContent).toBe('Go');
+    expect((await within(skills).findByText('Programming')).closest('dt')?.nextElementSibling?.textContent).toBe('Go');
     // Calendar: the Alpha card opens its board; the Beta one stays on this page.
     expect((await screen.findAllByRole('link', { name: /^Pricing page\./ }))[0].getAttribute('href')).toBe('/tracking/1?card=11');
     expect((await screen.findAllByRole('link', { name: /^Plant HMI\./ }))[0].getAttribute('href')).toBe('/tracking/people/4');
