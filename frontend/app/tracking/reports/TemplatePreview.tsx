@@ -87,7 +87,10 @@ function DocxView({ blob, title, onError }: { blob: Blob; title: string; onError
         doc.querySelectorAll('a').forEach((a) => {
           const href = a.getAttribute('href') ?? '';
           if (!SAFE_HREF.test(href)) a.removeAttribute('href');
-          else if (!href.startsWith('#')) a.setAttribute('target', '_blank');
+          else if (!href.startsWith('#')) {
+            a.setAttribute('target', '_blank');
+            a.setAttribute('rel', 'noopener noreferrer');
+          }
         });
       })
       .catch((e) => !cancelled && onError(e));

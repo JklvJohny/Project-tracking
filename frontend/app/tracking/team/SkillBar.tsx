@@ -329,7 +329,8 @@ function AddSkillForm({ skills, categories, people, preset, onDone }: Omit<AddPr
   const [name, setName] = useState('');
   const [who, setWho] = useState<number[]>([]);
   const [category, setCategory] = useState<string>(String(preset.id));
-  const [error, setError] = useState<string | null>(null);
+  // A code, or the error itself when it has none: resolved at render, so it follows a language switch.
+  const [error, setError] = useState<{ code?: string; err?: unknown } | null>(null);
   const field = useRef<HTMLInputElement>(null);
   const ids = useId();
   const clean = cleanSkills([name])[0] ?? '';
@@ -337,7 +338,7 @@ function AddSkillForm({ skills, categories, people, preset, onDone }: Omit<AddPr
   const categoryId = category === NONE ? null : Number(category);
 
   const fail = (code: string) => {
-    setError(code);
+    setError({ code });
     field.current?.focus();
   };
   const submit = () => {
@@ -353,7 +354,7 @@ function AddSkillForm({ skills, categories, people, preset, onDone }: Omit<AddPr
         onError: (e) => {
           const code = e instanceof ApiError ? (e.fields?.name ?? e.fields?.userIds ?? e.fields?.categoryId) : undefined;
           if (code && TEXT.en.errors[code]) fail(code);
-          else setError(errorMessage(e, lang));
+          else setError({ err: e });
         },
       },
     );
@@ -388,7 +389,7 @@ function AddSkillForm({ skills, categories, people, preset, onDone }: Omit<AddPr
         />
         {error && (
           <p id={`${ids}-error`} role="alert" className="text-xs text-destructive">
-            {t.errors[error] ?? error}
+            {error.code ? t.errors[error.code] : errorMessage(error.err, lang)}
           </p>
         )}
       </div>

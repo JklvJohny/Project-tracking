@@ -46,14 +46,20 @@ export function useSetSkills() {
       api<{ skills: string[] }>(`/team/${userId}/skills`, { method: 'PUT', json: { skills } }),
     onMutate: async ({ userId, skills }) => {
       await qc.cancelQueries({ queryKey: teamKey });
-      const before = qc.getQueryData<Team>(teamKey);
+      const before = qc.getQueryData<Team>(teamKey)?.people.find((p) => p.userId === userId)?.skills;
       qc.setQueryData<Team>(teamKey, (old) =>
         old && { ...old, people: old.people.map((p) => (p.userId === userId ? { ...p, skills } : p)) },
       );
       return { before };
     },
-    onError: (e, _v, ctx) => {
-      if (ctx?.before) qc.setQueryData(teamKey, ctx.before);
+    onError: (e, { userId }, ctx) => {
+      // Put back only this person's skills: restoring the whole team would also undo a save for someone else that
+      // succeeded in the meantime.
+      const before = ctx?.before;
+      if (before)
+        qc.setQueryData<Team>(teamKey, (old) =>
+          old && { ...old, people: old.people.map((p) => (p.userId === userId ? { ...p, skills: before } : p)) },
+        );
       toast.error(errorMessage(e, lang));
     },
     onSuccess: ({ skills }, { userId }) =>

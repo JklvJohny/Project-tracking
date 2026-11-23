@@ -165,6 +165,18 @@ describe('Reports page', () => {
     expect(posted()).toHaveLength(0);
   });
 
+  it('an error on screen follows a language switch', async () => {
+    const view = setup();
+    fireEvent.change(await screen.findByTestId('upload-input'), { target: { files: [new File(['x'], 'a.txt', { type: 'text/plain' })] } });
+    expect((await screen.findByRole('alert')).textContent).toBe('Only PDF files are supported');
+    view.rerender(
+      <TrackingProvider lang="th">
+        <ReportsPage />
+      </TrackingProvider>,
+    );
+    expect(screen.getByRole('alert').textContent).toBe('รองรับเฉพาะไฟล์ PDF');
+  });
+
   it('upload posts FormData and adds the row', async () => {
     setup();
     fireEvent.change(await screen.findByTestId('upload-input'), { target: { files: [pdf('new.pdf')] } });

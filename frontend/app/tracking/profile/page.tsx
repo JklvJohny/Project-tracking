@@ -104,21 +104,20 @@ function PhotoCard({ user }: { user: S['User'] }) {
   const confirm = useConfirm();
   const { upload, remove } = usePhoto();
   const input = useRef<HTMLInputElement>(null);
-  const [error, setError] = useState<string | null>(null);
+  // The code or the error itself, never its text: the message is resolved at render so it follows a language switch.
+  const [error, setError] = useState<{ code?: string; err?: unknown } | null>(null);
+  const message = error && (error.code && t.errors[error.code] ? t.errors[error.code] : errorMessage(error.err, lang));
   const ids = useId();
 
   const pick = (file: File | undefined) => {
     if (!file) return;
     // Mirrors the server (internal/profile); it checks again, and also the pixel count.
-    if (!TYPES.includes(file.type)) return setError(t.errors.unsupported_type);
-    if (file.size > MAX_BYTES) return setError(t.errors.too_large);
+    if (!TYPES.includes(file.type)) return setError({ code: 'unsupported_type' });
+    if (file.size > MAX_BYTES) return setError({ code: 'too_large' });
     setError(null);
     upload.mutate(file, {
       onSuccess: () => toast.success(t.changed),
-      onError: (e) => {
-        const code = e instanceof ApiError ? e.fields?.file : undefined;
-        setError(code && t.errors[code] ? t.errors[code] : errorMessage(e, lang));
-      },
+      onError: (e) => setError({ code: e instanceof ApiError ? e.fields?.file : undefined, err: e }),
     });
   };
   const onRemove = async () => {
@@ -178,7 +177,7 @@ function PhotoCard({ user }: { user: S['User'] }) {
         </p>
         {error && (
           <p id={`${ids}-err`} role="alert" className="text-xs text-destructive">
-            {error}
+            {message}
           </p>
         )}
       </div>

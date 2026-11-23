@@ -47,8 +47,10 @@ export function useMoveFailure(projectId: number) {
     onFail(e: unknown, prev: BoardData | undefined, retry: () => void) {
       mark();
       if (prev) qc.setQueryData(key, prev);
-      if (errorKey(e) === 'stale_order') toast(errorText('stale_order', lang));
-      else toast.error(errorText(errorKey(e), lang), { action: { label: t.retry, onClick: retry } });
+      // One toast per board: a burst of failed drags replaces it instead of stacking up.
+      const id = `move-${projectId}`;
+      if (errorKey(e) === 'stale_order') toast(errorText('stale_order', lang), { id });
+      else toast.error(errorText(errorKey(e), lang), { id, action: { label: t.retry, onClick: retry } });
     },
     onSettled() {
       // This move still counts as in flight inside its own onSettled.

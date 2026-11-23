@@ -37,6 +37,12 @@ import {
 } from 'react';
 import { useLang } from '../shared/i18n';
 import { announcements, cardDndId, listDndId, movedText } from './announcements';
+
+// Read out on every draggable card and list (dnd-kit's own text is English only).
+const INSTRUCTIONS = {
+  th: 'กด Space หรือ Enter เพื่อหยิบ ใช้ปุ่มลูกศรเพื่อย้าย กด Space หรือ Enter อีกครั้งเพื่อวาง หรือกด Escape เพื่อยกเลิก',
+  en: 'Press Space or Enter to pick up. Use the arrow keys to move. Press Space or Enter again to drop, or Escape to cancel.',
+};
 import type { BoardData, CardSummary } from './board-cache';
 import { CardPreview } from './CardPreview';
 import {
@@ -286,7 +292,7 @@ export function BoardDnd({
         key={sensors === allSensors ? 'drag' : 'static'}
         sensors={sensors}
         collisionDetection={collision}
-        accessibility={{ announcements: text }}
+        accessibility={{ announcements: text, screenReaderInstructions: { draggable: INSTRUCTIONS[lang] } }}
         onDragStart={onDragStart}
         onDragOver={onDragOver}
         onDragEnd={onDragEnd}

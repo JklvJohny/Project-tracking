@@ -108,14 +108,19 @@ export function CategoryDialog({ open, onOpenChange, skills, categories }: Props
   );
 }
 
-/** Maps a failed category write to an inline message: a known field code, else the general error text. */
-function useFieldError() {
+/**
+ * A failed check or write, kept as its code or the error itself: the text is resolved at render, so it follows a
+ * language switch instead of staying in the language it was raised in.
+ */
+type Failure = { code?: string; err?: unknown };
+
+const failureOf = (e: unknown): Failure => ({ code: e instanceof ApiError ? e.fields?.name : undefined, err: e });
+
+/** The inline text for a failure: a known field code, else the general error text. */
+function useFailureText() {
   const t = useT(TEXT);
   const { lang } = useLang();
-  return (e: unknown) => {
-    const code = e instanceof ApiError ? e.fields?.name : undefined;
-    return code && t.errors[code] ? t.errors[code] : errorMessage(e, lang);
-  };
+  return (f: Failure) => (f.code && t.errors[f.code] ? t.errors[f.code] : errorMessage(f.err, lang));
 }
 
 function Categories({
@@ -125,26 +130,26 @@ function Categories({
 }: Omit<Props, 'open' | 'onOpenChange'> & { field: RefObject<HTMLInputElement | null> }) {
   const t = useT(TEXT);
   const create = useCreateCategory();
-  const toMessage = useFieldError();
+  const toText = useFailureText();
   const [name, setName] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Failure | null>(null);
   const ids = useId();
 
-  const fail = (msg: string) => {
-    setError(msg);
+  const fail = (f: Failure) => {
+    setError(f);
     field.current?.focus();
   };
   const submit = () => {
     const clean = cleanSkills([name])[0] ?? '';
-    if (!clean) return fail(t.errors.required);
-    if (clean.length > MAX_SKILL) return fail(t.errors.too_long);
-    if (categories.some((c) => c.name.toLocaleLowerCase() === clean.toLocaleLowerCase())) return fail(t.errors.exists);
+    if (!clean) return fail({ code: 'required' });
+    if (clean.length > MAX_SKILL) return fail({ code: 'too_long' });
+    if (categories.some((c) => c.name.toLocaleLowerCase() === clean.toLocaleLowerCase())) return fail({ code: 'exists' });
     create.mutate(clean, {
       onSuccess: () => {
         setName('');
         field.current?.focus();
       },
-      onError: (e) => fail(toMessage(e)),
+      onError: (e) => fail(failureOf(e)),
     });
   };
 
@@ -194,7 +199,7 @@ function Categories({
         </div>
         {error && (
           <p id={`${ids}-err`} role="alert" className="text-xs text-destructive">
-            {error}
+            {toText(error)}
           </p>
         )}
       </form>
@@ -208,9 +213,9 @@ function CategoryRow({ category, count, others }: { category: Category; count: n
   const rename = useRenameCategory();
   const remove = useDeleteCategory();
   const confirm = useConfirm();
-  const toMessage = useFieldError();
+  const toText = useFailureText();
   const [draft, setDraft] = useState(category.name);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Failure | null>(null);
   const field = useRef<HTMLInputElement>(null);
   const discard = useRef(false);
   const ids = useId();
@@ -225,15 +230,15 @@ function CategoryRow({ category, count, others }: { category: Category; count: n
       setDraft(clean);
       return;
     }
-    const fail = (msg: string) => {
-      setError(msg);
+    const fail = (f: Failure) => {
+      setError(f);
       field.current?.focus();
     };
-    if (!clean) return fail(t.errors.required);
-    if (clean.length > MAX_SKILL) return fail(t.errors.too_long);
+    if (!clean) return fail({ code: 'required' });
+    if (clean.length > MAX_SKILL) return fail({ code: 'too_long' });
     if (others.some((c) => c.id !== category.id && c.name.toLocaleLowerCase() === clean.toLocaleLowerCase()))
-      return fail(t.errors.exists);
-    rename.mutate({ id: category.id, name: clean }, { onSuccess: () => setDraft(clean), onError: (e) => fail(toMessage(e)) });
+      return fail({ code: 'exists' });
+    rename.mutate({ id: category.id, name: clean }, { onSuccess: () => setDraft(clean), onError: (e) => fail(failureOf(e)) });
   };
   const onDelete = async () => {
     // An empty category is gone with nothing lost; one with skills moves them, so ask.
@@ -293,7 +298,7 @@ function CategoryRow({ category, count, others }: { category: Category; count: n
       </div>
       {error && (
         <p id={`${ids}-err`} role="alert" className="text-xs text-destructive">
-          {error}
+          {toText(error)}
         </p>
       )}
     </li>

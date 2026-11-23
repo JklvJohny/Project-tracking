@@ -157,8 +157,8 @@ Every method below is copied from the doc comments in `internal/store/repos.go` 
 Create(ctx context.Context, p Project) (Project, error)
 ```
 
-- Does: Create assigns ID and stores p as given (the service sets timestamps).
-- SQL obligation: INSERT INTO projects ... RETURNING id.
+- Does: Create assigns ID and stores p as given (the service sets timestamps). ErrDuplicate when p is live and another live project has its name, ignoring case: the service checks `NameTaken` first and maps ErrDuplicate to 409 `name_in_use`, which covers two people saving the same name at once.
+- SQL obligation: INSERT INTO projects ... RETURNING id; a unique violation on `ux_projects_name` is ErrDuplicate (return it straight away: the transaction is aborted).
 
 **`Get`**
 
@@ -175,8 +175,8 @@ Get(ctx context.Context, id int64) (Project, error)
 Save(ctx context.Context, p Project) error
 ```
 
-- Does: Save overwrites every column of an existing project; ErrNotFound if absent.
-- SQL obligation: UPDATE projects SET all columns WHERE id = $1.
+- Does: Save overwrites every column of an existing project; ErrNotFound if absent; ErrDuplicate as for `Create` (a rename or a restore can collide).
+- SQL obligation: UPDATE projects SET all columns WHERE id = $1; a unique violation on `ux_projects_name` is ErrDuplicate.
 
 **`All`**
 
@@ -474,6 +474,15 @@ RemoveAssignee(ctx context.Context, cardID, userID int64) (bool, error)
 - Does: RemoveAssignee reports whether a row was removed.
 - SQL obligation: DELETE FROM card_assignees WHERE card_id = $1 AND user_id = $2; removed = rows affected is 1.
 
+**`UnassignInProject`**
+
+```go
+UnassignInProject(ctx context.Context, projectID, userID int64) ([]int64, error)
+```
+
+- Does: removes userID from every card of the project, archived ones included, and returns the ids of the cards that lost them, ascending. `RemoveMember` calls it in the same transaction, then touches each card and logs `card.unassigned` for it, so someone who left a project holds none of its cards.
+- SQL obligation: DELETE FROM card_assignees ca USING cards c, lists l, boards b WHERE ca.card_id = c.id AND c.list_id = l.id AND l.board_id = b.id AND b.project_id = $1 AND ca.user_id = $2 RETURNING ca.card_id (sorted).
+
 **`AddLabel`**
 
 ```go
@@ -764,11 +773,11 @@ Get(ctx context.Context, id int64) (Document, error)
 **`SetDeleted`**
 
 ```go
-SetDeleted(ctx context.Context, id int64, at *time.Time) error
+SetDeleted(ctx context.Context, id int64, at *time.Time) (bool, error)
 ```
 
-- Does: SetDeleted sets deleted_at (nil restores); ErrNotFound if absent. No other column changes.
-- SQL obligation: UPDATE documents SET deleted_at = $2 WHERE id = $1.
+- Does: SetDeleted sets deleted_at (nil restores) and reports whether the row changed state; one already in that state is left alone (false), and the service then logs nothing, so two people deleting at once log one `document.deleted`. ErrNotFound if absent. No other column changes.
+- SQL obligation: UPDATE documents SET deleted_at = $2 WHERE id = $1 AND (deleted_at IS NULL) = ($2::timestamptz IS NOT NULL); changed = rows affected is 1; on 0, `SELECT 1` tells unchanged from ErrNotFound.
 
 **`ByProject`**
 
@@ -809,11 +818,11 @@ Backs the Team page (`internal/team`). Table `user_skills (user_id bigint, skill
 - SQL obligation: SELECT user_id, array_agg(skill ORDER BY position) FROM user_skills GROUP BY user_id.
 
 **`SetSkills`**
-- Does: replaces one person's set in one transaction; an empty slice deletes them all.
-- SQL obligation: DELETE FROM user_skills WHERE user_id = $1; INSERT INTO user_skills (user_id, skill, position) SELECT $1, s, ord FROM unnest($2::text[]) WITH ORDINALITY AS t(s, ord).
+- Does: replaces one person's set in one transaction; an empty slice deletes them all. Two saves for one person at once run one after the other, or the second insert would hit `ux_user_skills`.
+- SQL obligation: SELECT pg_advisory_xact_lock(hashtextextended('user_skills:' || $1, 0)); DELETE FROM user_skills WHERE user_id = $1; INSERT INTO user_skills (user_id, skill, position) SELECT $1, s, ord FROM unnest($2::text[]) WITH ORDINALITY AS t(s, ord).
 
 **`Workload`**
-- Does: per assignee, open cards across every project (not archived, active list, non-archived project, completed_at IS NULL): total, overdue (due before today), due soon (today up to `soon`, exclusive). Assignees with nothing open are absent. The page shows counts only, never the cards, so a project the caller cannot see is not revealed.
+- Does: per assignee, open cards across every project (not archived, active list, non-archived project, completed_at IS NULL): total, overdue (due before today), due soon (today up to `soon`, exclusive; the service passes today+8 days, so "due in 7 days" is today through today+7, as on the dashboard). Assignees with nothing open are absent. The page shows counts only, never the cards, so a project the caller cannot see is not revealed.
 - SQL obligation: one grouped query driven by `card_assignees`; see the comment on `TeamRepo.Workload` in `internal/store/repos.go`.
 
 Table `skill_catalog (name text PRIMARY KEY, category_id bigint NULL REFERENCES skill_categories(id) ON DELETE SET NULL, created_by bigint, created_at timestamptz)` with `ux_skill_catalog (lower(name))` is the department's list of named skills, so a skill can be offered and filtered on before anyone has it. Adding one with people (`POST /team/skills`) inserts the catalog row and appends the tag to each person's `user_skills` in the same transaction; removing it from the catalog leaves people's tags alone.

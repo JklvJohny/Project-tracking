@@ -23,8 +23,14 @@ export const useMyTasks = () => useQuery({ queryKey: qk.myTasks, queryFn: () => 
 export const useProjects = () => useQuery({ queryKey: qk.projects, queryFn: () => api<S['ProjectListItem'][]>('/projects') });
 
 // The browser revalidates this URL with If-None-Match (see api()), so a refetch of an unchanged board is a 304.
+// A board left in a background tab goes stale while others work on it (drags would then fail with stale_order), so
+// it reloads when the tab comes back, once it is older than staleTime. The server answers 304 when nothing changed.
 export const useBoard = (projectId: number) =>
-  useQuery({ queryKey: qk.board(projectId), queryFn: () => api<S['Board']>(`/projects/${projectId}/board`) });
+  useQuery({
+    queryKey: qk.board(projectId),
+    queryFn: () => api<S['Board']>(`/projects/${projectId}/board`),
+    refetchOnWindowFocus: true,
+  });
 
 export const useCard = (cardId: number | undefined) =>
   useQuery({
