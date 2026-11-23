@@ -269,7 +269,7 @@ erDiagram
   - Unarchiving a card or list gives it a new key at the end of its list or board.
   - Checklist items have no archive, so `UNIQUE (card_id, position)` covers all of them.
 - **Completion:** `cards.completed_at` is set when a card moves into a list with `is_done = true`, and cleared when it moves out, in the same transaction as the move. Done, overdue, "done this week" and the Gantt read it from `cards` alone, with no join to `lists`.
-- **"Today" is Bangkok time:** the database runs with `ALTER DATABASE ... SET timezone = 'Asia/Bangkok'`, so `current_date` matches the user's day. Without it, a UTC server shows a card due yesterday as not yet overdue between 00:00 and 07:00 Thai time.
+- **"Today" is Bangkok time:** the service's role runs with `ALTER ROLE tracking_app IN DATABASE ... SET timezone = 'Asia/Bangkok'` (set per role, not per database, so other services sharing the database keep their own), so `current_date` matches the user's day. Without it, a UTC server shows a card due yesterday as not yet overdue between 00:00 and 07:00 Thai time.
 - **Search:** `ILIKE '%term%'` on `title` (and `description_md` when asked), limited to the projects the caller can see. There is no `tsvector`: PostgreSQL has no Thai word splitter, so `ออกแบบหน้าแรก` would be one token and `หน้าแรก` would not match it.
   - At one department's size (thousands of cards) the scan takes milliseconds.
   - Add a `pg_trgm` GIN index only if `EXPLAIN ANALYZE` shows search over budget. First check `SELECT show_trgm('ออกแบบหน้าแรก')`: Thai vowel and tone marks must not split the trigrams under the database locale.

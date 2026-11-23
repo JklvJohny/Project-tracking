@@ -22,11 +22,20 @@ BEGIN;
 CREATE SCHEMA IF NOT EXISTS tracking;
 SET LOCAL search_path = tracking;
 
--- "Today" is Bangkok time, so current_date matches the user's day: without it
--- a card due yesterday shows as not overdue between 00:00 and 07:00 Thai time.
+-- tracking-service connects as tracking_app. Its settings below apply to that
+-- role in this database only, so other services sharing the server or the
+-- database keep theirs. No password here: the DBA sets it afterwards with
+--   ALTER ROLE tracking_app PASSWORD '...';
+-- Creating a role needs CREATEROLE (or superuser) for whoever runs this file.
 DO $$
 BEGIN
-  EXECUTE format('ALTER DATABASE %I SET timezone = %L', current_database(), 'Asia/Bangkok');
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'tracking_app') THEN
+    CREATE ROLE tracking_app LOGIN;
+  END IF;
+  -- "Today" is Bangkok time, so current_date matches the user's day: without it
+  -- a card due yesterday shows as not overdue between 00:00 and 07:00 Thai time.
+  EXECUTE format('ALTER ROLE tracking_app IN DATABASE %I SET timezone = %L', current_database(), 'Asia/Bangkok');
+  EXECUTE format('ALTER ROLE tracking_app IN DATABASE %I SET search_path = tracking', current_database());
 END
 $$;
 
@@ -328,5 +337,18 @@ FROM generate_series(0, 12) AS m;
 -- Rows outside every monthly partition land here instead of failing the
 -- write. It should stay empty: if it is not, a month's partition is missing.
 CREATE TABLE activity_events_default PARTITION OF activity_events DEFAULT;
+
+-- ---------------------------------------------------------------------------
+-- What the service may do: read and write rows, never change the schema.
+-- Migrations (and ensure_activity_partition, which creates tables) run as the
+-- owner of the schema, not as tracking_app.
+-- ---------------------------------------------------------------------------
+
+GRANT USAGE ON SCHEMA tracking TO tracking_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA tracking TO tracking_app;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA tracking TO tracking_app;
+-- Tables and sequences a later migration creates get the same rights.
+ALTER DEFAULT PRIVILEGES IN SCHEMA tracking GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO tracking_app;
+ALTER DEFAULT PRIVILEGES IN SCHEMA tracking GRANT USAGE, SELECT ON SEQUENCES TO tracking_app;
 
 COMMIT;
