@@ -29,7 +29,7 @@ import (
 	"tracking-service/internal/httpx"
 	"tracking-service/internal/profile"
 	"tracking-service/internal/project"
-	"tracking-service/internal/store/memory"
+	"tracking-service/internal/store/storetest"
 	"tracking-service/internal/users"
 )
 
@@ -57,7 +57,7 @@ func newEnv(t *testing.T) env {
 		tick++
 		return time.Date(2026, 11, 20, 9, 0, 0, 0, time.UTC).Add(time.Duration(tick) * time.Second)
 	}
-	st := memory.New(now)
+	st := storetest.New(t, now)
 	dir := t.TempDir()
 	blobs, err := blob.NewLocal(dir)
 	if err != nil {
@@ -215,7 +215,7 @@ func TestAvatar_TooManyPixelsIsRefusedBeforeDecoding(t *testing.T) {
 }
 
 func TestAvatar_IndexLoadsFromTheStore(t *testing.T) {
-	st := memory.New(time.Now)
+	st := storetest.New(t, time.Now)
 	blobs, _ := blob.NewLocal(t.TempDir())
 	raw := users.NewStub()
 	svc := profile.New(st, blobs, raw, profile.NewIndex(), time.Now)

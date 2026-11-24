@@ -9,8 +9,10 @@ import (
 
 	"tracking-service/internal/board"
 	"tracking-service/internal/card"
+	"tracking-service/internal/clock"
 	"tracking-service/internal/events"
 	"tracking-service/internal/project"
+	"tracking-service/internal/seed"
 	"tracking-service/internal/store"
 	"tracking-service/internal/store/memory"
 	"tracking-service/internal/users"
@@ -208,7 +210,7 @@ func (r recProjects) Save(ctx context.Context, p store.Project) error {
 // in opposite orders and deadlock in PostgreSQL.
 func TestWrites_TakeBoardLockFirst(t *testing.T) {
 	mem := memory.New(time.Now)
-	if err := memory.Seed(mem, users.NewStub(), false); err != nil {
+	if err := seed.Seed(mem, clock.UTC, users.NewStub(), false); err != nil {
 		t.Fatal(err)
 	}
 	var log []string

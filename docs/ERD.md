@@ -1,6 +1,6 @@
 # Project Tracking: ERD (proposal)
 
-PostgreSQL, schema `tracking`, owned only by `tracking-service`. Status: **proposal**, not yet migrated. The runnable DDL for the tables the code uses today is [backend/db/schema.sql](../backend/db/schema.sql).
+PostgreSQL, schema `tracking`, owned only by `tracking-service`. The tables the code uses today are migrated: [00001_init.sql](../backend/internal/store/postgres/migrations/00001_init.sql) (applied by the service at start-up; database setup in [backend/db/bootstrap.sql](../backend/db/bootstrap.sql)). Tables below that are not in it are still a proposal.
 
 **Single department (decided 2026-11-17):** there is no Workspace level. Projects sit at the top, and the only roles above project level are in `user_roles`.
 

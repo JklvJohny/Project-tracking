@@ -1,44 +1,17 @@
--- Project Tracking: PostgreSQL schema for tracking-service.
+-- +goose Up
+-- The tracking schema's first version: every table the code uses today.
 --
--- Source of truth: docs/ERD.md and docs/db-contract.md (the "SQL:" obligation
--- on every repo method in backend/internal/store/repos.go). Keep the three in
--- step: a column or index added here is added there in the same change.
+-- Runs inside schema "tracking" as its owner (tracking_app, see
+-- db/bootstrap.sql); tracking-service applies it at start-up with goose, so
+-- nobody runs this file by hand. A later change is a new numbered file, never
+-- an edit of this one once it has run anywhere.
 --
--- How to run (pgAdmin):
---   1. Create an empty database, e.g. "tracking", and connect to it.
---   2. Open this file in the Query Tool and run all of it (F5).
---   It runs in one transaction: on any error nothing is created.
---   It is meant for an empty database. To start over:
---   DROP SCHEMA tracking CASCADE;   (this deletes every tracking table and row)
---
--- Needs PostgreSQL 14 or newer.
+-- Source of truth together with docs/ERD.md and docs/db-contract.md (the
+-- "SQL:" obligation on every repo method in internal/store/repos.go).
 --
 -- Not created yet, because no code uses them: notifications,
 -- notification_prefs, attachments, import_jobs, import_rows, user_prefs, and
 -- the worker's job queue. They come with their features.
-
-BEGIN;
-
-CREATE SCHEMA IF NOT EXISTS tracking;
-SET LOCAL search_path = tracking;
-
--- tracking-service connects as tracking_app. Its settings below apply to that
--- role in this database only, so other services sharing the server or the
--- database keep theirs. No password here: the DBA sets it afterwards with
---   ALTER ROLE tracking_app PASSWORD '...';
--- Creating a role needs CREATEROLE (or superuser) for whoever runs this file.
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'tracking_app') THEN
-    CREATE ROLE tracking_app LOGIN;
-  END IF;
-  -- The services compute "today" in Go (Asia/Bangkok) and never use
-  -- current_date; this is a safety net so any SQL that does gets the Thai day,
-  -- not the UTC one (which is still yesterday until 07:00 Thai time).
-  EXECUTE format('ALTER ROLE tracking_app IN DATABASE %I SET timezone = %L', current_database(), 'Asia/Bangkok');
-  EXECUTE format('ALTER ROLE tracking_app IN DATABASE %I SET search_path = tracking', current_database());
-END
-$$;
 
 -- ---------------------------------------------------------------------------
 -- People. Every column that points at a person holds the user-service id:
@@ -319,6 +292,7 @@ CREATE INDEX idx_activity_project ON activity_events (project_id, created_at DES
 
 -- Creates the month's partition if it does not exist. Run it ahead of time
 -- for coming months (the worker will do this once it exists).
+-- +goose StatementBegin
 CREATE FUNCTION ensure_activity_partition(month date) RETURNS void
 LANGUAGE plpgsql AS $$
 DECLARE
@@ -330,6 +304,7 @@ BEGIN
     name, from_day, (from_day + interval '1 month')::date);
 END
 $$;
+-- +goose StatementEnd
 
 -- This month and the next 12.
 SELECT ensure_activity_partition((date_trunc('month', current_date) + make_interval(months => m))::date)
@@ -339,17 +314,9 @@ FROM generate_series(0, 12) AS m;
 -- write. It should stay empty: if it is not, a month's partition is missing.
 CREATE TABLE activity_events_default PARTITION OF activity_events DEFAULT;
 
--- ---------------------------------------------------------------------------
--- What the service may do: read and write rows, never change the schema.
--- Migrations (and ensure_activity_partition, which creates tables) run as the
--- owner of the schema, not as tracking_app.
--- ---------------------------------------------------------------------------
-
-GRANT USAGE ON SCHEMA tracking TO tracking_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA tracking TO tracking_app;
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA tracking TO tracking_app;
--- Tables and sequences a later migration creates get the same rights.
-ALTER DEFAULT PRIVILEGES IN SCHEMA tracking GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO tracking_app;
-ALTER DEFAULT PRIVILEGES IN SCHEMA tracking GRANT USAGE, SELECT ON SEQUENCES TO tracking_app;
-
-COMMIT;
+-- +goose Down
+DROP TABLE activity_events;
+DROP FUNCTION ensure_activity_partition(date);
+DROP TABLE report_templates, folder_shares, documents, comment_mentions, comments, checklist_items,
+  card_labels, labels, card_assignees, cards, lists, boards, project_members, projects,
+  user_skills, skill_catalog, skill_categories, user_avatars, user_cache, user_roles;

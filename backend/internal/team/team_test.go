@@ -17,7 +17,7 @@ import (
 	"tracking-service/internal/auth"
 	"tracking-service/internal/httpx"
 	"tracking-service/internal/store"
-	"tracking-service/internal/store/memory"
+	"tracking-service/internal/store/storetest"
 	"tracking-service/internal/team"
 	"tracking-service/internal/users"
 )
@@ -37,12 +37,12 @@ var now = time.Date(2026, 11, 17, 18, 0, 0, 0, time.UTC)
 
 type env struct {
 	h  http.Handler
-	st *memory.Store
+	st storetest.Store
 }
 
 func newEnv(t *testing.T) env {
 	t.Helper()
-	st := memory.New(func() time.Time { return now })
+	st := storetest.New(t, func() time.Time { return now })
 	svc := team.New(st, users.NewStub(), func() time.Time { return now })
 	h := httpx.NewRouter(func(r chi.Router) {
 		r.Use(auth.Middleware(headerAuth{}))
@@ -190,8 +190,10 @@ func TestTeam_WorkloadCountsOpenCardsInLiveProjects(t *testing.T) {
 		if err != nil {
 			return err
 		}
+		n := 0
 		add := func(list int64, due *store.Date, completed bool) error {
-			c := store.Card{ListID: list, Title: "c", DueDate: due, Position: "a"}
+			n++ // positions are unique per list in the database
+			c := store.Card{ListID: list, Title: "c", DueDate: due, Position: fmt.Sprintf("a%02d", n)}
 			if completed {
 				c.CompletedAt = &done
 			}

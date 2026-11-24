@@ -30,7 +30,7 @@ import (
 	"tracking-service/internal/httpx"
 	"tracking-service/internal/project"
 	"tracking-service/internal/store"
-	"tracking-service/internal/store/memory"
+	"tracking-service/internal/store/storetest"
 	"tracking-service/internal/users"
 )
 
@@ -56,7 +56,7 @@ func (headerAuth) Authenticate(r *http.Request) (int64, error) {
 type env struct {
 	h    http.Handler
 	st   store.Store
-	mem  *memory.Store
+	mem  storetest.Store
 	svc  *document.Service
 	proj *project.Service
 	pid  int64
@@ -85,7 +85,7 @@ func newEnv(t *testing.T) env {
 		tick++
 		return time.Date(2026, 11, 18, 9, 0, 0, 0, time.UTC).Add(time.Duration(tick) * time.Minute)
 	})
-	mem := memory.New(now)
+	mem := storetest.New(t, now)
 	mem.SeedUserRole(store.UserRole{UserID: admin, Role: "admin"})
 	mem.SeedUserRole(store.UserRole{UserID: manager, Role: "manager"})
 	up := users.NewStub()

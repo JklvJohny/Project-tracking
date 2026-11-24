@@ -1,8 +1,9 @@
 # DB contract: what the PostgreSQL `internal/store` must do
 
-For the system owner, who writes the PostgreSQL implementation of `backend/internal/store`.
-The in-memory store (`internal/store/memory`) is the reference: every service test runs against it,
-so the PostgreSQL store must behave the same way for every method below. Schema: `docs/ERD.md`.
+The PostgreSQL store is `backend/internal/store/postgres` (pgx, SQL written by hand); its tables are the goose
+migrations in `internal/store/postgres/migrations`, applied at start-up. The in-memory store (`internal/store/memory`)
+is the behaviour reference: every service test runs on it, and the same tests run on PostgreSQL when
+`TRACKING_TEST_DATABASE_URL` is set (see `backend/README.md`). Schema: `docs/ERD.md`.
 API shapes: `backend/api/openapi.yaml`.
 
 Ground rules:
@@ -11,7 +12,7 @@ Ground rules:
 - Every id is `int64` (`bigint`), user ids included. User ids have no foreign key (they come from user-service).
 - A missing row is `store.ErrNotFound`, never `sql.ErrNoRows` and never a nil value. Services map it to `not_found`.
 - A write that breaks a unique index the repo comment names returns `store.ErrDuplicate` (map Postgres `23505`). Services map it to a field error.
-- Dates are `DATE` and travel as `store.Date` (`"YYYY-MM-DD"`). Timestamps are `timestamptz`, handled in UTC: the services stamp every write with `clock.UTC` (wired in `main.go`), and the API emits them as `...Z`. Timestamps read back must be UTC too: convert with `.UTC()` when scanning, or the JSON would carry the server's local offset. Do not rely on the session time zone for this: the `tracking_app` role's is `Asia/Bangkok` (see `schema.sql`), and pgx returns `time.Local` anyway.
+- Dates are `DATE` and travel as `store.Date` (`"YYYY-MM-DD"`). Timestamps are `timestamptz`, handled in UTC: the services stamp every write with `clock.UTC` (wired in `main.go`), and the API emits them as `...Z`. Timestamps read back must be UTC too, or the JSON would carry the server's local offset: the store registers the `timestamptz` codec with `ScanLocation: time.UTC` on every connection, since the `tracking_app` role's session zone is `Asia/Bangkok` (see `db/bootstrap.sql`) and pgx would otherwise return `time.Local`. `clock.UTC` cuts to whole microseconds, PostgreSQL's precision, so a value the service returns equals the one a later read gives back.
 - Slices a repo returns (`CardChildren.AssigneeIDs`, `LabelIDs`, `Checklist`, mention ids, list results) are empty, never nil, when there are no rows. The services guard the ones the API emits, but the contract is "never nil".
 - Priority is `smallint` 0-3. The API never sees the number (`store.PriorityName`).
 - Position keys (`lists`, `cards`, `checklist_items`) are LexoRank text from `internal/rank`: base-36 digits `0-9a-z`.

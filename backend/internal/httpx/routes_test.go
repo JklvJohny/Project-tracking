@@ -22,7 +22,7 @@ import (
 	"tracking-service/internal/httpx"
 	"tracking-service/internal/profile"
 	"tracking-service/internal/project"
-	"tracking-service/internal/store/memory"
+	"tracking-service/internal/store/storetest"
 	"tracking-service/internal/team"
 	"tracking-service/internal/users"
 )
@@ -32,7 +32,7 @@ type noAuth struct{}
 func (noAuth) Authenticate(*http.Request) (int64, error) { return 1, nil }
 
 func TestOpenAPI_CoversEveryRoute(t *testing.T) {
-	st := memory.New(time.Now)
+	st := storetest.New(t, time.Now)
 	up := users.NewStub()
 	ev := events.NewLog(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	h := httpx.NewRouter(func(r chi.Router) {

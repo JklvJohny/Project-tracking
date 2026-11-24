@@ -1,4 +1,6 @@
-package memory
+// Package seed fills an empty store with the prototype's sample data for
+// local development. It works on any store.Store: the memory one or PostgreSQL.
+package seed
 
 import (
 	"context"
@@ -9,6 +11,7 @@ import (
 
 	"tracking-service/internal/board"
 	"tracking-service/internal/card"
+	"tracking-service/internal/clock"
 	"tracking-service/internal/events"
 	"tracking-service/internal/project"
 	"tracking-service/internal/rank"
@@ -66,19 +69,33 @@ func items(pairs ...any) []seedItem {
 	return out
 }
 
+// Target is a store the seed can write to: the services plus the two rows no
+// service creates (system roles, and skills set without the Team page).
+type Target interface {
+	store.Store
+	SeedUserRole(store.UserRole) error
+	SeedSkills(userID int64, skills ...string) error
+}
+
 // Seed fills s with the prototype's two projects (and, when large, a load-test
 // project). It goes through the services so the data obeys every rule
 // (positions, completed_at, activity). Call it once, on an empty store.
-func Seed(s *Store, up users.Provider, large bool) error {
+func Seed(s Target, now clock.Clock, up users.Provider, large bool) error {
 	ctx := context.Background()
 	ev := events.NewLog(slog.New(slog.NewTextHandler(io.Discard, nil)))
-	projects := project.New(s, up, ev, s.now)
-	boards := board.New(s, ev, s.now)
-	cards := card.New(s, up, ev, s.now)
+	projects := project.New(s, up, ev, now)
+	boards := board.New(s, ev, now)
+	cards := card.New(s, up, ev, now)
 
-	at := s.now()
-	s.SeedUserRole(store.UserRole{UserID: uAdmin, Role: "admin", GrantedAt: at, GrantedBy: uAdmin})
-	s.SeedUserRole(store.UserRole{UserID: uPM, Role: "manager", GrantedAt: at, GrantedBy: uAdmin})
+	at := now()
+	for _, ur := range []store.UserRole{
+		{UserID: uAdmin, Role: "admin", GrantedAt: at, GrantedBy: uAdmin},
+		{UserID: uPM, Role: "manager", GrantedAt: at, GrantedBy: uAdmin},
+	} {
+		if err := s.SeedUserRole(ur); err != nil {
+			return err
+		}
+	}
 	for id, sk := range map[int64][]string{
 		uAdmin:  {"Project management", "Budgeting", "Stakeholder reporting"},
 		uPM:     {"Project management", "Scrum", "UX research", "Copywriting"},
@@ -88,9 +105,11 @@ func Seed(s *Store, up users.Provider, large bool) error {
 		uTester: {"QA testing", "Documentation"},
 		uSam:    {"React", "Go", "CI/CD", "Performance"},
 	} {
-		s.SeedSkills(id, sk...)
+		if err := s.SeedSkills(id, sk...); err != nil {
+			return err
+		}
 	}
-	if err := seedCategories(ctx, team.New(s, up, s.now)); err != nil {
+	if err := seedCategories(ctx, team.New(s, up, now)); err != nil {
 		return err
 	}
 
@@ -196,7 +215,7 @@ func Seed(s *Store, up users.Provider, large bool) error {
 	}
 
 	if large {
-		return seedLarge(ctx, s, projects, boards)
+		return seedLarge(ctx, s, now, projects, boards)
 	}
 	return nil
 }
@@ -320,7 +339,7 @@ func (sd *seeder) add(uid, listID int64, c seedCard) error {
 // straight to the repos inside one Update (2,000 service calls would each
 // deep-copy the whole store); positions still come from rank.Spread, so the
 // board loads and drags work as on any other project.
-func seedLarge(ctx context.Context, s *Store, projects *project.Service, boards *board.Service) error {
+func seedLarge(ctx context.Context, s store.Store, now clock.Clock, projects *project.Service, boards *board.Service) error {
 	p, err := projects.Create(ctx, uPM, project.CreateProjectInput{Name: "Load Test", Description: "2,000 cards for performance checks."})
 	if err != nil {
 		return fmt.Errorf("seed load test: %w", err)
@@ -337,7 +356,7 @@ func seedLarge(ctx context.Context, s *Store, projects *project.Service, boards 
 	const perList = 250
 	pos := rank.Spread(perList)
 	return s.Update(ctx, func(r store.Repos) error {
-		now := s.now()
+		now := now()
 		for _, l := range v.Lists {
 			for i := 0; i < perList; i++ {
 				c := store.Card{

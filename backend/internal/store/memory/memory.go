@@ -136,15 +136,17 @@ func (s *Store) Activity() []store.ActivityEvent {
 }
 
 // SeedUserRole grants a system role without a service call, for seeds and tests.
-func (s *Store) SeedUserRole(ur store.UserRole) {
+func (s *Store) SeedUserRole(ur store.UserRole) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.d.userRoles[ur.UserID] = ur
+	return nil
 }
 
 // SeedSkills sets a person's skills directly (local seed data only).
-func (s *Store) SeedSkills(userID int64, skills ...string) {
+func (s *Store) SeedSkills(userID int64, skills ...string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.d.skills[userID] = skills
+	return nil
 }

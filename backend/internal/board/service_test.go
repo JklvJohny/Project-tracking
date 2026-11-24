@@ -16,7 +16,7 @@ import (
 	"tracking-service/internal/events"
 	"tracking-service/internal/project"
 	"tracking-service/internal/store"
-	"tracking-service/internal/store/memory"
+	"tracking-service/internal/store/storetest"
 	"tracking-service/internal/users"
 )
 
@@ -33,7 +33,7 @@ const (
 type env struct {
 	svc  *board.Service
 	proj *project.Service
-	st   *memory.Store
+	st   storetest.Store
 	ctx  context.Context
 	pid  int64
 	tick *int // minutes added to t0; the clock moves only when a test says so
@@ -43,7 +43,7 @@ func newEnv(t *testing.T) env {
 	t.Helper()
 	tick := new(int)
 	now := clock.Clock(func() time.Time { return t0.Add(time.Duration(*tick) * time.Minute) })
-	st := memory.New(now)
+	st := storetest.New(t, now)
 	st.SeedUserRole(store.UserRole{UserID: admin, Role: "admin"})
 	st.SeedUserRole(store.UserRole{UserID: manager, Role: "manager"})
 	quiet := slog.New(slog.NewTextHandler(io.Discard, nil))

@@ -20,7 +20,7 @@ import (
 	"tracking-service/internal/dashboard"
 	"tracking-service/internal/httpx"
 	"tracking-service/internal/store"
-	"tracking-service/internal/store/memory"
+	"tracking-service/internal/store/storetest"
 )
 
 const (
@@ -34,7 +34,7 @@ const (
 var nearMidnightUTC = time.Date(2026, 11, 17, 18, 30, 0, 0, time.UTC)
 
 type fixture struct {
-	st            *memory.Store
+	st            storetest.Store
 	svc           *dashboard.Service
 	pAlpha, pBeta int64
 	pArchived     int64
@@ -45,7 +45,7 @@ func newFixture(t *testing.T) fixture {
 	t.Helper()
 	slog.SetDefault(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	now := clock.Fixed(nearMidnightUTC)
-	st := memory.New(now)
+	st := storetest.New(t, now)
 	st.SeedUserRole(store.UserRole{UserID: adminID, Role: "admin"})
 	f := fixture{st: st, svc: dashboard.New(st, now), ctx: context.Background()}
 	err := st.Update(f.ctx, func(r store.Repos) error {

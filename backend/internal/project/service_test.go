@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"strings"
@@ -15,7 +16,7 @@ import (
 	"tracking-service/internal/events"
 	"tracking-service/internal/project"
 	"tracking-service/internal/store"
-	"tracking-service/internal/store/memory"
+	"tracking-service/internal/store/storetest"
 	"tracking-service/internal/users"
 	"tracking-service/internal/validate"
 )
@@ -31,14 +32,14 @@ const (
 
 type env struct {
 	svc *project.Service
-	st  *memory.Store
+	st  storetest.Store
 	ctx context.Context
 }
 
 func newEnv(t *testing.T) env {
 	t.Helper()
 	now := clock.Fixed(t0)
-	st := memory.New(now)
+	st := storetest.New(t, now)
 	st.SeedUserRole(store.UserRole{UserID: admin, Role: "admin"})
 	st.SeedUserRole(store.UserRole{UserID: manager, Role: "manager"})
 	quiet := slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -436,8 +437,9 @@ func TestList_IncludesOwnerMembersProgress(t *testing.T) {
 		if err := r.Lists.Save(e.ctx, l); err != nil {
 			return err
 		}
-		for _, deleted := range []bool{false, false, true} { // two live reports and a deleted one
-			d := store.Document{ProjectID: p.ID, StorageKey: "k", Filename: "f.pdf", UploadedBy: manager, CreatedAt: t0}
+		for i, deleted := range []bool{false, false, true} { // two live reports and a deleted one
+			d := store.Document{ProjectID: p.ID, StorageKey: fmt.Sprintf("k%d", i), Filename: "f.pdf", MimeType: "application/pdf",
+				UploadedBy: manager, CreatedAt: t0}
 			if deleted {
 				d.DeletedAt = ptr(t0)
 			}

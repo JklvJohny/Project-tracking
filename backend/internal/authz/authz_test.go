@@ -9,7 +9,7 @@ import (
 	"tracking-service/internal/apperr"
 	"tracking-service/internal/authz"
 	"tracking-service/internal/store"
-	"tracking-service/internal/store/memory"
+	"tracking-service/internal/store/storetest"
 )
 
 func TestRequire_Table(t *testing.T) {
@@ -52,19 +52,28 @@ func TestCanCreateProject(t *testing.T) {
 
 func TestProjectRole(t *testing.T) {
 	ctx := context.Background()
-	st := memory.New(func() time.Time { return time.Unix(0, 0) })
+	st := storetest.New(t, func() time.Time { return time.Unix(0, 0).UTC() })
 	st.SeedUserRole(store.UserRole{UserID: 1, Role: "admin"})
-	_ = st.Update(ctx, func(r store.Repos) error {
-		return r.Members.Put(ctx, store.Member{ProjectID: 10, UserID: 2, Role: "member"})
-	})
+	var pid int64
+	if err := st.Update(ctx, func(r store.Repos) error {
+		at := time.Unix(0, 0).UTC()
+		p, err := r.Projects.Create(ctx, store.Project{Name: "P", Status: "active", OwnerID: 1, CreatedBy: 1, CreatedAt: at, UpdatedAt: at})
+		if err != nil {
+			return err
+		}
+		pid = p.ID
+		return r.Members.Put(ctx, store.Member{ProjectID: pid, UserID: 2, Role: "member", AddedAt: at})
+	}); err != nil {
+		t.Fatal(err)
+	}
 	_ = st.View(ctx, func(r store.Repos) error {
-		if role, err := authz.ProjectRole(ctx, r, 1, 10); err != nil || role != authz.Admin {
+		if role, err := authz.ProjectRole(ctx, r, 1, pid); err != nil || role != authz.Admin {
 			t.Errorf("admin: %v %v", role, err)
 		}
-		if role, err := authz.ProjectRole(ctx, r, 2, 10); err != nil || role != authz.Member {
+		if role, err := authz.ProjectRole(ctx, r, 2, pid); err != nil || role != authz.Member {
 			t.Errorf("member: %v %v", role, err)
 		}
-		_, err := authz.ProjectRole(ctx, r, 3, 10)
+		_, err := authz.ProjectRole(ctx, r, 3, pid)
 		var ae *apperr.Error
 		if !errors.As(err, &ae) || ae.Code != "not_found" {
 			t.Errorf("outsider: %v", err)

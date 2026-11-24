@@ -1,4 +1,4 @@
-package memory_test
+package seed_test
 
 import (
 	"context"
@@ -9,14 +9,15 @@ import (
 
 	"tracking-service/internal/board"
 	"tracking-service/internal/events"
-	"tracking-service/internal/store/memory"
+	"tracking-service/internal/seed"
+	"tracking-service/internal/store/storetest"
 	"tracking-service/internal/users"
 )
 
-func seeded(t *testing.T, large bool) (*memory.Store, *board.Service) {
+func seeded(t *testing.T, large bool) (storetest.Store, *board.Service) {
 	t.Helper()
-	st := memory.New(time.Now)
-	if err := memory.Seed(st, users.NewStub(), large); err != nil {
+	st := storetest.New(t, time.Now)
+	if err := seed.Seed(st, time.Now, users.NewStub(), large); err != nil {
 		t.Fatal(err)
 	}
 	return st, board.New(st, events.NewLog(slog.New(slog.NewTextHandler(io.Discard, nil))), time.Now)

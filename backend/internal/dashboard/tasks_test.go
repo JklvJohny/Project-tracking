@@ -19,8 +19,9 @@ func addAlphaCards(t *testing.T, f fixture) {
 		if err != nil {
 			return err
 		}
+		// Each card its own position: the database keeps them unique per list.
 		mk := func(title string, due *store.Date, done bool, who ...int64) (int64, error) {
-			card := store.Card{ListID: c.ListID, Title: title, DueDate: due}
+			card := store.Card{ListID: c.ListID, Title: title, DueDate: due, Position: "z" + title}
 			if done {
 				card.CompletedAt = &nearMidnightUTC
 			}
@@ -43,8 +44,8 @@ func addAlphaCards(t *testing.T, f fixture) {
 		if err != nil {
 			return err
 		}
-		for _, done := range []bool{true, false} {
-			if _, err := r.Checklist.Create(f.ctx, store.ChecklistItem{CardID: id, Text: "x", IsDone: done, Position: "a"}); err != nil {
+		for i, done := range []bool{true, false} {
+			if _, err := r.Checklist.Create(f.ctx, store.ChecklistItem{CardID: id, Text: "x", IsDone: done, Position: string(rune('a' + i))}); err != nil {
 				return err
 			}
 		}
