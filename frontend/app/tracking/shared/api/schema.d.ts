@@ -732,7 +732,7 @@ export interface paths {
         /** Non-deleted comments, oldest first */
         get: operations["listComments"];
         put?: never;
-        /** Add a comment. Mentions are written `@[<userId>]` in the body; mentioned project members are notified. */
+        /** Add a comment. Mentions are written `@[<userId>]` in the body; mentioned project members are notified. At most 10 live comments per card; the 11th is 422 with body too_many. */
         post: operations["addComment"];
         delete?: never;
         options?: never;

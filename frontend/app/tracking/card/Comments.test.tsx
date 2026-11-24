@@ -30,7 +30,7 @@ const board = (myRole: B['myRole']): B => ({
   ],
 });
 
-function setup(role: B['myRole'], me = 2) {
+function setup(role: B['myRole'], me = 2, list = comments) {
   apiMock.mockImplementation(async (path: string, init?: ApiInit) => {
     if (path === '/me') return { user: { id: me, name: 'x', avatarUrl: '' }, isAdmin: false, canCreateProject: false };
     if (path === '/projects/1/board') return board(role);
@@ -38,7 +38,7 @@ function setup(role: B['myRole'], me = 2) {
       return { id: 9, cardId: 5, authorId: me, bodyMd: (init.json as { body: string }).body, createdAt: '2026-11-04T00:00:00Z', editedAt: null, mentionIds: [] };
     if (path === '/comments/1' && init?.method === 'PATCH')
       return { ...comments[0], bodyMd: (init.json as { body: string }).body, editedAt: '2026-11-05T00:00:00Z' };
-    if (path === '/cards/5/comments') return comments;
+    if (path === '/cards/5/comments') return list;
     return {};
   });
   render(
@@ -52,6 +52,13 @@ beforeEach(() => apiMock.mockReset());
 afterEach(cleanup);
 
 describe('Comments', () => {
+  it('at 10 comments the editor gives way to a note', async () => {
+    const ten = Array.from({ length: 10 }, (_, i) => ({ ...comments[1], id: 100 + i, bodyMd: `c${i}` }));
+    setup('member', 2, ten);
+    expect(await screen.findByText(/maximum of 10 comments/)).toBeTruthy();
+    expect(screen.queryByRole('textbox')).toBeNull();
+  });
+
   it('renders markdown without raw html and mentions as chips', async () => {
     setup('member');
     expect(await screen.findByText('bold')).toBeTruthy();

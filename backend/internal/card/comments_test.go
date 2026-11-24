@@ -41,6 +41,31 @@ func TestParseMentions(t *testing.T) {
 	}
 }
 
+// Ten live comments per card; a deleted one frees a place.
+func TestAddComment_CapOfTen(t *testing.T) {
+	e := newEnv(t)
+	c := e.mk(t, e.lists(t)[0].ID, "c")
+	var first card.Comment
+	for i := 0; i < 10; i++ {
+		cm, err := e.svc.AddComment(e.ctx, member, c.ID, "hi")
+		if err != nil {
+			t.Fatalf("comment %d: %v", i+1, err)
+		}
+		if i == 0 {
+			first = cm
+		}
+	}
+	if _, err := e.svc.AddComment(e.ctx, member, c.ID, "one more"); fieldsOf(err)["body"] != "too_many" {
+		t.Fatalf("11th: %v", err)
+	}
+	if err := e.svc.DeleteComment(e.ctx, member, first.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.svc.AddComment(e.ctx, member, c.ID, "after a delete"); err != nil {
+		t.Fatalf("after delete: %v", err)
+	}
+}
+
 func TestAddComment_OutsiderNotFound(t *testing.T) {
 	e := newEnv(t)
 	c := e.mk(t, e.lists(t)[0].ID, "c")

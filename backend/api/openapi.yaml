@@ -838,7 +838,7 @@ paths:
     post:
       tags: [comments]
       operationId: addComment
-      summary: Add a comment. Mentions are written `@[<userId>]` in the body; mentioned project members are notified.
+      summary: Add a comment. Mentions are written `@[<userId>]` in the body; mentioned project members are notified. At most 10 live comments per card; the 11th is 422 with body too_many.
       requestBody:
         required: true
         content:
