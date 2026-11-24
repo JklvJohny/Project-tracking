@@ -50,9 +50,9 @@ Pass the id in the `X-User-ID` header. Names come from the stub user-service (id
 | 3 | วิภา รักงาน | none | member | not a member |
 | 4 | Somsak P. | none | member | not a member |
 | 5 | ปิยะ มั่นคง | none | member | pm |
-| 6 | Mali S. | none | viewer | not a member |
+| 6 | Mali S. | none | member | not a member |
 | 7 | ธนากร ทองดี | none | member | member |
-| 8 | Anan T. | none | not a member | viewer |
+| 8 | Anan T. | none | not a member | member |
 
 Only admins and managers can create projects. Seed project ids: 1 Website Redesign, 2 Mobile App v2 (on hold), 3 Load Test (only with `SEED_LARGE=1`).
 

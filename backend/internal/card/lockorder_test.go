@@ -260,7 +260,7 @@ func TestWrites_TakeBoardLockFirst(t *testing.T) {
 		}},
 		{"DeleteLabel", func() error { return proj.DeleteLabel(ctx, pm, labelID) }},
 		{"AddMember", func() error { _, err := proj.AddMember(ctx, pm, 2, 3, "member"); return err }},
-		{"SetRole", func() error { _, err := proj.SetRole(ctx, pm, 2, 3, "viewer"); return err }},
+		{"SetRole", func() error { _, err := proj.SetRole(ctx, pm, 2, 3, "pm"); return err }},
 		{"RemoveMember", func() error { return proj.RemoveMember(ctx, pm, 2, 3) }},
 		{"UpdateProject", func() error {
 			_, err := proj.Update(ctx, pm, 1, project.UpdateProjectInput{Name: str("W")})

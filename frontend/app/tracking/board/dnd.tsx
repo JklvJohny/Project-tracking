@@ -146,7 +146,7 @@ export function BoardDnd({
   const droppedRef = useRef(false);
   const focusRef = useRef<string | null>(null);
 
-  // Viewers get an empty sensor list: nothing can start a drag.
+  // Without edit rights (an archived project) the sensor list is empty: nothing can start a drag.
   const allSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(TouchSensor, {

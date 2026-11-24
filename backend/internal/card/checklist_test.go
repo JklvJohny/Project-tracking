@@ -180,12 +180,6 @@ func TestItem_Permissions(t *testing.T) {
 	e := newEnv(t)
 	c := e.mk(t, e.lists(t)[0].ID, "c")
 	it := e.addItem(t, c.ID, "a")
-	if _, err := e.svc.AddItem(e.ctx, viewer, c.ID, "x"); code(err) != "forbidden" {
-		t.Fatalf("viewer add: %v", err)
-	}
-	if _, err := e.svc.UpdateItem(e.ctx, viewer, it.ID, card.ItemPatch{IsDone: ptr(true)}); code(err) != "forbidden" {
-		t.Fatalf("viewer update: %v", err)
-	}
 	if err := e.svc.DeleteItem(e.ctx, outside, it.ID); code(err) != "not_found" {
 		t.Fatalf("outside: %v", err)
 	}
@@ -277,12 +271,5 @@ func TestToggle_MemberOnlyOnAssignedCards(t *testing.T) {
 	got, err := e.svc.UpdateItem(e.ctx, member, it.ID, card.ItemPatch{IsDone: ptr(true)})
 	if err != nil || !got.IsDone {
 		t.Fatalf("assigned member tick: %+v %v", got, err)
-	}
-	// A viewer stays read-only even when assigned.
-	if _, err := e.svc.Assign(e.ctx, manager, c.ID, viewer); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := e.svc.UpdateItem(e.ctx, viewer, it.ID, card.ItemPatch{IsDone: ptr(false)}); code(err) != "forbidden" {
-		t.Fatalf("assigned viewer tick: %v", err)
 	}
 }

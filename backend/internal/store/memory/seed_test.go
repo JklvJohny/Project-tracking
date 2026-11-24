@@ -36,7 +36,7 @@ func TestSeed_PrototypeData(t *testing.T) {
 	for _, m := range v.Members {
 		roles[m.UserID] = m.Role
 	}
-	if roles[2] != "pm" || roles[3] != "member" || roles[4] != "member" || roles[5] != "member" || roles[6] != "viewer" {
+	if roles[2] != "pm" || roles[3] != "member" || roles[4] != "member" || roles[5] != "member" || roles[6] != "member" {
 		t.Fatalf("members: %v", roles)
 	}
 	done := 0

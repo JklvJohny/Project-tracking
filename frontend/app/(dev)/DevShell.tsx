@@ -53,7 +53,7 @@ const DEV_USERS = [
   { id: 3, name: 'วิภา รักงาน', role: 'member' },
   { id: 4, name: 'Somsak P.', role: 'member' },
   { id: 5, name: 'ปิยะ มั่นคง', role: 'member' },
-  { id: 6, name: 'Mali S.', role: 'viewer' },
+  { id: 6, name: 'Mali S.', role: 'member' },
   { id: 7, name: 'ธนากร ทองดี', role: 'member' },
   { id: 8, name: 'Anan T.', role: 'no role' },
 ];
@@ -63,13 +63,13 @@ const TEXT = {
     nav: 'เมนูหลัก', app: 'แอปหลัก', section: 'ติดตามงาน', other: 'อื่นๆ', dashboard: 'แดชบอร์ด', projects: 'โปรเจกต์',
     import: 'นำเข้า', reports: 'รายงาน', team: 'ทีมงาน', settings: 'ตั้งค่า', soon: 'เร็ว ๆ นี้', lang: 'ภาษา', theme: 'สลับธีม',
     user: 'ผู้ใช้ (dev)', mobileNav: 'ไปที่', myTasks: 'งานของฉัน', profile: 'โปรไฟล์', account: 'บัญชีของฉัน',
-    roles: { admin: 'ผู้ดูแลระบบ', manager: 'ผู้จัดการ', member: 'สมาชิก', viewer: 'ผู้ชม', 'no role': 'ผู้ใช้ทั่วไป' } as Record<string, string>,
+    roles: { admin: 'ผู้ดูแลระบบ', manager: 'ผู้จัดการ', member: 'สมาชิก', 'no role': 'ผู้ใช้ทั่วไป' } as Record<string, string>,
   },
   en: {
     nav: 'Main menu', app: 'Host App', section: 'Tracking', other: 'Other', dashboard: 'Dashboard', projects: 'Projects',
     import: 'Import', reports: 'Reports', team: 'Team', settings: 'Settings', soon: 'Soon', lang: 'Language', theme: 'Toggle theme',
     user: 'User (dev)', mobileNav: 'Go to', myTasks: 'My tasks', profile: 'Profile', account: 'My account',
-    roles: { admin: 'Admin', manager: 'Manager', member: 'Member', viewer: 'Viewer', 'no role': 'User' } as Record<string, string>,
+    roles: { admin: 'Admin', manager: 'Manager', member: 'Member', 'no role': 'User' } as Record<string, string>,
   },
 };
 

@@ -118,13 +118,13 @@ describe('MembersDialog', () => {
 
   it('adds a found person with the chosen role', async () => {
     usersImpl = async () => [{ id: 3, name: 'Cara', avatarUrl: '' }];
-    writeImpl = async () => ({ userId: 3, name: 'Cara', avatarUrl: '', role: 'viewer', addedAt: 'x' });
+    writeImpl = async () => ({ userId: 3, name: 'Cara', avatarUrl: '', role: 'pm', addedAt: 'x' });
     renderDialog();
-    await pickOption(await screen.findByRole('combobox', { name: 'Role for new member' }), 'Viewer');
+    await pickOption(await screen.findByRole('combobox', { name: 'Role for new member' }), 'PM');
     fireEvent.change(screen.getByLabelText('Search people'), { target: { value: 'ca' } });
     fireEvent.click(await screen.findByRole('button', { name: 'Add Cara' }));
     await waitFor(() =>
-      expect(apiMock).toHaveBeenCalledWith('/projects/1/members', { method: 'POST', json: { userId: 3, role: 'viewer' } }),
+      expect(apiMock).toHaveBeenCalledWith('/projects/1/members', { method: 'POST', json: { userId: 3, role: 'pm' } }),
     );
     expect(await screen.findByText('Cara')).toBeTruthy();
   });

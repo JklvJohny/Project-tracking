@@ -40,7 +40,7 @@ const (
 	member  int64 = 3
 	other   int64 = 4 // a second member
 	outside int64 = 5
-	viewer  int64 = 6
+	third   int64 = 6 // a third member
 )
 
 type headerAuth struct{}
@@ -96,7 +96,7 @@ func newEnv(t *testing.T) env {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for uid, role := range map[int64]string{member: "member", other: "member", viewer: "viewer"} {
+	for uid, role := range map[int64]string{member: "member", other: "member", third: "member"} {
 		if _, err := proj.AddMember(ctx, manager, p.ID, uid, role); err != nil {
 			t.Fatal(err)
 		}
@@ -185,7 +185,7 @@ func TestUpload_OK(t *testing.T) {
 	if _, leaked := d["storageKey"]; leaked {
 		t.Error("storage key must not reach the client")
 	}
-	rec, body = e.call(viewer, "GET", e.listPath(), nil, "")
+	rec, body = e.call(third, "GET", e.listPath(), nil, "")
 	if list, _ := body["data"].([]any); rec.Code != 200 || len(list) != 1 {
 		t.Fatalf("list = %d %s", rec.Code, rec.Body)
 	}
@@ -200,7 +200,7 @@ func TestUploaderName_FromCacheOnUploadAndList(t *testing.T) {
 	if got := data(body)["uploadedByName"]; got != "วิภา รักงาน" {
 		t.Errorf("upload name = %v", got)
 	}
-	_, body = e.call(viewer, "GET", e.listPath(), nil, "")
+	_, body = e.call(third, "GET", e.listPath(), nil, "")
 	list, _ := body["data"].([]any)
 	if len(list) != 1 || list[0].(map[string]any)["uploadedByName"] != "วิภา รักงาน" {
 		t.Errorf("list = %v", list)
@@ -268,11 +268,8 @@ func TestUpload_CapHitWhileSniffingIsTooLarge(t *testing.T) {
 	}
 }
 
-func TestUpload_ViewerForbidden_NonMemberNotFound(t *testing.T) {
+func TestUpload_NonMemberNotFound(t *testing.T) {
 	e := newEnv(t)
-	if rec, _ := e.upload(viewer, "x.pdf", pdf("")); rec.Code != 403 {
-		t.Errorf("viewer upload = %d", rec.Code)
-	}
 	rec, body := e.upload(outside, "x.pdf", pdf(""))
 	if rec.Code != 404 || body["code"] != "not_found" {
 		t.Errorf("non-member upload = %d %s", rec.Code, rec.Body)
@@ -310,7 +307,7 @@ func TestFile_StreamsWithHeaders(t *testing.T) {
 	e := newEnv(t)
 	content := pdf("body bytes")
 	_, body := e.upload(member, "รายงาน (v1).pdf", content)
-	rec, _ := e.call(viewer, "GET", "/documents/"+idStr(body)+"/file", nil, "")
+	rec, _ := e.call(third, "GET", "/documents/"+idStr(body)+"/file", nil, "")
 	if rec.Code != 200 || !bytes.Equal(rec.Body.Bytes(), content) {
 		t.Fatalf("file = %d %q", rec.Code, rec.Body)
 	}
@@ -331,9 +328,6 @@ func TestDelete_Permissions_AndRestore(t *testing.T) {
 
 	if rec, _ := e.call(other, "DELETE", "/documents/"+id, nil, ""); rec.Code != 403 {
 		t.Errorf("non-uploader member delete = %d, want 403", rec.Code)
-	}
-	if rec, _ := e.call(viewer, "DELETE", "/documents/"+id, nil, ""); rec.Code != 403 {
-		t.Errorf("viewer delete = %d, want 403", rec.Code)
 	}
 	if rec, _ := e.call(member, "DELETE", "/documents/"+id, nil, ""); rec.Code != 200 {
 		t.Fatalf("uploader delete = %d", rec.Code)

@@ -235,7 +235,7 @@ func (s *Service) AddComment(ctx context.Context, userID, cardID int64, body str
 }
 
 // EditComment is for the author only, and only while the author may still
-// comment: a member demoted to viewer cannot change what they wrote.
+// comment in the project.
 func (s *Service) EditComment(ctx context.Context, userID, commentID int64, body string) (Comment, error) {
 	var out Comment
 	var fresh []int64

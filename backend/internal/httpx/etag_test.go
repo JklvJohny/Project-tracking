@@ -42,7 +42,7 @@ func TestETag_304OnMatch(t *testing.T) {
 
 func TestETag_DiffersByRole(t *testing.T) {
 	a, _ := etagReq("", "t1", "pm")
-	b, _ := etagReq("", "t1", "viewer")
+	b, _ := etagReq("", "t1", "member")
 	if a.Header().Get("ETag") == b.Header().Get("ETag") {
 		t.Fatal("role must change the etag")
 	}

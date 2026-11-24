@@ -29,7 +29,7 @@ func TestArchivedProject_ReadOnlyUntilRestored(t *testing.T) {
 	if _, err := e.svc.AddMember(e.ctx, manager, p.ID, other, "member"); !projectArchived(err) {
 		t.Fatalf("add member: %v", err)
 	}
-	if _, err := e.svc.SetRole(e.ctx, manager, p.ID, regular, "viewer"); !projectArchived(err) {
+	if _, err := e.svc.SetRole(e.ctx, manager, p.ID, regular, "pm"); !projectArchived(err) {
 		t.Fatalf("set role: %v", err)
 	}
 	if err := e.svc.RemoveMember(e.ctx, manager, p.ID, regular); !projectArchived(err) {

@@ -36,8 +36,8 @@ func TestFolders_OnlyMembersAdminsAndSharedSeeAFolder(t *testing.T) {
 	if f := e.folders(t, admin)[e.pid]; f == nil || f["access"] != "admin" || f["documentCount"].(float64) != 1 || f["canShare"] != true {
 		t.Fatalf("admin folder = %v", f)
 	}
-	if f := e.folders(t, viewer)[e.pid]; f["access"] != "viewer" || f["canUpload"] != false || f["canShare"] != false {
-		t.Fatalf("viewer folder = %v", f)
+	if f := e.folders(t, third)[e.pid]; f["access"] != "member" || f["canUpload"] != true || f["canShare"] != true {
+		t.Fatalf("member folder = %v", f)
 	}
 	if rec, _ := e.call(outside, "GET", e.listPath(), nil, ""); rec.Code != 404 {
 		t.Fatalf("outsider list = %d", rec.Code)
@@ -96,9 +96,6 @@ func TestFolders_OnlyMembersAdminsAndSharedSeeAFolder(t *testing.T) {
 
 func TestShares_WhoMayShareAndWithWhom(t *testing.T) {
 	e := newEnv(t)
-	if rec, _ := e.call(viewer, "PUT", e.sharePath(outside), nil, ""); rec.Code != 403 {
-		t.Fatalf("viewer share = %d", rec.Code)
-	}
 	if rec, _ := e.call(outside, "PUT", e.sharePath(7), nil, ""); rec.Code != 404 {
 		t.Fatalf("outsider share = %d", rec.Code)
 	}

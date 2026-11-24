@@ -132,7 +132,7 @@ CREATE UNIQUE INDEX ux_projects_name ON projects (lower(name)) WHERE archived_at
 CREATE TABLE project_members (
   project_id bigint      NOT NULL REFERENCES projects (id),
   user_id    bigint      NOT NULL,
-  role       text        NOT NULL CHECK (role IN ('pm', 'member', 'viewer')),
+  role       text        NOT NULL CHECK (role IN ('pm', 'member')),
   added_at   timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (project_id, user_id)
 );

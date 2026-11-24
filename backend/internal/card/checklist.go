@@ -216,7 +216,7 @@ func (s *Service) DeleteItem(ctx context.Context, userID, itemID int64) error {
 }
 
 // canTick decides who may tick or untick a checklist item: admins and PMs on any card, members only on cards
-// assigned to them (the owner's rule, 2026-11-19). Viewers never reach here (resolveEditable needs EditCards).
+// assigned to them (the owner's rule, 2026-11-19).
 // Editing an item's text, adding, moving and deleting items stay open to every member.
 func canTick(ctx context.Context, r store.Repos, sc scope, userID int64) error {
 	if sc.role == authz.Admin || sc.role == authz.PM {

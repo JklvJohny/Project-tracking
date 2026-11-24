@@ -732,7 +732,7 @@ export interface paths {
         /** Non-deleted comments, oldest first */
         get: operations["listComments"];
         put?: never;
-        /** Add a comment. Mentions are written `@[<userId>]` in the body; mentioned project members are notified. Viewers get 403. */
+        /** Add a comment. Mentions are written `@[<userId>]` in the body; mentioned project members are notified. */
         post: operations["addComment"];
         delete?: never;
         options?: never;
@@ -752,11 +752,11 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Soft-delete. Authors delete their own; PM or admin delete any. A viewer gets 403 even on their own comment. */
+        /** Soft-delete. Authors delete their own; PM or admin delete any. */
         delete: operations["deleteComment"];
         options?: never;
         head?: never;
-        /** Edit your own comment (sets editedAt). Member, PM or admin; a viewer gets 403 even on their own comment. */
+        /** Edit your own comment (sets editedAt). */
         patch: operations["editComment"];
         trace?: never;
     };
@@ -772,7 +772,7 @@ export interface paths {
         /** The project's non-deleted reports, newest first. Any member or admin; others get 404. */
         get: operations["listDocuments"];
         put?: never;
-        /** Upload a PDF (admin, pm or member; a viewer gets 403). Max 20 MiB, and the content must start with `%PDF-` whatever the client claims. Field `file`; extra parts are ignored. */
+        /** Upload a PDF (admin, pm, member, or someone the folder is shared with). Max 20 MiB, and the content must start with `%PDF-` whatever the client claims. Field `file`; extra parts are ignored. */
         post: operations["uploadDocument"];
         delete?: never;
         options?: never;
@@ -811,7 +811,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Soft-delete (the file is kept so restore works). The uploader, a pm or an admin; another member or a viewer gets 403. */
+        /** Soft-delete (the file is kept so restore works). The uploader, a pm or an admin; another member gets 403. */
         delete: operations["deleteDocument"];
         options?: never;
         head?: never;
@@ -863,7 +863,7 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** Who outside the project the report folder is shared with, oldest first. Admin, pm or member; a viewer or a shared user gets 403, anyone else 404. */
+        /** Who outside the project the report folder is shared with, oldest first. Admin, pm or member; a shared user gets 403, anyone else 404. */
         get: operations["listFolderShares"];
         put?: never;
         post?: never;
@@ -1006,12 +1006,12 @@ export interface components {
         /** @enum {string} */
         ProjectStatus: "active" | "on_hold" | "done";
         /** @enum {string} */
-        ProjectRole: "pm" | "member" | "viewer";
+        ProjectRole: "pm" | "member";
         /**
          * @description The caller's role in this project; admin for system admins who are not members.
          * @enum {string}
          */
-        MyRole: "admin" | "pm" | "member" | "viewer";
+        MyRole: "admin" | "pm" | "member";
         /** @enum {string} */
         Priority: "low" | "medium" | "high" | "urgent";
         /** @enum {string} */
@@ -1516,7 +1516,7 @@ export interface components {
              * @description The caller's project role, or shared when they are outside the project and the folder is shared with them.
              * @enum {string}
              */
-            access: "admin" | "pm" | "member" | "viewer" | "shared";
+            access: "admin" | "pm" | "member" | "shared";
             /** @description False in an archived project. */
             canUpload: boolean;
             /** @description Admin */

@@ -57,17 +57,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('CardPanel', () => {
-  it('viewer sees no inputs', async () => {
-    renderPanel('viewer');
-    await screen.findByText('Fix login');
-    await screen.findAllByText('Bug');
-    expect(screen.queryAllByRole('textbox')).toHaveLength(0);
-    expect(screen.queryAllByRole('combobox')).toHaveLength(0);
-    // Only the sheet's own Close button is allowed.
-    expect(screen.queryAllByRole('button').map((b) => b.textContent)).toEqual(['Close']);
-  });
-
-  it('a PM on an archived project gets the viewer layout (read-only)', async () => {
+  it('a PM on an archived project gets the read-only layout', async () => {
     apiMock.mockImplementation(async (path: string) => {
       if (path === '/cards/5') return detail;
       const b = elsewhere(path, 'pm');
@@ -81,6 +71,8 @@ describe('CardPanel', () => {
     await screen.findByText('Fix login');
     await screen.findAllByText('Bug');
     expect(screen.queryAllByRole('textbox')).toHaveLength(0);
+    expect(screen.queryAllByRole('combobox')).toHaveLength(0);
+    // Only the sheet's own Close button is allowed.
     expect(screen.queryAllByRole('button').map((b) => b.textContent)).toEqual(['Close']);
   });
 

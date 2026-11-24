@@ -16,7 +16,6 @@ const (
 	Admin  Role = "admin"
 	PM     Role = "pm"
 	Member Role = "member"
-	Viewer Role = "viewer"
 )
 
 type Action int
@@ -55,7 +54,7 @@ func Require(role Role, a Action) error {
 	var ok bool
 	switch a {
 	case View:
-		ok = role == Admin || role == PM || role == Member || role == Viewer
+		ok = role == Admin || role == PM || role == Member
 	case ManageProject, DeleteAnyComment:
 		ok = role == Admin || role == PM
 	case EditCards, Comment:

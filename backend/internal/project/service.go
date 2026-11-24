@@ -570,7 +570,7 @@ func memberView(m store.Member, u store.CachedUser) MemberView {
 
 func validRole(role string, fields map[string]string) {
 	switch role {
-	case "pm", "member", "viewer":
+	case "pm", "member":
 	default:
 		fields["role"] = "invalid"
 	}

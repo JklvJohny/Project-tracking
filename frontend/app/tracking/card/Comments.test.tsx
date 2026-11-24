@@ -74,13 +74,6 @@ describe('Comments', () => {
     expect(screen.getAllByRole('button', { name: /^Delete comment/ })).toHaveLength(2);
   });
 
-  it('viewer sees comments but no editor or buttons', async () => {
-    setup('viewer');
-    await screen.findByText('theirs');
-    expect(screen.queryByRole('textbox')).toBeNull();
-    expect(screen.queryAllByRole('button')).toHaveLength(0);
-  });
-
   it('posting appends the comment', async () => {
     setup('member');
     await screen.findByText('theirs');

@@ -19,10 +19,9 @@ const user = (id: number, name: string) => ({ id, name, avatarUrl: '' });
 // The server's flags for the role, as document.folderOf sets them.
 const folder = (id: number, name: string, documentCount = 0) => {
   const live = (id === 1 ? archived : null) === null;
-  const editor = role !== 'viewer';
   return {
     id, name, archivedAt: id === 1 ? archived : null, documentCount, access: role,
-    canUpload: live && editor, canShare: live && editor && role !== 'shared', canManage: live && (role === 'pm' || role === 'admin'),
+    canUpload: live, canShare: live && role !== 'shared', canManage: live && (role === 'pm' || role === 'admin'),
   };
 };
 const doc = (id: number, filename: string, uploadedBy = 7) => ({
@@ -235,15 +234,6 @@ describe('Reports page', () => {
     expect(opts.action.label).toBe('Undo');
     opts.action.onClick();
     await waitFor(() => expect(apiMock).toHaveBeenCalledWith('/documents/1/restore', { method: 'POST' }));
-  });
-
-  it('a viewer sees no upload or delete', async () => {
-    role = 'viewer';
-    setup();
-    await screen.findByRole('grid');
-    expect(screen.queryByTestId('upload-input')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Upload PDF' })).toBeNull();
   });
 
   it('a member deletes only their own upload; an archived project has no controls', async () => {

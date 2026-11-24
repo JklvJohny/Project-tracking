@@ -14,8 +14,7 @@ describe('canTickCard', () => {
     expect(canTickCard(live('member'), [3], 9)).toBe(false);
     expect(canTickCard(live('member'), [9], undefined)).toBe(false);
   });
-  it('viewers never tick, nobody ticks on an archived project', () => {
-    expect(canTickCard(live('viewer'), [9], 9)).toBe(false);
+  it('nobody ticks on an archived project', () => {
     expect(canTickCard(archived('pm'), [], 9)).toBe(false);
     expect(canTickCard(archived('member'), [9], 9)).toBe(false);
   });

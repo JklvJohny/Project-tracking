@@ -75,7 +75,7 @@ erDiagram
     project_members {
         bigint project_id PK,FK
         bigint user_id PK
-        text role "pm | member | viewer"
+        text role "pm | member"
         timestamptz added_at
     }
     boards {
@@ -258,7 +258,7 @@ erDiagram
 - **Optimistic create:** the database assigns the id, so the frontend shows a new card with a temporary client id and replaces it with the real id from the response.
 - **Users are external:** every column that points at a person (`user_id`, `owner_id`, `created_by`, `author_id`, ...) holds the user-service id. There is no FK and no users table. Names and avatars come from `user_cache`. user-service ids are integers (confirmed 2026-11-17). These columns are `bigint`, which holds any `int` value, and it matches the `int64` the Go code already uses.
 - **Roles above project level:** `user_roles` holds only the exceptions. `admin` can do everything, including managing `user_roles`. `manager` can create projects and becomes PM of each one it creates. A user with no row is a regular user, who sees only the projects listed for them in `project_members`. One role per user (`user_id` is the PK).
-- **Project roles are separate:** `project_members.role` (`pm | member | viewer`) is not a reference to `user_roles`. It is its own value with a CHECK.
+- **Project roles are separate:** `project_members.role` (`pm | member`) is not a reference to `user_roles`. It is its own value with a CHECK.
 - **Enums:** `text` + `CHECK (... IN (...))` for values with no order (`status`, `role`, `color`, `type`). The value can be read directly in the database, logs and API, and adding a value is a cheap migration. `priority` is the exception: `smallint CHECK (priority BETWEEN 0 AND 3)`, because it has an order and `ORDER BY priority DESC` sorts it directly. The API sends the names `low | medium | high | urgent`, never the numbers.
 - **Archive is not a status:** `projects.status` is the work state (`active | on_hold | done`). `archived_at` alone says whether a project is archived, so the two can never disagree.
 - **Board load joins lists:** `cards` has no `board_id`. A board loads with `cards JOIN lists ON lists.id = cards.list_id WHERE lists.board_id = $1`, using the indexes on `lists (board_id)` and `cards (list_id, position)`.

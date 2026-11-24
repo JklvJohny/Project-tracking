@@ -19,14 +19,13 @@ import (
 
 // Dev people (stub users): 1 admin, 2 manager, 3-8 regular.
 // Prototype -> stub mapping: Anan=2, Mali=3, Kai=4, Ploy=5, Sam=7, Nina=8.
-// User 6 is a viewer in project 1 so every project role is exercised.
 const (
 	uAdmin  = 1
 	uPM     = 2
 	uMali   = 3
 	uKai    = 4
 	uPloy   = 5
-	uViewer = 6
+	uTester = 6
 	uSam    = 7
 	uNina   = 8
 )
@@ -86,7 +85,7 @@ func Seed(s *Store, up users.Provider, large bool) error {
 		uMali:   {"React", "TypeScript", "Tailwind", "Accessibility"},
 		uKai:    {"Go", "PostgreSQL", "API design", "Docker"},
 		uPloy:   {"UI design", "Figma", "Design systems", "Illustration"},
-		uViewer: {"QA testing", "Documentation"},
+		uTester: {"QA testing", "Documentation"},
 		uSam:    {"React", "Go", "CI/CD", "Performance"},
 	} {
 		s.SeedSkills(id, sk...)
@@ -105,7 +104,7 @@ func Seed(s *Store, up users.Provider, large bool) error {
 		return fmt.Errorf("seed project 1: %w", err)
 	}
 	if err := addMembers(ctx, projects, p1.ID, []member{
-		{uMali, "member"}, {uKai, "member"}, {uPloy, "member"}, {uViewer, "viewer"}, {uSam, "member"},
+		{uMali, "member"}, {uKai, "member"}, {uPloy, "member"}, {uTester, "member"}, {uSam, "member"},
 	}); err != nil {
 		return err
 	}
@@ -185,7 +184,7 @@ func Seed(s *Store, up users.Provider, large bool) error {
 	if err != nil {
 		return fmt.Errorf("seed project 2: %w", err)
 	}
-	if err := addMembers(ctx, projects, p2.ID, []member{{uPloy, "pm"}, {uSam, "member"}, {uNina, "viewer"}}); err != nil {
+	if err := addMembers(ctx, projects, p2.ID, []member{{uPloy, "pm"}, {uSam, "member"}, {uNina, "member"}}); err != nil {
 		return err
 	}
 	if _, err := renameLists(ctx, boards, uPM, p2.ID); err != nil {

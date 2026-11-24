@@ -69,9 +69,6 @@ func TestAddLabel_PermissionsAndArchivedCard(t *testing.T) {
 	e := newEnv(t)
 	c := e.mk(t, e.lists(t)[0].ID, "c")
 	l := e.label(t, e.pid, "Bug")
-	if _, err := e.svc.AddLabel(e.ctx, viewer, c.ID, l.ID); code(err) != "forbidden" {
-		t.Fatalf("viewer: %v", err)
-	}
 	if _, err := e.svc.AddLabel(e.ctx, outside, c.ID, l.ID); code(err) != "not_found" {
 		t.Fatalf("outside: %v", err)
 	}

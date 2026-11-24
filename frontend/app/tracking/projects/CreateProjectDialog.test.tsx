@@ -208,7 +208,7 @@ describe('ProjectsPage', () => {
     await waitFor(() => expect(screen.getByRole('link', { name: 'Live A' }).closest('section')?.id).toBe('archived'));
   });
 
-  it('members and viewers get no archive button; the archived section offers Restore to a PM', async () => {
+  it('members get no archive button; the archived section offers Restore to a PM', async () => {
     mockApi(false, [{ ...proj(1, 'Live A', 'active', null), myRole: 'member' }]);
     renderPage();
     await screen.findByText('Live A');

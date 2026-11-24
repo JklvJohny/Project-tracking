@@ -45,7 +45,7 @@ type Project struct {
 type Member struct {
 	ProjectID int64
 	UserID    int64
-	Role      string // pm | member | viewer
+	Role      string // pm | member
 	AddedAt   time.Time
 }
 

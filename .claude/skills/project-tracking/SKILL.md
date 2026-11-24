@@ -67,7 +67,7 @@ const t = TEXT[lang];
 
 ## 3. Permissions live on the server
 
-Roles are per project: Project Manager, Member, Viewer (`project_members`).
+Roles are per project: Project Manager and Member (`project_members`); there is no read-only role.
 Above that, `user_roles` holds only the exceptions: `admin` (everything) and
 `manager` (may create projects, and becomes PM of each one it creates). There
 is no Workspace level: one department uses the system.

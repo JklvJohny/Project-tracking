@@ -89,7 +89,7 @@ export function Board({
       </div>
     );
 
-  // Viewers get no controls; admin/pm manage lists; admin/pm/member add cards. An archived project is read-only.
+  // Admin/pm manage lists; admin/pm/member add cards. An archived project is read-only.
   const { canManage, canEdit: canAddCards } = boardAccess(data);
   // Admin/PM tick any card's checklist; a member only cards assigned to them (canTickCard has the rule).
   const meId = me.data?.user?.id;

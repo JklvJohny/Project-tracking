@@ -838,7 +838,7 @@ paths:
     post:
       tags: [comments]
       operationId: addComment
-      summary: Add a comment. Mentions are written `@[<userId>]` in the body; mentioned project members are notified. Viewers get 403.
+      summary: Add a comment. Mentions are written `@[<userId>]` in the body; mentioned project members are notified.
       requestBody:
         required: true
         content:
@@ -858,7 +858,7 @@ paths:
     patch:
       tags: [comments]
       operationId: editComment
-      summary: Edit your own comment (sets editedAt). Member, PM or admin; a viewer gets 403 even on their own comment.
+      summary: Edit your own comment (sets editedAt).
       requestBody:
         required: true
         content:
@@ -875,7 +875,7 @@ paths:
     delete:
       tags: [comments]
       operationId: deleteComment
-      summary: Soft-delete. Authors delete their own; PM or admin delete any. A viewer gets 403 even on their own comment.
+      summary: Soft-delete. Authors delete their own; PM or admin delete any.
       responses:
         '200': { $ref: '#/components/responses/Empty' }
         '400': { $ref: '#/components/responses/BadRequest' }
@@ -898,7 +898,7 @@ paths:
     post:
       tags: [documents]
       operationId: uploadDocument
-      summary: Upload a PDF (admin, pm or member; a viewer gets 403). Max 20 MiB, and the content must start with `%PDF-` whatever the client claims. Field `file`; extra parts are ignored.
+      summary: Upload a PDF (admin, pm, member, or someone the folder is shared with). Max 20 MiB, and the content must start with `%PDF-` whatever the client claims. Field `file`; extra parts are ignored.
       requestBody:
         required: true
         content:
@@ -934,7 +934,7 @@ paths:
     delete:
       tags: [documents]
       operationId: deleteDocument
-      summary: Soft-delete (the file is kept so restore works). The uploader, a pm or an admin; another member or a viewer gets 403.
+      summary: Soft-delete (the file is kept so restore works). The uploader, a pm or an admin; another member gets 403.
       responses:
         '200': { $ref: '#/components/responses/Empty' }
         '400': { $ref: '#/components/responses/BadRequest' }
@@ -970,7 +970,7 @@ paths:
     get:
       tags: [documents]
       operationId: listFolderShares
-      summary: Who outside the project the report folder is shared with, oldest first. Admin, pm or member; a viewer or a shared user gets 403, anyone else 404.
+      summary: Who outside the project the report folder is shared with, oldest first. Admin, pm or member; a shared user gets 403, anyone else 404.
       responses:
         '200': { $ref: '#/components/responses/FolderShareList' }
         '400': { $ref: '#/components/responses/BadRequest' }
@@ -1479,11 +1479,11 @@ components:
       enum: [active, on_hold, done]
     ProjectRole:
       type: string
-      enum: [pm, member, viewer]
+      enum: [pm, member]
     MyRole:
       description: The caller's role in this project; admin for system admins who are not members.
       type: string
-      enum: [admin, pm, member, viewer]
+      enum: [admin, pm, member]
     Priority:
       type: string
       enum: [low, medium, high, urgent]
@@ -1982,7 +1982,7 @@ components:
         name: { type: string }
         archivedAt: { type: [string, 'null'], format: date-time }
         documentCount: { type: integer, description: Reports not deleted. }
-        access: { type: string, enum: [admin, pm, member, viewer, shared], description: "The caller's project role, or shared when they are outside the project and the folder is shared with them." }
+        access: { type: string, enum: [admin, pm, member, shared], description: "The caller's project role, or shared when they are outside the project and the folder is shared with them." }
         canUpload: { type: boolean, description: False in an archived project. }
         canShare: { type: boolean, description: Admin, pm or member, in a live project. }
         canManage: { type: boolean, description: "Delete anyone's report (admin or pm); whoever can upload deletes their own." }

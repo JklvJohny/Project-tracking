@@ -19,7 +19,7 @@ import { PersonLink } from '../people/PersonLink';
 
 type S = components['schemas'];
 type Role = S['ProjectRole'];
-const ROLES: Role[] = ['pm', 'member', 'viewer'];
+const ROLES: Role[] = ['pm', 'member'];
 
 const TEXT = {
   th: {
@@ -39,7 +39,7 @@ const TEXT = {
     noResults: 'ไม่พบคน',
     loading: 'กำลังโหลด…',
     members: 'สมาชิก',
-    roles: { pm: 'PM', member: 'สมาชิก', viewer: 'ผู้ชม' } as Record<Role, string>,
+    roles: { pm: 'PM', member: 'สมาชิก' } as Record<Role, string>,
   },
   en: {
     title: 'Project members',
@@ -58,7 +58,7 @@ const TEXT = {
     noResults: 'No one found',
     loading: 'Loading…',
     members: 'Members',
-    roles: { pm: 'PM', member: 'Member', viewer: 'Viewer' } as Record<Role, string>,
+    roles: { pm: 'PM', member: 'Member' } as Record<Role, string>,
   },
 };
 

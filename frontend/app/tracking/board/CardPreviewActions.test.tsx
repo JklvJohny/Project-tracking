@@ -115,14 +115,10 @@ describe('CardPreview subtasks and assignees', () => {
     await waitFor(() => expect(apiMock).toHaveBeenCalledWith('/cards/5/assignees/2', { method: 'PUT' }));
   });
 
-  it('viewers and archived projects get no +, and checkboxes are disabled', async () => {
-    await renderAs('viewer');
-    expect(screen.queryByRole('button', { name: 'Add assignee' })).toBeNull();
-    expect(screen.queryByRole('link', { name: 'Add subtask' })).toBeNull();
-    expect(screen.getByRole('checkbox', { name: 'Build it' }).hasAttribute('disabled')).toBe(true);
-    cleanup();
+  it('an archived project gets no +, and checkboxes are disabled', async () => {
     await renderAs('pm', true);
     expect(screen.queryByRole('button', { name: 'Add assignee' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Add subtask' })).toBeNull();
     expect(screen.getByRole('checkbox', { name: 'Build it' }).hasAttribute('disabled')).toBe(true);
   });
 });

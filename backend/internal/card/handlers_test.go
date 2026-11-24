@@ -86,7 +86,7 @@ func TestHandlers_GetCardHasDescription_BoardDoesNot(t *testing.T) {
 	if rec, _ = do(h, member, "PATCH", "/cards/"+id(cid), `{"descriptionMd":"secret body","priority":"urgent"}`); rec.Code != 200 {
 		t.Fatalf("patch = %d %s", rec.Code, rec.Body)
 	}
-	rec, body = do(h, viewer, "GET", "/cards/"+id(cid), "")
+	rec, body = do(h, member2, "GET", "/cards/"+id(cid), "")
 	d := body["data"].(map[string]any)
 	if rec.Code != 200 || d["descriptionMd"] != "secret body" || d["priority"] != "urgent" {
 		t.Fatalf("get = %d %s", rec.Code, rec.Body)

@@ -169,15 +169,25 @@ func TestCreate_Validation(t *testing.T) {
 	}
 }
 
+// There is no read-only role (the owner's decision, 2026-11-24): pm and member only.
+func TestAddMember_ViewerRoleRejected(t *testing.T) {
+	e := newEnv(t)
+	p := e.mustCreate(t, manager, "P")
+	_, err := e.svc.AddMember(e.ctx, manager, p.ID, regular, "viewer")
+	if fieldsOf(err)["role"] != "invalid" {
+		t.Fatalf("err = %v", err)
+	}
+}
+
 func TestList_RegularUserSeesOnlyMemberProjects(t *testing.T) {
 	e := newEnv(t)
 	mine := e.mustCreate(t, manager, "Mine")
 	e.mustCreate(t, manager, "Hidden")
-	if _, err := e.svc.AddMember(e.ctx, manager, mine.ID, regular, "viewer"); err != nil {
+	if _, err := e.svc.AddMember(e.ctx, manager, mine.ID, regular, "member"); err != nil {
 		t.Fatal(err)
 	}
 	got, err := e.svc.List(e.ctx, regular)
-	if err != nil || len(got) != 1 || got[0].ID != mine.ID || got[0].MyRole != "viewer" {
+	if err != nil || len(got) != 1 || got[0].ID != mine.ID || got[0].MyRole != "member" {
 		t.Fatalf("got %+v %v", got, err)
 	}
 }

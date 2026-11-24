@@ -87,7 +87,7 @@ export function CardPanel({
   const card = useCard(cardId);
   const me = useMe();
   const archive = useArchiveCard(projectId);
-  // An archived project is read-only for everyone, like a viewer.
+  // An archived project is read-only for everyone.
   const { canEdit, canManage } = boardAccess(board.data);
   const d = card.data;
   // A deleted card or a stale ?card id answers not_found/forbidden for good: retrying cannot help.

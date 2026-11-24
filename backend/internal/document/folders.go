@@ -23,13 +23,13 @@ type access struct {
 func (a access) shared() bool { return a.role == "" }
 
 // canUpload: anyone who edits cards in the project, and anyone the folder is
-// shared with (the owner's decision, 2026-11-21). Viewers stay read-only.
+// shared with (the owner's decision, 2026-11-21).
 func (a access) canUpload() bool {
 	return a.shared() || authz.Require(a.role, authz.EditCards) == nil
 }
 
-// canShare: admin, PM and member. Viewers and people the folder is shared
-// with cannot pass it on.
+// canShare: admin, PM and member. People the folder is shared with cannot
+// pass it on.
 func (a access) canShare() bool {
 	return !a.shared() && authz.Require(a.role, authz.EditCards) == nil
 }
@@ -74,7 +74,7 @@ type Folder struct {
 	Name          string     `json:"name"`
 	ArchivedAt    *time.Time `json:"archivedAt"`
 	DocumentCount int        `json:"documentCount"`
-	// Access is the caller's project role (admin, pm, member, viewer), or
+	// Access is the caller's project role (admin, pm, member), or
 	// "shared" when they are not in the project and the folder is shared with them.
 	Access    string `json:"access"`
 	CanUpload bool   `json:"canUpload"`

@@ -37,7 +37,7 @@ func zip(extra string) []byte { return []byte("PK\x03\x04" + extra) }
 
 func TestTemplates_UploadListDownload(t *testing.T) {
 	e := newEnv(t)
-	// Anyone signed in may add one, a viewer or someone outside every project included.
+	// Anyone signed in may add one, someone outside every project included.
 	code, body := e.uploadTemplate(outside, map[string]string{"category": " รายงานประจำสัปดาห์ ", "description": "ใช้ทุกวันศุกร์"}, "Weekly Report.docx", zip("word"))
 	if code != 201 {
 		t.Fatalf("upload = %d %v", code, body)
@@ -50,14 +50,14 @@ func TestTemplates_UploadListDownload(t *testing.T) {
 	if _, leaked := d["storageKey"]; leaked {
 		t.Error("storage key must not reach the client")
 	}
-	if code, _ := e.uploadTemplate(viewer, map[string]string{"category": "Budget", "name": "Q1 budget"}, "b.xlsx", zip("x")); code != 201 {
+	if code, _ := e.uploadTemplate(third, map[string]string{"category": "Budget", "name": "Q1 budget"}, "b.xlsx", zip("x")); code != 201 {
 		t.Fatalf("xlsx = %d", code)
 	}
 	if code, _ := e.uploadTemplate(member, map[string]string{"category": "Budget", "name": "Approval"}, "a.pdf", pdf("p")); code != 201 {
 		t.Fatalf("pdf = %d", code)
 	}
 
-	rec, body := e.call(viewer, "GET", "/report-templates", nil, "")
+	rec, body := e.call(third, "GET", "/report-templates", nil, "")
 	list, _ := body["data"].([]any)
 	if rec.Code != 200 || len(list) != 3 {
 		t.Fatalf("list = %d %s", rec.Code, rec.Body)
@@ -123,7 +123,7 @@ func TestTemplates_EditDeleteRestore(t *testing.T) {
 		t.Fatalf("blank name = %d %s", rec.Code, rec.Body)
 	}
 
-	if rec, _ := e.call(viewer, "DELETE", "/report-templates/"+id, nil, ""); rec.Code != 200 {
+	if rec, _ := e.call(third, "DELETE", "/report-templates/"+id, nil, ""); rec.Code != 200 {
 		t.Fatalf("delete = %d %s", rec.Code, rec.Body)
 	}
 	if _, body := e.call(member, "GET", "/report-templates", nil, ""); len(body["data"].([]any)) != 0 {
