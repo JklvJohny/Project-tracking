@@ -3,6 +3,7 @@ import { Pencil, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { PersonLink } from '../people/PersonLink';
 import { Avatar } from '../shared/Avatar';
 import { boardAccess } from '../shared/access';
 import { useBoard, useComments, useMe } from '../shared/api/queries';
@@ -17,6 +18,9 @@ import { useAddComment, useDeleteComment, useEditComment } from './mutations';
 import { Rendered } from './Rendered';
 
 type Comment = components['schemas']['Comment'];
+
+// Mirrors the server's cap (internal/card maxComments); it refuses the 11th as well.
+const MAX_COMMENTS = 10;
 
 const TEXT = {
   th: {
@@ -33,6 +37,7 @@ const TEXT = {
     loading: 'กำลังโหลดความคิดเห็น',
     retry: 'ลองอีกครั้ง',
     unknown: 'ผู้ใช้ที่ไม่รู้จัก',
+    full: `การ์ดนี้มีความคิดเห็นครบ ${MAX_COMMENTS} ข้อแล้ว ลบข้อที่ไม่ใช้ก่อนจึงจะเพิ่มได้`,
   },
   en: {
     title: 'Comments',
@@ -48,6 +53,7 @@ const TEXT = {
     loading: 'Loading comments',
     retry: 'Retry',
     unknown: 'Unknown user',
+    full: `This card has the maximum of ${MAX_COMMENTS} comments. Delete one to add another.`,
   },
 };
 
@@ -104,10 +110,12 @@ export function Comments({ projectId, cardId, readOnly = false }: { projectId: n
             return (
               <li key={c.id} data-comment={c.id} className="flex flex-col gap-1 rounded-lg border p-3">
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Avatar user={users.get(c.authorId) ?? { id: c.authorId, name }} size="xs" />
-                  <span className="font-medium text-foreground" aria-hidden>
-                    {name}
-                  </span>
+                  <PersonLink userId={c.authorId} className="flex min-w-0 items-center gap-2">
+                    <Avatar user={users.get(c.authorId) ?? { id: c.authorId, name }} size="xs" />
+                    <span className="font-medium text-foreground" aria-hidden>
+                      {name}
+                    </span>
+                  </PersonLink>
                   <time dateTime={c.createdAt}>{fmtDate(c.createdAt, lang)}</time>
                   {c.editedAt && <span>({t.edited})</span>}
                   <span className="ml-auto" />
@@ -143,7 +151,12 @@ export function Comments({ projectId, cardId, readOnly = false }: { projectId: n
         </ul>
       )}
       <SaveStatus state={state.kind === 'error' ? state : { kind: 'idle' }} />
-      {canWrite && <CommentEditor members={mentionable} submitLabel={t.send} onSubmit={(body) => add.mutateAsync(body)} />}
+      {canWrite &&
+        (list.length >= MAX_COMMENTS ? (
+          <p className="rounded-lg border border-dashed px-3 py-2 text-sm text-muted-foreground">{t.full}</p>
+        ) : (
+          <CommentEditor members={mentionable} submitLabel={t.send} onSubmit={(body) => add.mutateAsync(body)} />
+        ))}
     </section>
   );
 }

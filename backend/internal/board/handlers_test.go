@@ -37,6 +37,9 @@ func (e env) handler() http.Handler {
 
 func do(h http.Handler, user int64, method, path, body string, hdr ...string) (*httptest.ResponseRecorder, map[string]any) {
 	req := httptest.NewRequest(method, "/api/tracking/v1"+path, strings.NewReader(body))
+	if body != "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	req.Header.Set("X-User-ID", strconv.FormatInt(user, 10))
 	for i := 0; i+1 < len(hdr); i += 2 {
 		req.Header.Set(hdr[i], hdr[i+1])
@@ -69,9 +72,9 @@ func TestBoardHandler_SecondGetWithIfNoneMatchIs304(t *testing.T) {
 		t.Fatalf("second = %d body=%q", rec.Code, rec.Body)
 	}
 	// same board, different role: another role's tag must not match
-	rec, _ = do(h, viewer, "GET", path, "", "If-None-Match", tag)
+	rec, _ = do(h, manager, "GET", path, "", "If-None-Match", tag)
 	if rec.Code != 200 {
-		t.Fatalf("viewer with member's tag = %d", rec.Code)
+		t.Fatalf("pm with member's tag = %d", rec.Code)
 	}
 	if rec, _ = do(h, outside, "GET", path, ""); rec.Code != 404 {
 		t.Fatalf("outsider = %d", rec.Code)
@@ -117,7 +120,7 @@ func TestListHandlers_Flow(t *testing.T) {
 	if rec, _ = do(h, manager, "POST", "/lists/"+lid+"/archive", ""); rec.Code != 200 {
 		t.Fatalf("archive = %d %s", rec.Code, rec.Body)
 	}
-	rec, body = do(h, viewer, "GET", "/projects/"+strconv.FormatInt(e.pid, 10)+"/archived", "")
+	rec, body = do(h, member2, "GET", "/projects/"+strconv.FormatInt(e.pid, 10)+"/archived", "")
 	d, _ := body["data"].(map[string]any)
 	if rec.Code != 200 || len(d["lists"].([]any)) != 1 || len(d["cards"].([]any)) != 0 {
 		t.Fatalf("archived = %d %s", rec.Code, rec.Body)

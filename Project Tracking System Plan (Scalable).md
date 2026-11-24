@@ -82,15 +82,15 @@ Phases follow the Roadmap: **P1** = MVP, **P2** = Ready for team use, **P3** = S
 
 ## User Roles
 
-| Permission | Admin | Project Manager | Member | Viewer |
-| --- | --- | --- | --- | --- |
-| Manage Workspace and members | ✓ |  |  |  |
-| Create / delete Projects | ✓ | ✓ |  |  |
-| Add members to a Project | ✓ | ✓ |  |  |
-| Manage Lists and Labels | ✓ | ✓ |  |  |
-| Create / edit / move cards | ✓ | ✓ | ✓ |  |
-| Comment and attach files | ✓ | ✓ | ✓ |  |
-| View Boards and Dashboard | ✓ | ✓ | ✓ | ✓ |
+| Permission | Admin | Project Manager | Member |
+| --- | --- | --- | --- |
+| Manage Workspace and members | ✓ |  |  |
+| Create / delete Projects | ✓ | ✓ |  |
+| Add members to a Project | ✓ | ✓ |  |
+| Manage Lists and Labels | ✓ | ✓ |  |
+| Create / edit / move cards | ✓ | ✓ | ✓ |
+| Comment and attach files | ✓ | ✓ | ✓ |
+| View Boards and Dashboard | ✓ | ✓ | ✓ |
 
 Roles are set per Project. The same person can be a Project Manager in one Project and a Member in another.
 

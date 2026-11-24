@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import { routes } from '../shared/routes';
 import { StatusPill } from '../shared/StatusPill';
+import { ProjectArchiveButton } from './ProjectArchiveButton';
 import { Members, Owner, Progress, Timeline } from './project-parts';
 import type { ProjectRow } from './project-row';
 
@@ -14,7 +15,10 @@ export function ProjectsGrid({ projects }: { projects: ProjectRow[] }) {
             <Link href={routes.board(p.id)} className="min-w-0 font-medium hover:underline">
               {p.name}
             </Link>
-            <StatusPill status={p.archivedAt ? 'archived' : p.status} />
+            <div className="flex shrink-0 items-center gap-1">
+              <StatusPill status={p.archivedAt ? 'archived' : p.status} />
+              <ProjectArchiveButton project={p} />
+            </div>
           </div>
           {p.description && <p className="line-clamp-2 text-sm text-muted-foreground">{p.description}</p>}
           <div className="text-xs text-muted-foreground"><Timeline p={p} /></div>

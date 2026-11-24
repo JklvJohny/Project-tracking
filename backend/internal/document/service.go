@@ -18,7 +18,6 @@ import (
 	"unicode"
 
 	"tracking-service/internal/apperr"
-	"tracking-service/internal/authz"
 	"tracking-service/internal/blob"
 	"tracking-service/internal/clock"
 	"tracking-service/internal/store"
@@ -124,31 +123,17 @@ func newKey(projectID int64) (string, error) {
 	return strconv.FormatInt(projectID, 10) + "/" + hex.EncodeToString(b[:]) + ".pdf", nil
 }
 
-// projectScope resolves the caller's role in a project: non-members get
-// not_found, so a project's existence is not revealed.
-func projectScope(ctx context.Context, r store.Repos, userID, projectID int64) (store.Project, authz.Role, error) {
-	role, err := authz.ProjectRole(ctx, r, userID, projectID)
-	if err != nil {
-		return store.Project{}, "", err
-	}
-	p, err := r.Projects.Get(ctx, projectID)
-	if errors.Is(err, store.ErrNotFound) {
-		return p, "", apperr.NotFound("project")
-	}
-	return p, role, err
-}
-
-// canUpload is the role and archive check an upload shares in both of its
+// canUpload is the access and archive check an upload shares in both of its
 // transactions.
 func canUpload(ctx context.Context, r store.Repos, userID, projectID int64) error {
-	p, role, err := projectScope(ctx, r, userID, projectID)
+	a, err := folderScope(ctx, r, userID, projectID)
 	if err != nil {
 		return err
 	}
-	if err := authz.Require(role, authz.EditCards); err != nil {
-		return err
+	if !a.canUpload() {
+		return apperr.Forbidden()
 	}
-	if p.ArchivedAt != nil {
+	if a.project.ArchivedAt != nil {
 		return apperr.ProjectArchived()
 	}
 	return nil
@@ -158,7 +143,7 @@ func canUpload(ctx context.Context, r store.Repos, userID, projectID int64) erro
 func (s *Service) List(ctx context.Context, userID, projectID int64) ([]View, error) {
 	out := []View{}
 	err := s.st.View(ctx, func(r store.Repos) error {
-		if _, _, err := projectScope(ctx, r, userID, projectID); err != nil {
+		if _, err := folderScope(ctx, r, userID, projectID); err != nil {
 			return err
 		}
 		ds, err := r.Documents.ByProject(ctx, projectID)
@@ -260,31 +245,31 @@ func (s *Service) record(ctx context.Context, r store.Repos, projectID, actor in
 	})
 }
 
-// resolve finds a document and the caller's role in its project. A deleted
+// resolve finds a document and the caller's access to its folder. A deleted
 // document is hidden unless withDeleted (restore needs it).
-func resolve(ctx context.Context, r store.Repos, userID, docID int64, withDeleted bool) (store.Document, store.Project, authz.Role, error) {
+func resolve(ctx context.Context, r store.Repos, userID, docID int64, withDeleted bool) (store.Document, access, error) {
 	d, err := r.Documents.Get(ctx, docID)
 	if errors.Is(err, store.ErrNotFound) {
-		return d, store.Project{}, "", apperr.NotFound("document")
+		return d, access{}, apperr.NotFound("document")
 	}
 	if err != nil {
-		return d, store.Project{}, "", err
+		return d, access{}, err
 	}
-	p, role, err := projectScope(ctx, r, userID, d.ProjectID)
+	a, err := folderScope(ctx, r, userID, d.ProjectID)
 	if err != nil {
-		return d, p, role, apperr.NotFoundAs(err, "document")
+		return d, a, apperr.NotFoundAs(err, "document")
 	}
 	if d.DeletedAt != nil && !withDeleted {
-		return d, p, role, apperr.NotFound("document")
+		return d, a, apperr.NotFound("document")
 	}
-	return d, p, role, nil
+	return d, a, nil
 }
 
-// Open returns the file for any project member or admin.
+// Open returns the file for anyone who may open the folder.
 func (s *Service) Open(ctx context.Context, userID, docID int64) (File, error) {
 	var d store.Document
 	err := s.st.View(ctx, func(r store.Repos) (err error) {
-		d, _, _, err = resolve(ctx, r, userID, docID, false)
+		d, _, err = resolve(ctx, r, userID, docID, false)
 		return err
 	})
 	if err != nil {
@@ -300,24 +285,20 @@ func (s *Service) Open(ctx context.Context, userID, docID int64) (File, error) {
 	return File{Name: d.Filename, ReadCloser: rc}, nil
 }
 
-// setDeleted is Delete and Restore: the uploader, a pm or an admin, in a live
-// project. The blob is never touched, so restore can bring the file back.
+// setDeleted is Delete and Restore: the uploader (while they may still
+// upload), a pm or an admin, in a live project. The blob is never touched, so
+// restore can bring the file back.
 func (s *Service) setDeleted(ctx context.Context, userID, docID int64, deleted bool) (View, error) {
 	var out View
 	err := s.st.Update(ctx, func(r store.Repos) error {
-		d, p, role, err := resolve(ctx, r, userID, docID, !deleted)
+		d, a, err := resolve(ctx, r, userID, docID, !deleted)
 		if err != nil {
 			return err
 		}
-		if err := authz.Require(role, authz.EditCards); err != nil {
-			return err
+		if !a.canUpload() || (d.UploadedBy != userID && !a.canManage()) {
+			return apperr.Forbidden()
 		}
-		if d.UploadedBy != userID {
-			if err := authz.Require(role, authz.ManageProject); err != nil {
-				return err
-			}
-		}
-		if p.ArchivedAt != nil {
+		if a.project.ArchivedAt != nil {
 			return apperr.ProjectArchived()
 		}
 		names, err := uploaderNames(ctx, r, []store.Document{d})
@@ -334,7 +315,8 @@ func (s *Service) setDeleted(ctx context.Context, userID, docID int64, deleted b
 			now := s.now()
 			at, typ = &now, "document.deleted"
 		}
-		if err := r.Documents.SetDeleted(ctx, docID, at); err != nil {
+		changed, err := r.Documents.SetDeleted(ctx, docID, at)
+		if err != nil || !changed { // someone else got there first: nothing to log
 			return err
 		}
 		return s.record(ctx, r, d.ProjectID, userID, typ, docID)

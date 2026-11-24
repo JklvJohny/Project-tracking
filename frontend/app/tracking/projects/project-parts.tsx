@@ -4,6 +4,7 @@ import { AvatarStack } from '../shared/AvatarStack';
 import { fmtDate } from '../shared/format';
 import { useLang, useT } from '../shared/i18n';
 import type { ProjectRow } from './project-row';
+import { PersonLink } from '../people/PersonLink';
 
 const TEXT = {
   th: { progress: 'ความคืบหน้า' },
@@ -25,15 +26,17 @@ export function Timeline({ p }: { p: ProjectRow }) {
 export function Owner({ p }: { p: ProjectRow }) {
   if (!p.owner) return MUTED;
   return (
-    <span className="inline-flex items-center gap-2">
+    <PersonLink userId={p.owner.id} className="inline-flex min-w-0 items-center gap-2">
       <Avatar user={p.owner} size="sm" />
-      <span className="truncate">{p.owner.name}</span>
-    </span>
+      <span className="truncate" aria-hidden>
+        {p.owner.name}
+      </span>
+    </PersonLink>
   );
 }
 
 export function Members({ p }: { p: ProjectRow }) {
-  return p.members ? <AvatarStack users={p.members} max={4} size="sm" /> : MUTED;
+  return p.members ? <AvatarStack users={p.members} max={4} size="sm" link /> : MUTED;
 }
 
 export function Progress({ p }: { p: ProjectRow }) {

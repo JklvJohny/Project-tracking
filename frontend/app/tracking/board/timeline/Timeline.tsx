@@ -2,7 +2,7 @@
 import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useBoard } from '../../shared/api/queries';
 import { Avatar } from '../../shared/Avatar';
@@ -17,14 +17,14 @@ import {
   type TimelineRow,
   type TimelineStatus,
 } from './timeline-model';
+import { PersonLink } from '../../people/PersonLink';
 
-const OPEN_KEY = 'pt-timeline-open';
+export const TIMELINE_OPEN_KEY = 'pt-timeline-open';
 const LEFT = '10rem';
 
 const TEXT = {
   th: {
     title: 'ไทม์ไลน์',
-    subtitle: 'ใครทำงานไหนเสร็จเมื่อไหร่',
     prev: 'สัปดาห์ก่อนหน้า',
     next: 'สัปดาห์ถัดไป',
     today: 'วันนี้',
@@ -40,7 +40,6 @@ const TEXT = {
   },
   en: {
     title: 'Timeline',
-    subtitle: 'Who finishes which task, by date',
     prev: 'Previous week',
     next: 'Next week',
     today: 'Today',
@@ -61,14 +60,6 @@ const WEEK_FORMAT: Record<Lang, Intl.DateTimeFormat> = {
   th: new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'short', timeZone: 'UTC' }),
   en: new Intl.DateTimeFormat('en-US', { day: 'numeric', month: 'short', timeZone: 'UTC' }),
 };
-
-function readOpen() {
-  try {
-    return localStorage.getItem(OPEN_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
 
 function Bar({ row, group, pathname }: { row: TimelineRow; group: TimelineGroup; pathname: string }) {
   const t = useT(TEXT);
@@ -180,11 +171,18 @@ function TimelineBody({ projectId }: { projectId: number }) {
             <div key={g.assignee?.id ?? 'none'} role="group" aria-label={g.assignee?.name ?? t.unassigned}>
               <div className="flex items-center gap-2 border-b bg-muted px-3 py-1.5">
                 {g.assignee ? (
-                  <Avatar user={g.assignee} size="sm" />
+                  <PersonLink userId={g.assignee.id} className="flex min-w-0 items-center gap-2">
+                    <Avatar user={g.assignee} size="sm" />
+                    <span className="truncate text-sm font-semibold" aria-hidden>
+                      {g.assignee.name}
+                    </span>
+                  </PersonLink>
                 ) : (
-                  <span aria-hidden className="size-6 rounded-full border border-dashed" />
+                  <>
+                    <span aria-hidden className="size-6 rounded-full border border-dashed" />
+                    <span className="truncate text-sm font-semibold">{t.unassigned}</span>
+                  </>
                 )}
-                <span className="truncate text-sm font-semibold">{g.assignee?.name ?? t.unassigned}</span>
                 <span className="ml-auto shrink-0 text-xs text-muted-foreground">{t.tasks(g.rows.length)}</span>
               </div>
               {g.rows.map((r) => (
@@ -229,28 +227,20 @@ function TimelineBody({ projectId }: { projectId: number }) {
 }
 
 /** The collapsible Timeline region below the Board. Closed on first visit, like the prototype. */
+/** Open state is owned by the page (`useStoredOpen(TIMELINE_OPEN_KEY, false)`) because the splitter can collapse it. */
 export function TimelineSection({
   projectId,
+  open,
   onOpenChange,
 }: {
   projectId: number;
-  onOpenChange?: (open: boolean) => void;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }) {
   const t = useT(TEXT);
-  const [open, setOpen] = useState(false);
-  useEffect(() => setOpen(readOpen()), []);
-  useEffect(() => onOpenChange?.(open), [open, onOpenChange]);
-  const flip = () => {
-    const next = !open;
-    setOpen(next);
-    try {
-      localStorage.setItem(OPEN_KEY, next ? '1' : '0');
-    } catch {
-      /* storage unavailable: the choice lasts for this visit only */
-    }
-  };
+  const flip = () => onOpenChange(!open);
   return (
-    <section className="flex min-h-0 flex-1 flex-col border-t bg-muted/40 pt-3">
+    <section className={`flex flex-col border-t bg-muted/40 pt-3 ${open ? 'min-h-0 flex-1' : 'shrink-0'}`}>
       <div className="mx-4 mb-3 flex flex-wrap items-center gap-x-3 gap-y-1">
         <button
           type="button"
@@ -262,7 +252,6 @@ export function TimelineSection({
           <ChevronDown className={`size-4 transition-transform ${open ? '' : '-rotate-90'}`} aria-hidden />
           {t.title}
         </button>
-        <span className="hidden text-xs text-muted-foreground sm:inline">{t.subtitle}</span>
       </div>
       <div id="timeline-section-body" hidden={!open} className="min-h-0 overflow-auto">
         {open && <TimelineBody projectId={projectId} />}

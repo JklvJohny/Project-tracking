@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"strings"
@@ -15,7 +16,7 @@ import (
 	"tracking-service/internal/events"
 	"tracking-service/internal/project"
 	"tracking-service/internal/store"
-	"tracking-service/internal/store/memory"
+	"tracking-service/internal/store/storetest"
 	"tracking-service/internal/users"
 	"tracking-service/internal/validate"
 )
@@ -31,14 +32,14 @@ const (
 
 type env struct {
 	svc *project.Service
-	st  *memory.Store
+	st  storetest.Store
 	ctx context.Context
 }
 
 func newEnv(t *testing.T) env {
 	t.Helper()
 	now := clock.Fixed(t0)
-	st := memory.New(now)
+	st := storetest.New(t, now)
 	st.SeedUserRole(store.UserRole{UserID: admin, Role: "admin"})
 	st.SeedUserRole(store.UserRole{UserID: manager, Role: "manager"})
 	quiet := slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -169,15 +170,25 @@ func TestCreate_Validation(t *testing.T) {
 	}
 }
 
+// There is no read-only role (the owner's decision, 2026-11-24): pm and member only.
+func TestAddMember_ViewerRoleRejected(t *testing.T) {
+	e := newEnv(t)
+	p := e.mustCreate(t, manager, "P")
+	_, err := e.svc.AddMember(e.ctx, manager, p.ID, regular, "viewer")
+	if fieldsOf(err)["role"] != "invalid" {
+		t.Fatalf("err = %v", err)
+	}
+}
+
 func TestList_RegularUserSeesOnlyMemberProjects(t *testing.T) {
 	e := newEnv(t)
 	mine := e.mustCreate(t, manager, "Mine")
 	e.mustCreate(t, manager, "Hidden")
-	if _, err := e.svc.AddMember(e.ctx, manager, mine.ID, regular, "viewer"); err != nil {
+	if _, err := e.svc.AddMember(e.ctx, manager, mine.ID, regular, "member"); err != nil {
 		t.Fatal(err)
 	}
 	got, err := e.svc.List(e.ctx, regular)
-	if err != nil || len(got) != 1 || got[0].ID != mine.ID || got[0].MyRole != "viewer" {
+	if err != nil || len(got) != 1 || got[0].ID != mine.ID || got[0].MyRole != "member" {
 		t.Fatalf("got %+v %v", got, err)
 	}
 }
@@ -426,8 +437,9 @@ func TestList_IncludesOwnerMembersProgress(t *testing.T) {
 		if err := r.Lists.Save(e.ctx, l); err != nil {
 			return err
 		}
-		for _, deleted := range []bool{false, false, true} { // two live reports and a deleted one
-			d := store.Document{ProjectID: p.ID, StorageKey: "k", Filename: "f.pdf", UploadedBy: manager, CreatedAt: t0}
+		for i, deleted := range []bool{false, false, true} { // two live reports and a deleted one
+			d := store.Document{ProjectID: p.ID, StorageKey: fmt.Sprintf("k%d", i), Filename: "f.pdf", MimeType: "application/pdf",
+				UploadedBy: manager, CreatedAt: t0}
 			if deleted {
 				d.DeletedAt = ptr(t0)
 			}

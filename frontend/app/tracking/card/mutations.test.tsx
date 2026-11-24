@@ -1,13 +1,17 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, renderHook } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
+import { toast } from 'sonner';
+import { TrackingContext, type TrackingCtx } from '../shared/i18n';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../shared/api/client';
 import { qk } from '../shared/api/queries';
 import type { components } from '../shared/api/schema';
-import { useChecklist, useLabelCrud, useUpdateCard } from './mutations';
+import { ApiError } from '../shared/api/client';
+import { useChecklist, useLabelCrud, useToggleChecklistItem, useUpdateCard } from './mutations';
 
 vi.mock('../shared/api/client', async (orig) => ({ ...(await orig<object>()), api: vi.fn() }));
+vi.mock('sonner', async (orig) => ({ ...(await orig<object>()), toast: Object.assign(vi.fn(), { error: vi.fn() }) }));
 const apiMock = vi.mocked(api);
 
 type S = components['schemas'];
@@ -30,11 +34,19 @@ const board: S['Board'] = {
 };
 
 let qc: QueryClient;
-const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
+// The hooks read the language for their error toasts; this test keeps its own QueryClient, so only the language
+// context is provided, not the whole TrackingProvider.
+const lang = { lang: 'en', setLang() {}, theme: 'light', setTheme() {}, resolvedTheme: 'light', darkPalette: 'slate', setDarkPalette() {} } as TrackingCtx;
+const wrapper = ({ children }: { children: ReactNode }) => (
+  <QueryClientProvider client={qc}>
+    <TrackingContext.Provider value={lang}>{children}</TrackingContext.Provider>
+  </QueryClientProvider>
+);
 const boardCard = () => qc.getQueryData<S['Board']>(qk.board(1))!.cards[0];
 
 beforeEach(() => {
   apiMock.mockReset();
+  vi.mocked(toast.error).mockReset();
   qc = new QueryClient();
   qc.setQueryData(qk.board(1), board);
   qc.setQueryData(qk.card(5), detail);
@@ -81,5 +93,47 @@ describe('card mutations', () => {
     expect(b.labels).toEqual([]);
     expect(b.cards[0].labelIds).toEqual([]);
     expect(qc.getQueryData<S['CardDetail']>(qk.card(5))?.labelIds).toEqual([]);
+  });
+
+  it('an edit that fails after its field was closed is reported, with Retry; an open field reports it itself', async () => {
+    let fail!: (e: unknown) => void;
+    apiMock.mockImplementationOnce(() => new Promise((_, reject) => (fail = reject)));
+    const { result, unmount } = renderHook(() => useUpdateCard(1, 5), { wrapper });
+    act(() => result.current.mutate({ descriptionMd: 'draft' }));
+    await waitFor(() => expect(apiMock).toHaveBeenCalled());
+    unmount(); // Escape closed the panel while the save was in flight
+    await act(async () => fail(new ApiError('conflict', 409, 'project_archived')));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
+    const [text, opts] = vi.mocked(toast.error).mock.calls[0] as [string, { action: { label: string; onClick: () => void } }];
+    expect(text).toBe('Your edit to the card was not saved: This project is archived and cannot be changed');
+    apiMock.mockResolvedValueOnce({ ...detail, descriptionMd: 'draft' });
+    opts.action.onClick();
+    await waitFor(() => expect(qc.getQueryData<S['CardDetail']>(qk.card(5))?.descriptionMd).toBe('draft'));
+    expect(apiMock).toHaveBeenLastCalledWith('/cards/5', { method: 'PATCH', json: { descriptionMd: 'draft' } });
+
+    vi.mocked(toast.error).mockReset();
+    apiMock.mockRejectedValueOnce(new ApiError('conflict', 409, 'project_archived'));
+    const open = renderHook(() => useUpdateCard(1, 5), { wrapper });
+    await act(() => open.result.current.mutateAsync({ title: 'x' }).catch(() => {}));
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('a failed tick from the board undoes only that tick, not one that succeeded meanwhile', async () => {
+    const items = [1, 2].map((n) => ({ id: n, text: `i${n}`, isDone: false, position: `p${n}` }));
+    qc.setQueryData(qk.card(5), { ...detail, checklist: items });
+    qc.setQueryData(qk.board(1), {
+      ...board,
+      cards: [{ ...summary, checklistTotal: 2, checklistPreview: items.map(({ id, text, isDone }) => ({ id, text, isDone })) }],
+    });
+    let failA!: (e: unknown) => void;
+    apiMock.mockImplementationOnce(() => new Promise((_, reject) => (failA = reject)));
+    apiMock.mockResolvedValueOnce({ ...items[1], isDone: true });
+    const { result } = renderHook(() => useToggleChecklistItem(1), { wrapper });
+    act(() => result.current.mutate({ cardId: 5, itemId: 1, isDone: true }));
+    await act(() => result.current.mutateAsync({ cardId: 5, itemId: 2, isDone: true }));
+    await act(async () => failA(new ApiError('server_error', 500, 'x')));
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    expect(boardCard().checklistPreview.map((i) => i.isDone)).toEqual([false, true]);
+    expect(qc.getQueryData<S['CardDetail']>(qk.card(5))?.checklist.map((i) => i.isDone)).toEqual([false, true]);
   });
 });

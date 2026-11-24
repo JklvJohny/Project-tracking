@@ -24,14 +24,17 @@ func (r *documentRepo) Get(_ context.Context, id int64) (store.Document, error) 
 	return d, nil
 }
 
-func (r *documentRepo) SetDeleted(_ context.Context, id int64, at *time.Time) error {
+func (r *documentRepo) SetDeleted(_ context.Context, id int64, at *time.Time) (bool, error) {
 	d, ok := r.d.documents[id]
 	if !ok {
-		return store.ErrNotFound
+		return false, store.ErrNotFound
+	}
+	if (d.DeletedAt != nil) == (at != nil) {
+		return false, nil
 	}
 	d.DeletedAt = ptr(at)
 	r.d.documents[id] = d
-	return nil
+	return true, nil
 }
 
 func (r *documentRepo) ByProject(_ context.Context, projectID int64) ([]store.Document, error) {

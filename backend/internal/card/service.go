@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"time"
-	"unicode/utf8"
 
 	"tracking-service/internal/apperr"
 	"tracking-service/internal/authz"
@@ -207,6 +206,11 @@ func resolveEditableUnlocked(ctx context.Context, r store.Repos, userID, cardID 
 	if sc.card.ArchivedAt != nil {
 		return sc, apperr.Conflict("card is archived")
 	}
+	// Cards in an archived list are off the board: an edit there would be
+	// invisible until the list is restored.
+	if sc.list.ArchivedAt != nil {
+		return sc, apperr.Conflict("list is archived")
+	}
 	return sc, nil
 }
 
@@ -281,7 +285,7 @@ func (s *Service) Create(ctx context.Context, userID, listID int64, in CreateCar
 			return err
 		}
 		now := s.now()
-		c := store.Card{ListID: l.ID, Title: title, Position: pos, CreatedBy: userID, CreatedAt: now, UpdatedAt: now}
+		c := store.Card{ListID: l.ID, Title: title, Priority: store.PriorityMedium, Position: pos, CreatedBy: userID, CreatedAt: now, UpdatedAt: now}
 		if l.IsDone {
 			c.CompletedAt = &now
 		}
@@ -328,9 +332,7 @@ func (s *Service) Update(ctx context.Context, userID, cardID int64, in UpdateCar
 			changed = append(changed, "title")
 		}
 		if in.DescriptionMD != nil {
-			if utf8.RuneCountInString(*in.DescriptionMD) > maxDescription {
-				fields["descriptionMd"] = "too_long"
-			}
+			validate.LongText("descriptionMd", *in.DescriptionMD, maxDescription, fields)
 			c.Description = *in.DescriptionMD
 			changed = append(changed, "descriptionMd")
 		}

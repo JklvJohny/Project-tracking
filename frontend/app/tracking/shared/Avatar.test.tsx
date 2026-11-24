@@ -1,9 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { apiBlob } from './api/client';
 import { Avatar, AVATAR_COLORS, avatarColorIndex, initials } from './Avatar';
 import { AvatarStack } from './AvatarStack';
+
+vi.mock('./api/client', async (orig) => ({ ...(await orig<object>()), apiBlob: vi.fn() }));
 
 afterEach(cleanup);
 
@@ -47,11 +50,61 @@ describe('Avatar', () => {
   });
 });
 
+describe('Avatar pictures', () => {
+  it("a new version of someone's photo releases the old one from memory", async () => {
+    let n = 0;
+    URL.createObjectURL = vi.fn(() => `blob:av-${++n}`);
+    URL.revokeObjectURL = vi.fn();
+    vi.mocked(apiBlob).mockResolvedValue(new Blob(['x']));
+    const base = '/api/tracking/v1/users/9/avatar';
+    const view = render(<Avatar user={{ id: 9, name: 'Kai W.', avatarUrl: `${base}?v=1` }} />);
+    await waitFor(() => expect(view.container.querySelector('img')?.getAttribute('src')).toBe('blob:av-1'));
+    view.rerender(<Avatar user={{ id: 9, name: 'Kai W.', avatarUrl: `${base}?v=2` }} />);
+    await waitFor(() => expect(view.container.querySelector('img')?.getAttribute('src')).toBe('blob:av-2'));
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:av-1');
+  });
+});
+
 describe('AvatarStack', () => {
   it('shows max avatars and a +N overflow', () => {
     const users = [1, 2, 3, 4, 5, 6].map((id) => ({ id, name: `User ${id}` }));
     render(<AvatarStack users={users} max={4} />);
     expect(screen.getAllByTitle(/^User /)).toHaveLength(4);
     expect(screen.getByText('+2')).toBeTruthy();
+  });
+});
+
+describe('Avatar pictures', () => {
+  it('a tracking picture is fetched once with the api headers and shown over the initials', async () => {
+    vi.mocked(apiBlob).mockResolvedValue(new Blob(['x'], { type: 'image/jpeg' }));
+    URL.createObjectURL = vi.fn(() => 'blob:a1');
+    const url = '/api/tracking/v1/users/9/avatar?v=1';
+    const { container } = render(
+      <>
+        <Avatar user={{ id: 9, name: 'Mali S.', avatarUrl: url }} />
+        <Avatar user={{ id: 9, name: 'Mali S.', avatarUrl: url }} size="lg" />
+      </>,
+    );
+    await waitFor(() => expect(container.querySelectorAll('img')).toHaveLength(2));
+    expect(container.querySelector('img')!.getAttribute('src')).toBe('blob:a1');
+    expect(apiBlob).toHaveBeenCalledTimes(1);
+    expect(apiBlob).toHaveBeenCalledWith('/users/9/avatar?v=1');
+    // The name stays readable, and the picture is decoration next to it.
+    expect(screen.getAllByText('Mali S.')).toHaveLength(2);
+    expect(container.querySelector('img')!.getAttribute('alt')).toBe('');
+  });
+
+  it('a picture that fails to load falls back to the initials', async () => {
+    const { container } = render(<Avatar user={{ id: 3, name: 'Kai W.', avatarUrl: 'https://example.com/k.png' }} />);
+    const img = container.querySelector('img')!;
+    expect(img.getAttribute('src')).toBe('https://example.com/k.png');
+    fireEvent.error(img);
+    await waitFor(() => expect(container.querySelector('img')).toBeNull());
+    expect(screen.getByText('KW')).toBeTruthy();
+  });
+
+  it('anything that is not a web or tracking URL is ignored', () => {
+    const { container } = render(<Avatar user={{ id: 3, name: 'Kai W.', avatarUrl: 'javascript:alert(1)' }} />);
+    expect(container.querySelector('img')).toBeNull();
   });
 });

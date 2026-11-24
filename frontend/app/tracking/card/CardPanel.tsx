@@ -6,12 +6,13 @@ import { Sheet, SheetClose, SheetContent, SheetTitle } from '@/components/ui/she
 import { Skeleton } from '@/components/ui/skeleton';
 import { useArchiveCard } from '../board/mutations';
 import { detailToSummary } from '../board/board-cache';
-import { boardAccess } from '../shared/access';
-import { useBoard, useCard } from '../shared/api/queries';
+import { boardAccess, canTickCard } from '../shared/access';
+import { useBoard, useCard, useMe } from '../shared/api/queries';
 import { ApiError } from '../shared/api/client';
 import { errorMessage } from '../shared/errors';
 import { priorityLabel } from '../shared/format';
 import { useLang, useT } from '../shared/i18n';
+import { PersonLink } from '../people/PersonLink';
 import { Avatar } from '../shared/Avatar';
 import { AssigneePicker } from './AssigneePicker';
 import { Checklist } from './Checklist';
@@ -56,9 +57,14 @@ const TEXT = {
   },
 };
 
-/** Hands focus back to the card that opened the panel (its link survives the close; Radix has no trigger to restore). */
+/**
+ * Hands focus back to the card that opened the panel (its link survives the close; Radix has no trigger to restore).
+ * The last match wins: a list table opened over the board renders after it and holds the `&card=` link.
+ * Only links on screen count: the calendar keeps its phone agenda in the DOM (display: none) after the month grid.
+ */
 function focusOpener(cardId: number) {
-  document.querySelector<HTMLElement>(`a[href$="?card=${cardId}"]`)?.focus();
+  const links = [...document.querySelectorAll<HTMLElement>(`a[href$="?card=${cardId}"], a[href$="&card=${cardId}"]`)];
+  links.findLast((a) => a.getClientRects().length > 0)?.focus();
 }
 
 export function CardPanel({
@@ -79,13 +85,16 @@ export function CardPanel({
   const { lang } = useLang();
   const board = useBoard(projectId);
   const card = useCard(cardId);
+  const me = useMe();
   const archive = useArchiveCard(projectId);
-  // An archived project is read-only for everyone, like a viewer.
+  // An archived project is read-only for everyone.
   const { canEdit, canManage } = boardAccess(board.data);
   const d = card.data;
   // A deleted card or a stale ?card id answers not_found/forbidden for good: retrying cannot help.
   const gone = card.error instanceof ApiError && (card.error.code === 'not_found' || card.error.code === 'forbidden');
   const readOnly = !canEdit || !!d?.archivedAt;
+  // Admin/PM tick any card; a member only a card assigned to them.
+  const canTick = !readOnly && !!d && canTickCard(board.data, d.assigneeIds, me.data?.user?.id);
   // Names come from the board's user list (members and past assignees); anyone else shows as unknown.
   const creator = d && (board.data?.users.find((u) => u.id === d.createdBy) ?? { id: d.createdBy, name: `${t.unknown} #${d.createdBy}` });
 
@@ -196,6 +205,7 @@ export function CardPanel({
                 projectId={projectId}
                 cardId={cardId}
                 readOnly={readOnly}
+                canTick={canTick}
                 focusAdd={focusChecklist}
                 onFocusHandled={onFocusHandled}
               />
@@ -227,8 +237,12 @@ export function CardPanel({
               {creator && (
                 <div className="flex items-center gap-2 border-t pt-3 text-xs text-muted-foreground">
                   <span>{t.createdBy}</span>
-                  <Avatar user={creator} size="xs" />
-                  <span className="min-w-0 truncate text-foreground">{creator.name}</span>
+                  <PersonLink userId={creator.id} className="flex min-w-0 items-center gap-2">
+                    <Avatar user={creator} size="xs" />
+                    <span className="min-w-0 truncate text-foreground" aria-hidden>
+                      {creator.name}
+                    </span>
+                  </PersonLink>
                 </div>
               )}
               <p className="text-xs text-muted-foreground">

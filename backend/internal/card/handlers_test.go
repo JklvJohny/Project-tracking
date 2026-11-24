@@ -39,6 +39,9 @@ func (e env) handler() http.Handler {
 
 func do(h http.Handler, user int64, method, path, body string) (*httptest.ResponseRecorder, map[string]any) {
 	req := httptest.NewRequest(method, "/api/tracking/v1"+path, strings.NewReader(body))
+	if body != "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	req.Header.Set("X-User-ID", strconv.FormatInt(user, 10))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -83,7 +86,7 @@ func TestHandlers_GetCardHasDescription_BoardDoesNot(t *testing.T) {
 	if rec, _ = do(h, member, "PATCH", "/cards/"+id(cid), `{"descriptionMd":"secret body","priority":"urgent"}`); rec.Code != 200 {
 		t.Fatalf("patch = %d %s", rec.Code, rec.Body)
 	}
-	rec, body = do(h, viewer, "GET", "/cards/"+id(cid), "")
+	rec, body = do(h, member2, "GET", "/cards/"+id(cid), "")
 	d := body["data"].(map[string]any)
 	if rec.Code != 200 || d["descriptionMd"] != "secret body" || d["priority"] != "urgent" {
 		t.Fatalf("get = %d %s", rec.Code, rec.Body)

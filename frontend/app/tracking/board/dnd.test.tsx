@@ -99,14 +99,6 @@ describe('keyboard moves', () => {
     expect(writes()).toHaveLength(0);
   });
 
-  it('viewer cannot move or drag', async () => {
-    await renderAs('viewer');
-    fireEvent.keyDown(row('C10'), { key: 'ArrowDown', altKey: true });
-    expect(writes()).toHaveLength(0);
-    expect(row('C10').getAttribute('tabindex')).toBeNull();
-    expect(screen.queryByRole('button', { name: /Move list/ })).toBeNull();
-  });
-
   it('only admin and pm get list handles; Alt+ArrowRight moves a list', async () => {
     await renderAs('pm');
     fireEvent.keyDown(screen.getByRole('button', { name: /Move list L1/ }), { key: 'ArrowRight', altKey: true });

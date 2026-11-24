@@ -11,17 +11,38 @@ import (
 	"tracking-service/internal/store"
 )
 
-// Text trims s and records "required" or "too_long" (counted in runes, so
-// Thai is not penalised for multi-byte characters). It returns the trimmed text.
+// Storable reports whether PostgreSQL can store s in a text column: it must
+// be valid UTF-8 with no NUL character. JSON can carry "\u0000", and a
+// multipart form value can carry any bytes.
+func Storable(s string) bool {
+	return utf8.ValidString(s) && !strings.ContainsRune(s, 0)
+}
+
+// Text trims s and records "required", "invalid" (see Storable) or "too_long"
+// (counted in runes, so Thai is not penalised for multi-byte characters). It
+// returns the trimmed text.
 func Text(field, s string, max int, fields map[string]string) string {
 	s = strings.TrimSpace(s)
 	switch {
 	case s == "":
 		fields[field] = "required"
+	case !Storable(s):
+		fields[field] = "invalid"
 	case utf8.RuneCountInString(s) > max:
 		fields[field] = "too_long"
 	}
 	return s
+}
+
+// LongText records "invalid" or "too_long" for optional free text (a card or
+// project description), which may be empty.
+func LongText(field, s string, max int, fields map[string]string) {
+	switch {
+	case !Storable(s):
+		fields[field] = "invalid"
+	case utf8.RuneCountInString(s) > max:
+		fields[field] = "too_long"
+	}
 }
 
 // Date parses an optional YYYY-MM-DD value. A nil input means "not given" and
@@ -30,7 +51,8 @@ func Date(field string, s *string, fields map[string]string) *store.Date {
 	if s == nil {
 		return nil
 	}
-	if _, err := time.Parse("2006-01-02", *s); err != nil {
+	// Year 0000 parses in Go but is not a PostgreSQL date.
+	if t, err := time.Parse("2006-01-02", *s); err != nil || t.Year() < 1 {
 		fields[field] = "invalid_date"
 		return nil
 	}

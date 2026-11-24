@@ -56,6 +56,7 @@ function ItemRow({
   index,
   count,
   readOnly,
+  canTick,
   onToggle,
   onRename,
   onDelete,
@@ -65,6 +66,7 @@ function ItemRow({
   index: number;
   count: number;
   readOnly: boolean;
+  canTick: boolean;
   onToggle: (done: boolean) => void;
   onRename: (text: string) => Promise<boolean>;
   onDelete: () => void;
@@ -102,10 +104,10 @@ function ItemRow({
   };
 
   return (
-    <li data-item={item.id} className="flex items-center gap-2 py-1" onKeyDown={readOnly ? undefined : onKeyDown}>
+    <li data-item={item.id} className="group/item flex items-center gap-2 py-1" onKeyDown={readOnly ? undefined : onKeyDown}>
       <Checkbox
         checked={item.isDone}
-        disabled={readOnly}
+        disabled={readOnly || !canTick}
         aria-label={item.text}
         onCheckedChange={(v) => onToggle(v === true)}
       />
@@ -139,6 +141,7 @@ function ItemRow({
               item.isDone ? 'text-muted-foreground line-through' : ''
             }`}
           />
+          <span className="flex items-center opacity-0 transition-opacity group-hover/item:opacity-100 group-focus-within/item:opacity-100 [@media(hover:none)]:opacity-100">
           <Button variant="ghost" size="icon-xs" aria-label={t.up(item.text)} title={t.up(item.text)} disabled={index === 0} onClick={() => onMove(-1)}>
             <ArrowUp aria-hidden />
           </Button>
@@ -148,6 +151,7 @@ function ItemRow({
           <Button variant="ghost" size="icon-xs" aria-label={t.del(item.text)} title={t.del(item.text)} onClick={onDelete}>
             <Trash2 aria-hidden />
           </Button>
+          </span>
         </>
       )}
     </li>
@@ -158,12 +162,15 @@ export function Checklist({
   projectId,
   cardId,
   readOnly,
+  canTick = !readOnly,
   focusAdd = false,
   onFocusHandled,
 }: {
   projectId: number;
   cardId: number;
   readOnly: boolean;
+  /** May tick items (admin/PM, or a member assigned to the card). Text edits follow `readOnly` only. */
+  canTick?: boolean;
   /** Focus the add-item input once on mount (the card preview's "+" link). */
   focusAdd?: boolean;
   onFocusHandled?: () => void;
@@ -248,6 +255,7 @@ export function Checklist({
             index={i}
             count={items.length}
             readOnly={readOnly}
+            canTick={canTick}
             onToggle={(v) => void save(() => cl.update.mutateAsync({ id: item.id, isDone: v }))}
             onRename={(text) => save(() => cl.update.mutateAsync({ id: item.id, text }))}
             onDelete={() => void remove(i)}
@@ -274,7 +282,7 @@ export function Checklist({
               }
             }}
           />
-          <p className="text-xs text-muted-foreground">{t.hint}</p>
+          <p className="sr-only">{t.hint}</p>
           <SaveStatus state={state} />
         </>
       )}

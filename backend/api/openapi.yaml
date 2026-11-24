@@ -11,7 +11,11 @@ info:
     Writes are all-or-nothing and return the updated entity. Ids are int64 (JSON numbers).
     Dates are `YYYY-MM-DD`, timestamps are RFC 3339 in UTC (`...Z`).
     An archived project is read-only: every write to it or to anything in it answers 409 with
-    error `project_archived`, except `POST /projects/{projectID}/restore`.
+    error `project_archived`, except `POST /projects/{projectID}/restore`. An archived list is
+    read-only too, with the cards in it (409).
+    A JSON request body must be sent as `Content-Type: application/json` (otherwise 400). A write a
+    browser marks `Sec-Fetch-Site: cross-site` answers 403 `forbidden`.
+    Free text may not contain a NUL character or invalid UTF-8 (`fields.<field>=invalid`).
 servers:
   - url: /api/tracking/v1
 security:
@@ -27,6 +31,9 @@ tags:
   - name: checklist
   - name: comments
   - name: documents
+  - name: dashboard
+  - name: team
+  - name: profile
   - name: ops
 paths:
   /healthz:
@@ -47,6 +54,208 @@ paths:
       responses:
         '200': { $ref: '#/components/responses/Me' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+  /me/tasks:
+    get:
+      tags: [me]
+      operationId: getMyTasks
+      summary: The caller's open cards (completedAt not set) across the non-archived projects they can see. Active cards in active lists only. Earliest dueDate first, cards without a dueDate last. Today is the Asia/Bangkok date.
+      responses:
+        '200': { $ref: '#/components/responses/MyTasks' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /me/avatar:
+    put:
+      tags: [profile]
+      operationId: setMyAvatar
+      summary: Upload the caller's profile picture (multipart field `file`). JPEG, PNG or WebP up to 5 MiB and 40 megapixels; anything else is `file` = `unsupported_type` / `too_large` / `required`. The server crops it to the centre square and stores a 256x256 JPEG redrawn from the pixels (EXIF and other embedded data are dropped). Every tracking view then carries the new avatarUrl in place of the user-service one.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '200': { $ref: '#/components/responses/AvatarUrl' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    delete:
+      tags: [profile]
+      operationId: deleteMyAvatar
+      summary: Remove the caller's tracking picture; the user-service avatar (returned, possibly empty) shows again.
+      responses:
+        '200': { $ref: '#/components/responses/AvatarUrl' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /users/{userID}/avatar:
+    parameters:
+      - $ref: '#/components/parameters/userID'
+    get:
+      tags: [profile]
+      operationId: getAvatar
+      summary: A tracking profile picture as image/jpeg, for any signed-in user. The URL in avatarUrl carries ?v=<version>, so responses are cacheable for good (private).
+      parameters:
+        - name: v
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        '200':
+          description: The picture.
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /people/{userID}:
+    parameters:
+      - $ref: '#/components/parameters/userID'
+    get:
+      tags: [team]
+      operationId: getPerson
+      summary: One person's page. Admins and anyone who is PM of a project may open anyone's, and see every live project and open card of that person, also in projects they are not in; everyone else only their own (403). Counts follow GET /team.
+      responses:
+        '200': { $ref: '#/components/responses/Person' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /team:
+    get:
+      tags: [team]
+      operationId: getTeam
+      summary: Everyone in the department (from user-service) by name, with their skills and open-work counts across every live project (counts only, so projects the caller cannot see are not revealed). Open = assigned, not completed, in an active list of a non-archived project; overdue = dueDate before today; dueSoon = dueDate from today to 6 days ahead. Today is the Asia/Bangkok date.
+      responses:
+        '200': { $ref: '#/components/responses/Team' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /team/skills:
+    post:
+      tags: [team]
+      operationId: addSkill
+      summary: Name a skill for the department (the Team page offers and filters on it even before anyone has it) and optionally give it to people, in one transaction. A name that exists ignoring case is reused with its first spelling; people who already have it are left alone. At most 500 named skills (fields.name=too_many) and 500 people per request (fields.userIds=too_many). Anyone signed in. Returns the Team view.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              additionalProperties: false
+              properties:
+                name: { type: string, maxLength: 40, description: Trimmed with inner spaces squeezed; required. }
+                userIds: { type: array, items: { type: integer, format: int64 }, description: People to give it to. Unknown ids are fields.userIds=unknown; anyone already at 30 skills is fields.userIds=too_many. }
+                categoryId: { type: [integer, 'null'], format: int64, description: Category to put it in (an existing skill moves there). Unknown is fields.categoryId=unknown. }
+      responses:
+        '200': { $ref: '#/components/responses/Team' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    delete:
+      tags: [team]
+      operationId: removeSkill
+      summary: Take a skill off the department list (matched ignoring case). People who list it keep it. The name is a query parameter because skills such as CI/CD contain a slash.
+      parameters:
+        - name: name
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/Empty' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /team/skills/category:
+    put:
+      tags: [team]
+      operationId: setSkillCategory
+      summary: Put a skill (matched ignoring case) in one category, or none with categoryId null. A skill only on people's cards joins the department list under its first spelling. Anyone signed in. Returns the Team view.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, categoryId]
+              additionalProperties: false
+              properties:
+                name: { type: string, maxLength: 40 }
+                categoryId: { type: [integer, 'null'], format: int64, description: Unknown is fields.categoryId=unknown. }
+      responses:
+        '200': { $ref: '#/components/responses/Team' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /team/categories:
+    post:
+      tags: [team]
+      operationId: createSkillCategory
+      summary: Add a skill category. Names are trimmed with inner spaces squeezed, at most 40 characters, unique ignoring case (fields.name=exists); at most 50 categories (fields.name=too_many). Anyone signed in. Returns the Team view.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CategoryName' }
+      responses:
+        '200': { $ref: '#/components/responses/Team' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /team/categories/{categoryID}:
+    parameters:
+      - name: categoryID
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    patch:
+      tags: [team]
+      operationId: renameSkillCategory
+      summary: Rename a skill category, with the same rules as create; changing only the case is allowed. Returns the Team view.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CategoryName' }
+      responses:
+        '200': { $ref: '#/components/responses/Team' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    delete:
+      tags: [team]
+      operationId: deleteSkillCategory
+      summary: Delete a skill category. Its skills stay, uncategorised. Returns the Team view.
+      responses:
+        '200': { $ref: '#/components/responses/Team' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /team/{userID}/skills:
+    parameters:
+      - $ref: '#/components/parameters/userID'
+    put:
+      tags: [team]
+      operationId: setSkills
+      summary: Replace a person's skills. Any signed-in user may edit anyone's. Each tag is trimmed with inner spaces squeezed; blanks are dropped and case-insensitive duplicates keep the first spelling. At most 30 tags of 40 characters; an empty list clears them.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [skills]
+              additionalProperties: false
+              properties:
+                skills: { type: array, maxItems: 30, items: { type: string, maxLength: 40 } }
+      responses:
+        '200': { $ref: '#/components/responses/Skills' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
   /users:
     get:
       tags: [me]
@@ -547,7 +756,7 @@ paths:
     post:
       tags: [checklist]
       operationId: addChecklistItem
-      summary: Append an item. 409 on an archived card.
+      summary: Append an item. 409 on an archived card. At most 100 items per card (fields.text=too_many).
       requestBody:
         required: true
         content:
@@ -568,6 +777,10 @@ paths:
       tags: [checklist]
       operationId: updateChecklistItem
       summary: Edit text and/or tick the item.
+      description: >-
+        Editing the text needs edit rights on the card (admin, pm, member). Ticking or unticking (`isDone`) is
+        allowed for admin and pm on any card, and for a member only on cards assigned to them; otherwise 403
+        forbidden.
       requestBody:
         required: true
         content:
@@ -625,7 +838,7 @@ paths:
     post:
       tags: [comments]
       operationId: addComment
-      summary: Add a comment. Mentions are written `@[<userId>]` in the body; mentioned project members are notified. Viewers get 403.
+      summary: Add a comment. Mentions are written `@[<userId>]` in the body; mentioned project members are notified. At most 10 live comments per card; the 11th is 422 with body too_many.
       requestBody:
         required: true
         content:
@@ -645,7 +858,7 @@ paths:
     patch:
       tags: [comments]
       operationId: editComment
-      summary: Edit your own comment (sets editedAt). Member, PM or admin; a viewer gets 403 even on their own comment.
+      summary: Edit your own comment (sets editedAt).
       requestBody:
         required: true
         content:
@@ -662,7 +875,7 @@ paths:
     delete:
       tags: [comments]
       operationId: deleteComment
-      summary: Soft-delete. Authors delete their own; PM or admin delete any. A viewer gets 403 even on their own comment.
+      summary: Soft-delete. Authors delete their own; PM or admin delete any.
       responses:
         '200': { $ref: '#/components/responses/Empty' }
         '400': { $ref: '#/components/responses/BadRequest' }
@@ -685,7 +898,7 @@ paths:
     post:
       tags: [documents]
       operationId: uploadDocument
-      summary: Upload a PDF (admin, pm or member; a viewer gets 403). Max 20 MiB, and the content must start with `%PDF-` whatever the client claims. Field `file`; extra parts are ignored.
+      summary: Upload a PDF (admin, pm, member, or someone the folder is shared with). Max 20 MiB, and the content must start with `%PDF-` whatever the client claims. Field `file`; extra parts are ignored.
       requestBody:
         required: true
         content:
@@ -721,7 +934,7 @@ paths:
     delete:
       tags: [documents]
       operationId: deleteDocument
-      summary: Soft-delete (the file is kept so restore works). The uploader, a pm or an admin; another member or a viewer gets 403.
+      summary: Soft-delete (the file is kept so restore works). The uploader, a pm or an admin; another member gets 403.
       responses:
         '200': { $ref: '#/components/responses/Empty' }
         '400': { $ref: '#/components/responses/BadRequest' }
@@ -743,6 +956,146 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+  /report-folders:
+    get:
+      tags: [documents]
+      operationId: listReportFolders
+      summary: "The report folders the caller may open, by project id: every project's for an admin; otherwise the caller's projects and the folders shared with them."
+      responses:
+        '200': { $ref: '#/components/responses/FolderList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /projects/{projectID}/folder-shares:
+    parameters:
+      - $ref: '#/components/parameters/projectID'
+    get:
+      tags: [documents]
+      operationId: listFolderShares
+      summary: Who outside the project the report folder is shared with, oldest first. Admin, pm or member; a shared user gets 403, anyone else 404.
+      responses:
+        '200': { $ref: '#/components/responses/FolderShareList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /projects/{projectID}/folder-shares/{userID}:
+    parameters:
+      - $ref: '#/components/parameters/projectID'
+      - $ref: '#/components/parameters/userID'
+    put:
+      tags: [documents]
+      operationId: shareFolder
+      summary: "Share the report folder with someone outside the project: they may list, download and upload reports and delete their own, nothing else in the project. Admin, pm or member. Sharing again returns the existing share. A project member is 422 (userId: already_member); an unknown user is 404; an archived project is 409."
+      responses:
+        '200': { $ref: '#/components/responses/FolderShare' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    delete:
+      tags: [documents]
+      operationId: unshareFolder
+      summary: Stop sharing the folder with that user (their uploads stay). Same permission as sharing; removing a share that does not exist is a no-op.
+      responses:
+        '200': { $ref: '#/components/responses/Empty' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /report-templates:
+    get:
+      tags: [templates]
+      operationId: listReportTemplates
+      summary: Every non-deleted report template, ordered by category, then name (case-insensitive). Templates are department-wide, not per project; any signed-in user may read them.
+      responses:
+        '200': { $ref: '#/components/responses/ReportTemplateList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [templates]
+      operationId: uploadReportTemplate
+      summary: Upload a template (any signed-in user). `.docx`, `.xlsx`, `.pptx`, the legacy `.doc`, `.xls`, `.ppt`, or `.pdf`, max 20 MiB; the content must match the extension (`PK` zip header for Office, the OLE2 header `D0 CF 11 E0` for legacy Office, `%PDF-` for PDF), else `file` = `unsupported_type`. Send the text fields BEFORE `file`; parts after the file are not read. An empty `name` defaults to the file name without its extension.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [category, file]
+              properties:
+                category: { type: string, maxLength: 60, description: Free text; the UI groups by it. Trimmed; required. }
+                name: { type: string, maxLength: 120 }
+                description: { type: string, maxLength: 500 }
+                file: { type: string, format: binary }
+      responses:
+        '201': { $ref: '#/components/responses/ReportTemplate' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /report-templates/{templateID}:
+    parameters:
+      - $ref: '#/components/parameters/templateID'
+    patch:
+      tags: [templates]
+      operationId: updateReportTemplate
+      summary: Edit category, name or description (any signed-in user). The file is not replaceable here; upload a new template instead. Same rules as upload; a deleted template is 404.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReportTemplatePatch' }
+      responses:
+        '200': { $ref: '#/components/responses/ReportTemplate' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    delete:
+      tags: [templates]
+      operationId: deleteReportTemplate
+      summary: Soft-delete (any signed-in user); the file is kept so restore works.
+      responses:
+        '200': { $ref: '#/components/responses/Empty' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /report-templates/{templateID}/file:
+    parameters:
+      - $ref: '#/components/parameters/templateID'
+    get:
+      tags: [templates]
+      operationId: downloadReportTemplate
+      summary: Stream the file as an attachment with its own MIME type. A deleted template is 404.
+      responses:
+        '200': { $ref: '#/components/responses/ReportTemplateFile' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /report-templates/{templateID}/restore:
+    parameters:
+      - $ref: '#/components/parameters/templateID'
+    post:
+      tags: [templates]
+      operationId: restoreReportTemplate
+      summary: Undo a delete (any signed-in user); restoring a live template is a no-op.
+      responses:
+        '200': { $ref: '#/components/responses/ReportTemplate' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /dashboard:
+    get:
+      tags: [dashboard]
+      operationId: getDashboard
+      summary: Open-work overview across the projects the caller can see (an admin sees all non-archived projects). Counts only active cards in active lists of non-archived projects. `projectId` narrows it to one project; a project the caller cannot see, or an archived one, is 404. Today is the Asia/Bangkok date.
+      parameters:
+        - { name: projectId, in: query, required: false, schema: { type: integer, format: int64, minimum: 1 } }
+      responses:
+        '200': { $ref: '#/components/responses/Dashboard' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
 components:
   securitySchemes:
     userHeader:
@@ -759,6 +1112,7 @@ components:
     itemID: { name: itemID, in: path, required: true, schema: { type: integer, format: int64, minimum: 1 } }
     commentID: { name: commentID, in: path, required: true, schema: { type: integer, format: int64, minimum: 1 } }
     documentID: { name: documentID, in: path, required: true, schema: { type: integer, format: int64, minimum: 1 } }
+    templateID: { name: templateID, in: path, required: true, schema: { type: integer, format: int64, minimum: 1 } }
   responses:
     Health:
       description: Service is up.
@@ -910,6 +1264,74 @@ components:
             properties:
               success: { const: true }
               data: { $ref: '#/components/schemas/Comment' }
+    Dashboard:
+      description: The dashboard.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [success, data]
+            properties:
+              success: { const: true }
+              data: { $ref: '#/components/schemas/Dashboard' }
+    Team:
+      description: The department with skills and workload.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [success, data]
+            properties:
+              success: { const: true }
+              data: { $ref: '#/components/schemas/Team' }
+    AvatarUrl:
+      description: The avatar URL now in effect.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [success, data]
+            properties:
+              success: { const: true }
+              data:
+                type: object
+                required: [avatarUrl]
+                properties:
+                  avatarUrl: { type: string, description: Empty when the person has no picture anywhere. }
+    Person:
+      description: The person's page.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [success, data]
+            properties:
+              success: { const: true }
+              data: { $ref: '#/components/schemas/PersonPage' }
+    Skills:
+      description: The person's skills as saved.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [success, data]
+            properties:
+              success: { const: true }
+              data:
+                type: object
+                required: [skills]
+                properties:
+                  skills: { type: array, items: { type: string } }
+    MyTasks:
+      description: The caller's open tasks.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [success, data]
+            properties:
+              success: { const: true }
+              data: { $ref: '#/components/schemas/MyTasks' }
     DocumentList:
       description: Non-deleted documents, newest first.
       content:
@@ -930,6 +1352,64 @@ components:
             properties:
               success: { const: true }
               data: { $ref: '#/components/schemas/Document' }
+    FolderList:
+      description: Report folders by project id.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [success, data]
+            properties:
+              success: { const: true }
+              data: { type: array, items: { $ref: '#/components/schemas/Folder' } }
+    FolderShareList:
+      description: The folder's shares, oldest first.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [success, data]
+            properties:
+              success: { const: true }
+              data: { type: array, items: { $ref: '#/components/schemas/FolderShare' } }
+    FolderShare:
+      description: The share.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [success, data]
+            properties:
+              success: { const: true }
+              data: { $ref: '#/components/schemas/FolderShare' }
+    ReportTemplateList:
+      description: Non-deleted templates by category, then name.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [success, data]
+            properties:
+              success: { const: true }
+              data: { type: array, items: { $ref: '#/components/schemas/ReportTemplate' } }
+    ReportTemplate:
+      description: The template.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [success, data]
+            properties:
+              success: { const: true }
+              data: { $ref: '#/components/schemas/ReportTemplate' }
+    ReportTemplateFile:
+      description: The file bytes (not the JSON envelope), with its own Content-Type, `Content-Disposition attachment; filename*=UTF-8''<name>` and `X-Content-Type-Options nosniff`.
+      headers:
+        Content-Disposition: { schema: { type: string } }
+        X-Content-Type-Options: { schema: { type: string, const: nosniff } }
+      content:
+        application/octet-stream:
+          schema: { type: string, format: binary }
     DocumentFile:
       description: The PDF bytes, not the JSON envelope. Sent with `Content-Disposition attachment; filename*=UTF-8''<name>` and `X-Content-Type-Options nosniff`.
       headers:
@@ -999,11 +1479,11 @@ components:
       enum: [active, on_hold, done]
     ProjectRole:
       type: string
-      enum: [pm, member, viewer]
+      enum: [pm, member]
     MyRole:
       description: The caller's role in this project; admin for system admins who are not members.
       type: string
-      enum: [admin, pm, member, viewer]
+      enum: [admin, pm, member]
     Priority:
       type: string
       enum: [low, medium, high, urgent]
@@ -1019,11 +1499,12 @@ components:
         avatarUrl: { type: string }
     Me:
       type: object
-      required: [user, isAdmin, canCreateProject]
+      required: [user, isAdmin, canCreateProject, canViewPeople]
       properties:
         user: { $ref: '#/components/schemas/User' }
         isAdmin: { type: boolean }
         canCreateProject: { type: boolean, description: True for system admins and managers. }
+        canViewPeople: { type: boolean, description: 'True for system admins and anyone who is PM of a project: they may open any person page (GET /people/{userID}).' }
     Project:
       type: object
       required: [id, name, description, ownerId, status, startDate, endDate, createdAt, updatedAt, archivedAt, myRole]
@@ -1290,6 +1771,195 @@ components:
       properties:
         text: { type: string, minLength: 1, maxLength: 500 }
         isDone: { type: boolean }
+    Dashboard:
+      type: object
+      description: |
+        Status rules match the Timeline. done is completedAt set; overdue is not done and dueDate before today; in progress is not done, not overdue and startDate on or before today; otherwise not started. Open means not done.
+      required: [asOf, totals, byProject, workload, byPriority, deadlines]
+      properties:
+        asOf: { type: string, format: date, description: Today in Asia/Bangkok. }
+        totals:
+          type: object
+          required: [total, done, open, inProgress, notStarted, overdue, dueSoon, unassigned]
+          properties:
+            total: { type: integer }
+            done: { type: integer }
+            open: { type: integer }
+            inProgress: { type: integer }
+            notStarted: { type: integer }
+            overdue: { type: integer }
+            dueSoon: { type: integer, description: Open cards due today through today plus 7 days. }
+            unassigned: { type: integer, description: Open cards with no assignee. }
+        byProject:
+          type: array
+          description: Every scoped project by name; a project with no active cards has all zeros.
+          items:
+            type: object
+            required: [id, name, done, inProgress, notStarted, overdue, total]
+            properties:
+              id: { type: integer, format: int64 }
+              name: { type: string }
+              done: { type: integer }
+              inProgress: { type: integer }
+              notStarted: { type: integer }
+              overdue: { type: integer }
+              total: { type: integer }
+        workload:
+          type: array
+          description: Every member of the scoped projects with their open cards, most open first, then by name. Members with no open cards are included.
+          items:
+            type: object
+            required: [user, inProgress, notStarted, overdue, open]
+            properties:
+              user: { $ref: '#/components/schemas/User' }
+              inProgress: { type: integer }
+              notStarted: { type: integer }
+              overdue: { type: integer }
+              open: { type: integer }
+        byPriority:
+          type: array
+          description: Open cards per priority; all four are always present, urgent first.
+          items:
+            type: object
+            required: [priority, open]
+            properties:
+              priority: { $ref: '#/components/schemas/Priority' }
+              open: { type: integer }
+        deadlines:
+          type: array
+          description: Open cards that are overdue or due within 14 days, soonest first, at most 20.
+          items:
+            type: object
+            required: [cardId, projectId, projectName, listName, title, dueDate, daysLeft, assignees]
+            properties:
+              cardId: { type: integer, format: int64 }
+              projectId: { type: integer, format: int64 }
+              projectName: { type: string }
+              listName: { type: string }
+              title: { type: string }
+              dueDate: { type: string, format: date }
+              daysLeft: { type: integer, description: Days from today to dueDate; negative when overdue. }
+              assignees: { type: array, items: { $ref: '#/components/schemas/User' } }
+    Team:
+      type: object
+      required: [asOf, people, catalog, categories]
+      properties:
+        asOf: { type: string, format: date, description: Today in Asia/Bangkok. }
+        people:
+          type: array
+          items: { $ref: '#/components/schemas/TeamPerson' }
+        catalog:
+          type: array
+          description: Skills the department has named or put in a category, including ones nobody lists yet, by name ignoring case. A skill only on people's cards and never categorised is not listed (it is uncategorised).
+          items:
+            type: object
+            required: [name, categoryId]
+            properties:
+              name: { type: string }
+              categoryId: { type: [integer, 'null'], format: int64 }
+        categories:
+          type: array
+          description: In the order they were made.
+          items: { $ref: '#/components/schemas/SkillCategory' }
+    SkillCategory:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+    CategoryName:
+      type: object
+      required: [name]
+      additionalProperties: false
+      properties:
+        name: { type: string, maxLength: 40 }
+    TeamPerson:
+      type: object
+      required: [userId, name, avatarUrl, skills, open, overdue, dueSoon]
+      properties:
+        userId: { type: integer, format: int64 }
+        name: { type: string }
+        avatarUrl: { type: string }
+        skills: { type: array, items: { type: string }, description: In the order saved. }
+        open: { type: integer, minimum: 0 }
+        overdue: { type: integer, minimum: 0 }
+        dueSoon: { type: integer, minimum: 0 }
+    MyTasks:
+      type: object
+      required: [asOf, tasks]
+      properties:
+        asOf: { type: string, format: date, description: Today in Asia/Bangkok. }
+        tasks:
+          type: array
+          items: { $ref: '#/components/schemas/Task' }
+    Task:
+      type: object
+      description: One open card assigned to a person.
+      required: [cardId, projectId, projectName, listName, title, priority, startDate, dueDate, daysLeft, checklistTotal, checklistDone, assignees]
+      properties:
+        cardId: { type: integer, format: int64 }
+        projectId: { type: integer, format: int64 }
+        projectName: { type: string }
+        listName: { type: string }
+        title: { type: string }
+        priority: { $ref: '#/components/schemas/Priority' }
+        startDate: { type: [string, 'null'], format: date }
+        dueDate: { type: [string, 'null'], format: date }
+        daysLeft: { type: [integer, 'null'], description: Days from today to dueDate; negative when overdue; null without a dueDate. }
+        checklistTotal: { type: integer }
+        checklistDone: { type: integer }
+        assignees: { type: array, description: Everyone on the card, the person included, by user id., items: { $ref: '#/components/schemas/User' } }
+    PersonPage:
+      type: object
+      required: [asOf, person, projects, tasks]
+      properties:
+        asOf: { type: string, format: date, description: Today in Asia/Bangkok. }
+        person: { $ref: '#/components/schemas/TeamPerson' }
+        projects:
+          type: array
+          description: Live projects the person belongs to, by name, including ones the caller is not in.
+          items:
+            type: object
+            required: [id, name, status, role, open]
+            properties:
+              id: { type: integer, format: int64 }
+              name: { type: string }
+              status: { $ref: '#/components/schemas/ProjectStatus' }
+              role: { $ref: '#/components/schemas/ProjectRole' }
+              open: { type: integer, minimum: 0, description: Open cards of this project assigned to the person. }
+        tasks:
+          type: array
+          description: Every open card assigned to the person in those projects, earliest due date first.
+          items: { $ref: '#/components/schemas/Task' }
+    ReportTemplate:
+      type: object
+      description: A department-wide report template. The storage key is never sent.
+      required: [id, category, name, description, filename, mimeType, sizeBytes, uploadedBy, uploadedByName, createdAt, updatedAt]
+      properties:
+        id: { type: integer, format: int64 }
+        category: { type: string }
+        name: { type: string }
+        description: { type: string }
+        filename: { type: string }
+        mimeType:
+          type: string
+          enum:
+            - application/pdf
+            - application/vnd.openxmlformats-officedocument.wordprocessingml.document
+            - application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+            - application/vnd.openxmlformats-officedocument.presentationml.presentation
+        sizeBytes: { type: integer, format: int64 }
+        uploadedBy: { type: integer, format: int64 }
+        uploadedByName: { type: string, description: Display name from the user cache; empty when the uploader is not cached. }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ReportTemplatePatch:
+      type: object
+      additionalProperties: false
+      properties:
+        category: { type: string, maxLength: 60 }
+        name: { type: string, maxLength: 120 }
+        description: { type: string, maxLength: 500 }
     Document:
       type: object
       description: A project report. The storage key is never sent.
@@ -1302,6 +1972,28 @@ components:
         sizeBytes: { type: integer, format: int64 }
         uploadedBy: { type: integer, format: int64 }
         uploadedByName: { type: string, description: Display name from the user cache; empty when the uploader is not cached. }
+        createdAt: { type: string, format: date-time }
+    Folder:
+      type: object
+      description: A project's report folder as the caller sees it.
+      required: [id, name, archivedAt, documentCount, access, canUpload, canShare, canManage]
+      properties:
+        id: { type: integer, format: int64, description: The project id. }
+        name: { type: string }
+        archivedAt: { type: [string, 'null'], format: date-time }
+        documentCount: { type: integer, description: Reports not deleted. }
+        access: { type: string, enum: [admin, pm, member, shared], description: "The caller's project role, or shared when they are outside the project and the folder is shared with them." }
+        canUpload: { type: boolean, description: False in an archived project. }
+        canShare: { type: boolean, description: Admin, pm or member, in a live project. }
+        canManage: { type: boolean, description: "Delete anyone's report (admin or pm); whoever can upload deletes their own." }
+    FolderShare:
+      type: object
+      required: [userId, name, avatarUrl, sharedBy, createdAt]
+      properties:
+        userId: { type: integer, format: int64 }
+        name: { type: string, description: Empty when user-service does not know the user any more. }
+        avatarUrl: { type: string }
+        sharedBy: { type: integer, format: int64 }
         createdAt: { type: string, format: date-time }
     CommentInput:
       type: object

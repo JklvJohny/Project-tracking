@@ -172,7 +172,7 @@ export function CommentEditor({
             {t.cancel}
           </Button>
         )}
-        <span className="text-xs text-muted-foreground">{t.hint}</span>
+        <span className="sr-only">{t.hint}</span>
         <span className="ml-auto" />
         <SaveStatus state={state} />
       </div>

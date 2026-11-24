@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"mime"
 	"net/http"
 
 	"tracking-service/internal/apperr"
@@ -64,7 +65,13 @@ func Fail(w http.ResponseWriter, r *http.Request, err error) {
 }
 
 // Decode reads one JSON object, rejecting unknown fields and oversized bodies.
+// The body must be declared as JSON: an HTML form on another site can post
+// text that happens to parse as JSON, but it cannot set this Content-Type
+// without a CORS preflight, which the service never grants.
 func Decode(r *http.Request, dst any) error {
+	if mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type")); err != nil || mt != "application/json" {
+		return apperr.BadRequest("Content-Type must be application/json")
+	}
 	dec := json.NewDecoder(http.MaxBytesReader(nil, r.Body, maxBody))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(dst); err != nil {

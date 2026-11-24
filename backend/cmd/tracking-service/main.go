@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -19,11 +21,17 @@ import (
 	"tracking-service/internal/card"
 	"tracking-service/internal/clock"
 	"tracking-service/internal/config"
+	"tracking-service/internal/dashboard"
 	"tracking-service/internal/document"
 	"tracking-service/internal/events"
 	"tracking-service/internal/httpx"
+	"tracking-service/internal/profile"
 	"tracking-service/internal/project"
+	"tracking-service/internal/seed"
+	"tracking-service/internal/store"
 	"tracking-service/internal/store/memory"
+	"tracking-service/internal/store/postgres"
+	"tracking-service/internal/team"
 	"tracking-service/internal/users"
 )
 
@@ -35,6 +43,9 @@ func main() {
 }
 
 func run() error {
+	if err := config.LoadDotEnv(".env.local"); err != nil {
+		return err
+	}
 	cfg, err := config.Load()
 	if err != nil {
 		return err
@@ -47,10 +58,20 @@ func run() error {
 	} else {
 		log.Fatal("no production authenticator wired")
 	}
-	st := memory.New(clock.UTC)
-	userProvider := users.NewStub()
-	if cfg.Env == "local" {
-		if err := memory.Seed(st, userProvider, cfg.SeedLarge); err != nil {
+	st, seedable, closeStore, err := openStore(cfg)
+	if err != nil {
+		return err
+	}
+	defer closeStore()
+	// Every service sees tracking avatars in place of user-service ones; profile keeps the raw provider.
+	rawUsers := users.NewStub()
+	avatars := profile.NewIndex()
+	if err := avatars.Load(context.Background(), st); err != nil {
+		return err
+	}
+	userProvider := avatars.Wrap(rawUsers)
+	if cfg.Env == "local" && seedable != nil {
+		if err := seed.Seed(seedable, clock.UTC, userProvider, cfg.SeedLarge); err != nil {
 			return err
 		}
 	}
@@ -63,7 +84,10 @@ func run() error {
 		return err
 	}
 	docs := document.New(st, blobs, userProvider, clock.UTC)
-	if cfg.Env == "local" {
+	dash := dashboard.New(st, clock.UTC)
+	teams := team.New(st, userProvider, clock.UTC)
+	profiles := profile.New(st, blobs, rawUsers, avatars, clock.UTC)
+	if cfg.Env == "local" && seedable != nil {
 		if err := seedReports(docs); err != nil {
 			return err
 		}
@@ -71,7 +95,7 @@ func run() error {
 	// Later modules mount in the same group.
 
 	srv := &http.Server{
-		Addr: ":" + cfg.Port,
+		Addr: net.JoinHostPort(cfg.Host, cfg.Port),
 		Handler: httpx.NewRouter(func(r chi.Router) {
 			r.Group(func(r chi.Router) {
 				r.Use(auth.Middleware(authn))
@@ -79,9 +103,18 @@ func run() error {
 				board.Mount(r, boards)
 				card.Mount(r, cards)
 				document.Mount(r, docs)
+				dashboard.Mount(r, dash)
+				team.Mount(r, teams)
+				profile.Mount(r, profiles)
 			})
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
+		// Whole-request limits, so a client that sends or reads very slowly
+		// cannot hold a connection (and a 20 MB upload's temp file) forever.
+		// Five minutes still lets a 20 MB report through a slow link.
+		ReadTimeout:  5 * time.Minute,
+		WriteTimeout: 5 * time.Minute,
+		IdleTimeout:  2 * time.Minute,
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -89,7 +122,7 @@ func run() error {
 	go refreshUserCache(ctx, projects)
 	errc := make(chan error, 1)
 	go func() { errc <- srv.ListenAndServe() }()
-	slog.Info("listening", "port", cfg.Port, "env", cfg.Env)
+	slog.Info("listening", "addr", srv.Addr, "env", cfg.Env)
 
 	select {
 	case err := <-errc:
@@ -102,6 +135,38 @@ func run() error {
 		return err
 	}
 	return nil
+}
+
+// openStore picks PostgreSQL when DATABASE_URL is set (bringing its schema up
+// to date first) and the memory store otherwise. seedable is the store to fill
+// with sample data, or nil when it already holds data: a database is seeded
+// only while it has no project, so a restart never adds a second copy.
+func openStore(cfg config.Config) (st store.Store, seedable seed.Target, closeFn func(), err error) {
+	if cfg.DatabaseURL == "" {
+		m := memory.New(clock.UTC)
+		slog.Warn("no DATABASE_URL: using the in-memory store, data is lost on restart")
+		return m, m, func() {}, nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	pg, err := postgres.Open(ctx, cfg.DatabaseURL, clock.UTC)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if err := pg.Migrate(ctx); err != nil {
+		pg.Close()
+		return nil, nil, nil, fmt.Errorf("migrate: %w", err)
+	}
+	empty, err := pg.Empty(ctx)
+	if err != nil {
+		pg.Close()
+		return nil, nil, nil, err
+	}
+	slog.Info("using PostgreSQL", "seed", empty && cfg.Env == "local")
+	if empty {
+		return pg, pg, pg.Close, nil
+	}
+	return pg, nil, pg.Close, nil
 }
 
 // refreshUserCache keeps names in user_cache from going stale; it stops when

@@ -32,9 +32,15 @@ type data struct {
 	checklist     map[int64]store.ChecklistItem
 	comments      map[int64]store.Comment
 	documents     map[int64]store.Document
+	templates     map[int64]store.ReportTemplate
 	mentions      map[mentionKey]store.CommentMention
 	userRoles     map[int64]store.UserRole
 	userCache     map[int64]store.CachedUser
+	skills        map[int64][]string
+	catalog       map[string]store.CatalogSkill // by lower(name)
+	categories    map[int64]store.SkillCategory
+	avatars       map[int64]store.UserAvatar
+	shares        map[memberKey]store.FolderShare
 	activity      []store.ActivityEvent
 
 	// seq[table] is the last id issued for that table.
@@ -54,9 +60,15 @@ func newData() *data {
 		checklist:     map[int64]store.ChecklistItem{},
 		comments:      map[int64]store.Comment{},
 		documents:     map[int64]store.Document{},
+		templates:     map[int64]store.ReportTemplate{},
 		mentions:      map[mentionKey]store.CommentMention{},
 		userRoles:     map[int64]store.UserRole{},
 		userCache:     map[int64]store.CachedUser{},
+		skills:        map[int64][]string{},
+		catalog:       map[string]store.CatalogSkill{},
+		categories:    map[int64]store.SkillCategory{},
+		avatars:       map[int64]store.UserAvatar{},
+		shares:        map[memberKey]store.FolderShare{},
 		seq:           map[string]int64{},
 	}
 }
@@ -91,6 +103,11 @@ func (s *Store) repos(d *data) store.Repos {
 		Users:     &usersRepo{d: d, now: s.now},
 		Activity:  &activityRepo{d: d, now: s.now},
 		Documents: &documentRepo{d: d},
+		Templates: &templateRepo{d: d},
+		Dashboard: &dashboardRepo{d: d},
+		Team:      &teamRepo{d: d},
+		Avatars:   &avatarRepo{d: d},
+		Shares:    &folderShareRepo{d: d},
 	}
 }
 
@@ -119,8 +136,17 @@ func (s *Store) Activity() []store.ActivityEvent {
 }
 
 // SeedUserRole grants a system role without a service call, for seeds and tests.
-func (s *Store) SeedUserRole(ur store.UserRole) {
+func (s *Store) SeedUserRole(ur store.UserRole) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.d.userRoles[ur.UserID] = ur
+	return nil
+}
+
+// SeedSkills sets a person's skills directly (local seed data only).
+func (s *Store) SeedSkills(userID int64, skills ...string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.d.skills[userID] = skills
+	return nil
 }

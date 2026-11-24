@@ -17,7 +17,7 @@ import (
 	"tracking-service/internal/events"
 	"tracking-service/internal/project"
 	"tracking-service/internal/store"
-	"tracking-service/internal/store/memory"
+	"tracking-service/internal/store/storetest"
 	"tracking-service/internal/users"
 )
 
@@ -27,7 +27,7 @@ const (
 	admin   int64 = 1
 	manager int64 = 2 // creates the projects, so is their PM
 	member  int64 = 3
-	viewer  int64 = 4
+	member2 int64 = 4 // a second member
 	outside int64 = 5
 )
 
@@ -35,7 +35,7 @@ type env struct {
 	svc   *card.Service
 	proj  *project.Service
 	board *board.Service
-	st    *memory.Store
+	st    storetest.Store
 	ctx   context.Context
 	pid   int64
 	tick  *int
@@ -45,7 +45,7 @@ func newEnv(t *testing.T) env {
 	t.Helper()
 	tick := new(int)
 	now := clock.Clock(func() time.Time { return t0.Add(time.Duration(*tick) * time.Minute) })
-	st := memory.New(now)
+	st := storetest.New(t, now)
 	st.SeedUserRole(store.UserRole{UserID: admin, Role: "admin"})
 	st.SeedUserRole(store.UserRole{UserID: manager, Role: "manager"})
 	quiet := slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -66,7 +66,7 @@ func (e env) newProject(t *testing.T, name string) int64 {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for uid, role := range map[int64]string{member: "member", viewer: "viewer"} {
+	for uid, role := range map[int64]string{member: "member", member2: "member"} {
 		if _, err := e.proj.AddMember(e.ctx, manager, p.ID, uid, role); err != nil {
 			t.Fatal(err)
 		}
@@ -153,12 +153,8 @@ func (e env) order(t *testing.T, listID int64) []int64 {
 	return ids
 }
 
-func TestCreate_ViewerForbidden(t *testing.T) {
+func TestCreate_OutsiderNotFound(t *testing.T) {
 	e := newEnv(t)
-	_, err := e.svc.Create(e.ctx, viewer, e.lists(t)[0].ID, card.CreateCardInput{Title: "x"})
-	if code(err) != "forbidden" {
-		t.Fatalf("err = %v", err)
-	}
 	if _, err := e.svc.Create(e.ctx, outside, e.lists(t)[0].ID, card.CreateCardInput{Title: "x"}); code(err) != "not_found" {
 		t.Fatalf("outsider err = %v", err)
 	}
@@ -290,12 +286,9 @@ func TestUpdate_DueBeforeStartValidation(t *testing.T) {
 	}
 }
 
-func TestUpdate_ArchivedCardConflict_ViewerForbidden(t *testing.T) {
+func TestUpdate_ArchivedCardConflict(t *testing.T) {
 	e := newEnv(t)
 	c := e.mk(t, e.lists(t)[0].ID, "c")
-	if _, err := e.svc.Update(e.ctx, viewer, c.ID, card.UpdateCardInput{Title: ptr("x")}); code(err) != "forbidden" {
-		t.Fatalf("viewer: %v", err)
-	}
 	if _, err := e.svc.Archive(e.ctx, member, c.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -447,9 +440,6 @@ func TestAssign_NonMemberValidation(t *testing.T) {
 	if code(err) != "validation_failed" || fieldsOf(err)["userId"] != "not_member" {
 		t.Fatalf("err = %v %v", err, fieldsOf(err))
 	}
-	if _, err := e.svc.Assign(e.ctx, viewer, c.ID, member); code(err) != "forbidden" {
-		t.Fatalf("viewer: %v", err)
-	}
 }
 
 func TestAssign_Idempotent(t *testing.T) {
@@ -521,14 +511,14 @@ func TestRestore_ListArchivedConflict(t *testing.T) {
 	}
 }
 
-func TestGet_NonMemberNotFound_ViewerReads(t *testing.T) {
+func TestGet_NonMemberNotFound_MemberReads(t *testing.T) {
 	e := newEnv(t)
 	c := e.mk(t, e.lists(t)[0].ID, "c")
 	if _, err := e.svc.Get(e.ctx, outside, c.ID); code(err) != "not_found" {
 		t.Fatalf("outsider: %v", err)
 	}
-	if _, err := e.svc.Get(e.ctx, viewer, c.ID); err != nil {
-		t.Fatalf("viewer: %v", err)
+	if _, err := e.svc.Get(e.ctx, member2, c.ID); err != nil {
+		t.Fatalf("member2: %v", err)
 	}
 	if _, err := e.svc.Get(e.ctx, outside, 9999); code(err) != "not_found" {
 		t.Fatalf("missing: %v", err)

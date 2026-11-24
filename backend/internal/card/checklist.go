@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"tracking-service/internal/apperr"
+	"tracking-service/internal/authz"
 	"tracking-service/internal/board"
 	"tracking-service/internal/store"
 	"tracking-service/internal/validate"
@@ -98,6 +99,10 @@ func lockedItem(ctx context.Context, r store.Repos, it store.ChecklistItem) (sto
 	return cur, err
 }
 
+// maxItems caps one card's checklist: a real one is a few dozen items, and
+// the board loads every card's counts, so the list must not grow without end.
+const maxItems = 100
+
 // AddItem appends an item at the end of the card's checklist.
 func (s *Service) AddItem(ctx context.Context, userID, cardID int64, text string) (ChecklistItemView, error) {
 	var out ChecklistItemView
@@ -114,6 +119,12 @@ func (s *Service) AddItem(ctx context.Context, userID, cardID int64, text string
 		pos, err := placeItem(ctx, r, cardID, 0, board.MoveInput{})
 		if err != nil {
 			return err
+		}
+		// Counted after placeItem, which holds the card's checklist lock.
+		if ps, err := r.Checklist.Positions(ctx, cardID); err != nil {
+			return err
+		} else if len(ps) >= maxItems {
+			return apperr.Validation(map[string]string{"text": "too_many"})
 		}
 		it, err := r.Checklist.Create(ctx, store.ChecklistItem{CardID: cardID, Text: text, Position: pos, UpdatedAt: s.now()})
 		if err != nil {
@@ -137,6 +148,11 @@ func (s *Service) UpdateItem(ctx context.Context, userID, itemID int64, in ItemP
 		}
 		if it, err = lockedItem(ctx, r, it); err != nil {
 			return err
+		}
+		if in.IsDone != nil {
+			if err := canTick(ctx, r, sc, userID); err != nil {
+				return err
+			}
 		}
 		fields := map[string]string{}
 		changed := []string{}
@@ -197,4 +213,23 @@ func (s *Service) DeleteItem(ctx context.Context, userID, itemID int64) error {
 		}
 		return s.touch(ctx, r, sc, userID, "checklist.deleted", it.ID, nil)
 	})
+}
+
+// canTick decides who may tick or untick a checklist item: admins and PMs on any card, members only on cards
+// assigned to them (the owner's rule, 2026-11-19).
+// Editing an item's text, adding, moving and deleting items stay open to every member.
+func canTick(ctx context.Context, r store.Repos, sc scope, userID int64) error {
+	if sc.role == authz.Admin || sc.role == authz.PM {
+		return nil
+	}
+	ch, err := r.Cards.Children(ctx, sc.card.ID)
+	if err != nil {
+		return err
+	}
+	for _, id := range ch.AssigneeIDs {
+		if id == userID {
+			return nil
+		}
+	}
+	return apperr.Forbidden()
 }

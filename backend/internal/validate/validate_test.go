@@ -1,6 +1,7 @@
 package validate_test
 
 import (
+	"maps"
 	"strings"
 	"testing"
 
@@ -57,5 +58,26 @@ func TestDateOrder_DueBeforeStart(t *testing.T) {
 	validate.DateOrder("due", nil, &e, f)
 	if len(f) != 0 {
 		t.Fatalf("equal/nil must pass: %v", f)
+	}
+}
+
+// PostgreSQL rejects NUL and invalid UTF-8 in text, and year 0 in a date: the
+// service must answer validation_failed, not let the insert fail with a 500.
+func TestUnstorableInputIsInvalid(t *testing.T) {
+	fields := map[string]string{}
+	validate.Text("title", "a\x00b", 200, fields)
+	validate.Text("name", "a\xffb", 200, fields)
+	validate.LongText("description", "ok\x00", 20000, fields)
+	validate.LongText("note", "", 20000, fields) // empty is fine for long text
+	zero := "0000-01-01"
+	if validate.Date("startDate", &zero, fields) != nil {
+		t.Error("year 0 parsed")
+	}
+	want := map[string]string{"title": "invalid", "name": "invalid", "description": "invalid", "startDate": "invalid_date"}
+	if !maps.Equal(fields, want) {
+		t.Fatalf("fields = %v, want %v", fields, want)
+	}
+	if !validate.Storable("ภาษาไทย ✓") {
+		t.Error("Thai text refused")
 	}
 }

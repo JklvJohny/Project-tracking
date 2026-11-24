@@ -41,12 +41,34 @@ func TestParseMentions(t *testing.T) {
 	}
 }
 
-func TestAddComment_ViewerForbidden(t *testing.T) {
+// Ten live comments per card; a deleted one frees a place.
+func TestAddComment_CapOfTen(t *testing.T) {
 	e := newEnv(t)
 	c := e.mk(t, e.lists(t)[0].ID, "c")
-	if _, err := e.svc.AddComment(e.ctx, viewer, c.ID, "hi"); code(err) != "forbidden" {
-		t.Fatalf("err = %v", err)
+	var first card.Comment
+	for i := 0; i < 10; i++ {
+		cm, err := e.svc.AddComment(e.ctx, member, c.ID, "hi")
+		if err != nil {
+			t.Fatalf("comment %d: %v", i+1, err)
+		}
+		if i == 0 {
+			first = cm
+		}
 	}
+	if _, err := e.svc.AddComment(e.ctx, member, c.ID, "one more"); fieldsOf(err)["body"] != "too_many" {
+		t.Fatalf("11th: %v", err)
+	}
+	if err := e.svc.DeleteComment(e.ctx, member, first.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.svc.AddComment(e.ctx, member, c.ID, "after a delete"); err != nil {
+		t.Fatalf("after delete: %v", err)
+	}
+}
+
+func TestAddComment_OutsiderNotFound(t *testing.T) {
+	e := newEnv(t)
+	c := e.mk(t, e.lists(t)[0].ID, "c")
 	if _, err := e.svc.AddComment(e.ctx, outside, c.ID, "hi"); code(err) != "not_found" {
 		t.Fatalf("outside err = %v", err)
 	}
@@ -55,12 +77,12 @@ func TestAddComment_ViewerForbidden(t *testing.T) {
 func TestAddComment_NonMemberMentionIgnored(t *testing.T) {
 	e, rec := newEnv(t).withRecorder()
 	c := e.mk(t, e.lists(t)[0].ID, "c")
-	body := "a " + mention(viewer) + " " + mention(admin) + " " + mention(outside) + " " + mention(99)
+	body := "a " + mention(member2) + " " + mention(admin) + " " + mention(outside) + " " + mention(99)
 	cm, err := e.svc.AddComment(e.ctx, member, c.ID, body)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(cm.MentionIDs, []int64{viewer}) {
+	if !reflect.DeepEqual(cm.MentionIDs, []int64{member2}) {
 		t.Fatalf("mentionIds = %v", cm.MentionIDs)
 	}
 	if len(rec.got) != 1 || rec.got[0].topic != "tracking.comment.mentioned" {
@@ -82,7 +104,7 @@ func TestEditComment_NotAuthorForbidden(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, u := range []int64{manager, admin, viewer} {
+	for _, u := range []int64{manager, admin, member2} {
 		if _, err := e.svc.EditComment(e.ctx, u, cm.ID, "x"); code(err) != "forbidden" {
 			t.Fatalf("user %d err = %v", u, err)
 		}
@@ -128,18 +150,18 @@ func TestDeleteComment_PMCanDeleteOthers_MemberCannot(t *testing.T) {
 func TestEdit_PublishesOnlyNewMentions(t *testing.T) {
 	e, rec := newEnv(t).withRecorder()
 	c := e.mk(t, e.lists(t)[0].ID, "c")
-	cm, err := e.svc.AddComment(e.ctx, member, c.ID, mention(viewer))
+	cm, err := e.svc.AddComment(e.ctx, member, c.ID, mention(member2))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(rec.got) != 1 {
 		t.Fatalf("add published %d", len(rec.got))
 	}
-	got, err := e.svc.EditComment(e.ctx, member, cm.ID, mention(viewer)+" "+mention(manager))
+	got, err := e.svc.EditComment(e.ctx, member, cm.ID, mention(member2)+" "+mention(manager))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(got.MentionIDs, []int64{viewer, manager}) {
+	if !reflect.DeepEqual(got.MentionIDs, []int64{member2, manager}) {
 		t.Fatalf("mentionIds = %v", got.MentionIDs)
 	}
 	if len(rec.got) != 2 {
@@ -157,7 +179,7 @@ func TestEdit_PublishesOnlyNewMentions(t *testing.T) {
 		t.Fatalf("published = %+v", rec.got)
 	}
 	// a failed write publishes nothing
-	if _, err := e.svc.EditComment(e.ctx, member, cm.ID, strings.Repeat("a", 5001)+mention(viewer)); code(err) != "validation_failed" {
+	if _, err := e.svc.EditComment(e.ctx, member, cm.ID, strings.Repeat("a", 5001)+mention(member2)); code(err) != "validation_failed" {
 		t.Fatalf("err = %v", err)
 	}
 	if len(rec.got) != 2 {
@@ -280,36 +302,5 @@ func TestCommentRoutes_HappyPath(t *testing.T) {
 	}
 	if rec, _ = do(h, member, "DELETE", "/comments/"+cid, ""); rec.Code != 200 {
 		t.Fatalf("delete = %d %s", rec.Code, rec.Body)
-	}
-}
-
-// A member demoted to viewer loses Comment, so their own comments are frozen.
-func TestEditComment_ViewerForbidden(t *testing.T) {
-	e := newEnv(t)
-	c := e.mk(t, e.lists(t)[0].ID, "c")
-	cm, err := e.svc.AddComment(e.ctx, member, c.ID, "hi")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := e.proj.SetRole(e.ctx, manager, e.pid, member, "viewer"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := e.svc.EditComment(e.ctx, member, cm.ID, "edited"); code(err) != "forbidden" {
-		t.Fatalf("err = %v", err)
-	}
-}
-
-func TestDeleteComment_ViewerForbidden(t *testing.T) {
-	e := newEnv(t)
-	c := e.mk(t, e.lists(t)[0].ID, "c")
-	cm, err := e.svc.AddComment(e.ctx, member, c.ID, "hi")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := e.proj.SetRole(e.ctx, manager, e.pid, member, "viewer"); err != nil {
-		t.Fatal(err)
-	}
-	if err := e.svc.DeleteComment(e.ctx, member, cm.ID); code(err) != "forbidden" {
-		t.Fatalf("err = %v", err)
 	}
 }

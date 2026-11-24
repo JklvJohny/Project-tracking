@@ -1,5 +1,6 @@
 'use client';
 import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { api } from '../shared/api/client';
 import { qk } from '../shared/api/queries';
@@ -8,7 +9,40 @@ import { errorMessage } from '../shared/errors';
 import { useLang, useT } from '../shared/i18n';
 import { bumpCommentCount, detailToSummary, setPreviewItemDone, upsertCard, type BoardData } from '../board/board-cache';
 
-const TEXT = { th: { retry: 'ลองอีกครั้ง' }, en: { retry: 'Retry' } };
+const TEXT = {
+  th: { retry: 'ลองอีกครั้ง', notSaved: (m: string) => `บันทึกการแก้ไขในการ์ดไม่สำเร็จ: ${m}` },
+  en: { retry: 'Retry', notSaved: (m: string) => `Your edit to the card was not saved: ${m}` },
+};
+
+/** True while the calling component is mounted. */
+function useMounted() {
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  return mounted;
+}
+
+/**
+ * Reports a save that failed after its field was closed. An open field shows its own error next to it; one closed
+ * mid-save (Escape, a click outside) flushes its draft on unmount and has nowhere left to show the error, so without
+ * this the edit would vanish without a word. Retry sends the same change again.
+ */
+function useClosedFieldFailure<V>(key: string, resend: (vars: V) => Promise<unknown>) {
+  const mounted = useMounted();
+  const { lang } = useLang();
+  const t = useT(TEXT);
+  return (e: unknown, vars: V) => {
+    if (mounted.current) return;
+    toast.error(t.notSaved(errorMessage(e, lang)), {
+      id: key,
+      action: { label: t.retry, onClick: () => void resend(vars).catch((err) => toast.error(errorMessage(err, lang), { id: key })) },
+    });
+  };
+}
 
 type S = components['schemas'];
 type Detail = S['CardDetail'];
@@ -54,10 +88,12 @@ function putChecklist(qc: QueryClient, projectId: number, cardId: number, fn: (i
 
 export function useUpdateCard(projectId: number, cardId: number) {
   const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (input: S['UpdateCardInput']) => api<Detail>(`/cards/${cardId}`, { method: 'PATCH', json: input satisfies S['UpdateCardInput'] }),
-    onSuccess: (d) => putDetail(qc, projectId, d),
-  });
+  const send = (input: S['UpdateCardInput']) =>
+    api<Detail>(`/cards/${cardId}`, { method: 'PATCH', json: input satisfies S['UpdateCardInput'] });
+  const closed = useClosedFieldFailure(`card-save-${cardId}`, (input: S['UpdateCardInput']) =>
+    send(input).then((d) => putDetail(qc, projectId, d)),
+  );
+  return useMutation({ mutationFn: send, onSuccess: (d) => putDetail(qc, projectId, d), onError: closed });
 }
 
 export function useAssign(projectId: number, cardId: number) {
@@ -124,11 +160,11 @@ export function useChecklist(projectId: number, cardId: number) {
     mutationFn: (text: string) => api<Item>(`/cards/${cardId}/checklist`, { method: 'POST', json: { text } satisfies S['AddItemInput'] }),
     onSuccess: (item) => putChecklist(qc, projectId, cardId, (items) => [...items, item]),
   });
-  const update = useMutation({
-    mutationFn: ({ id, ...input }: { id: number } & S['ItemPatch']) =>
-      api<Item>(`/checklist/${id}`, { method: 'PATCH', json: input satisfies S['ItemPatch'] }),
-    onSuccess: (item) => putChecklist(qc, projectId, cardId, (items) => items.map((i) => (i.id === item.id ? item : i))),
-  });
+  const patchItem = ({ id, ...input }: { id: number } & S['ItemPatch']) =>
+    api<Item>(`/checklist/${id}`, { method: 'PATCH', json: input satisfies S['ItemPatch'] });
+  const putItem = (item: Item) => putChecklist(qc, projectId, cardId, (items) => items.map((i) => (i.id === item.id ? item : i)));
+  const closed = useClosedFieldFailure(`checklist-save-${cardId}`, (vars: { id: number } & S['ItemPatch']) => patchItem(vars).then(putItem));
+  const update = useMutation({ mutationFn: patchItem, onSuccess: putItem, onError: closed });
   const remove = useMutation({
     mutationFn: (id: number) => api<unknown>(`/checklist/${id}`, { method: 'DELETE' }),
     onSuccess: (_r, id) => putChecklist(qc, projectId, cardId, (items) => items.filter((i) => i.id !== id)),
@@ -217,7 +253,7 @@ export function useDeleteComment(projectId: number, cardId: number) {
 
 /**
  * Ticks a checklist item straight from a board card. Optimistic on the board summary and on the card detail when it is
- * cached; a failure restores both snapshots. No success toast (inline edit).
+ * cached; a failure flips that one item back. No success toast (inline edit).
  */
 export function useToggleChecklistItem(projectId: number) {
   const qc = useQueryClient();
@@ -229,19 +265,19 @@ export function useToggleChecklistItem(projectId: number) {
     onMutate: async ({ cardId, itemId, isDone }) => {
       await qc.cancelQueries({ queryKey: qk.board(projectId) });
       await qc.cancelQueries({ queryKey: qk.card(cardId) });
-      const prev = { card: qc.getQueryData<Detail>(qk.card(cardId)), board: qc.getQueryData<BoardData>(qk.board(projectId)) };
       qc.setQueryData<BoardData>(qk.board(projectId), (b) => (b ? setPreviewItemDone(b, cardId, itemId, isDone) : b));
-      if (prev.card)
-        qc.setQueryData<Detail>(qk.card(cardId), {
-          ...prev.card,
-          checklist: prev.card.checklist.map((i) => (i.id === itemId ? { ...i, isDone } : i)),
-        });
-      return prev;
+      qc.setQueryData<Detail>(qk.card(cardId), (d) =>
+        d ? { ...d, checklist: d.checklist.map((i) => (i.id === itemId ? { ...i, isDone } : i)) } : d,
+      );
     },
-    onError: (e, vars, prev) => {
-      const { cardId, itemId } = vars;
-      if (prev?.card) qc.setQueryData(qk.card(cardId), prev.card);
-      if (prev?.board) qc.setQueryData(qk.board(projectId), prev.board);
+    onError: (e, vars) => {
+      const { cardId, itemId, isDone } = vars;
+      // Undo only this tick. Restoring the snapshots from onMutate would also undo any other tick that succeeded
+      // in the meantime, leaving the screen out of step with the server.
+      qc.setQueryData<BoardData>(qk.board(projectId), (b) => (b ? setPreviewItemDone(b, cardId, itemId, !isDone) : b));
+      qc.setQueryData<Detail>(qk.card(cardId), (d) =>
+        d ? { ...d, checklist: d.checklist.map((i) => (i.id === itemId ? { ...i, isDone: !isDone } : i)) } : d,
+      );
       // Per-item id: repeated failures replace one toast; Retry re-sends the same tick.
       toast.error(errorMessage(e, lang), { id: `checklist-${itemId}`, action: { label: t.retry, onClick: () => toggle.mutate(vars) } });
     },

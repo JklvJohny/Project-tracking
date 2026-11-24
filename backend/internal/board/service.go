@@ -383,6 +383,10 @@ func (s *Service) UpdateList(ctx context.Context, userID, listID int64, in Updat
 		if err != nil {
 			return err
 		}
+		// Restore it first: an archived list is read-only, like an archived card.
+		if l.ArchivedAt != nil {
+			return apperr.Conflict("list is archived")
+		}
 		fields := map[string]string{}
 		payload := map[string]any{"listId": l.ID}
 		if in.Name != nil {

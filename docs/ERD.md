@@ -1,6 +1,6 @@
 # Project Tracking: ERD (proposal)
 
-PostgreSQL, schema `tracking`, owned only by `tracking-service`. Status: **proposal**, not yet migrated.
+PostgreSQL, schema `tracking`, owned only by `tracking-service`. The tables the code uses today are migrated: [00001_init.sql](../backend/internal/store/postgres/migrations/00001_init.sql) (applied by the service at start-up; database setup in [backend/db/bootstrap.sql](../backend/db/bootstrap.sql)). Tables below that are not in it are still a proposal.
 
 **Single department (decided 2026-11-17):** there is no Workspace level. Projects sit at the top, and the only roles above project level are in `user_roles`.
 
@@ -10,6 +10,7 @@ PostgreSQL, schema `tracking`, owned only by `tracking-service`. Status: **propo
 erDiagram
     user_cache ||..o| user_roles : "user_id (no FK, external)"
     projects ||--o{ project_members : has
+    skill_categories |o--o{ skill_catalog : groups
     projects ||--|| boards : "has one"
     projects ||--o{ labels : defines
     boards ||--o{ lists : contains
@@ -36,6 +37,28 @@ erDiagram
         text avatar_url
         timestamptz synced_at
     }
+    user_skills {
+        bigint user_id PK "user-service id"
+        text skill PK "free text tag, 1-40 chars; unique per user case-insensitively"
+        int position "order the person listed them"
+    }
+    skill_catalog {
+        text name PK "1-40 chars; unique by lower(name)"
+        bigint category_id FK "nullable: uncategorised; ON DELETE SET NULL"
+        bigint created_by "user_id"
+        timestamptz created_at
+    }
+    skill_categories {
+        bigint id PK "identity; listed in this order"
+        text name "1-40 chars; unique by lower(name)"
+        bigint created_by "user_id"
+        timestamptz created_at
+    }
+    user_avatars {
+        bigint user_id PK "user-service id; one picture per person"
+        text storage_key "blob key of a 256x256 JPEG"
+        timestamptz updated_at "also the URL version (?v=)"
+    }
     projects {
         bigint id PK "identity"
         text name "UK lower(name) among non-archived"
@@ -52,7 +75,7 @@ erDiagram
     project_members {
         bigint project_id PK,FK
         bigint user_id PK
-        text role "pm | member | viewer"
+        text role "pm | member"
         timestamptz added_at
     }
     boards {
@@ -132,6 +155,7 @@ erDiagram
     cards |o--o{ activity_events : "about (optional)"
     cards ||--o{ attachments : "P2"
     projects ||--o{ documents : "P3 Reports"
+    projects ||--o{ folder_shares : "report folder shared outside the project"
     projects ||--o{ import_jobs : "P3"
     import_jobs ||--o{ import_rows : drafts
     import_jobs |o--o{ cards : "created from"
@@ -181,6 +205,26 @@ erDiagram
         timestamptz created_at
         timestamptz deleted_at
     }
+    folder_shares {
+        bigint project_id PK,FK
+        bigint user_id PK "user-service id; never a member of the project; INDEX (user_id)"
+        bigint shared_by "user_id"
+        timestamptz created_at
+    }
+    report_templates {
+        bigint id PK "identity"
+        text category "free text, 1-60 chars"
+        text name "1-120 chars"
+        text description "0-500 chars"
+        text storage_key
+        text filename
+        text mime_type "docx | xlsx | pptx | doc | xls | ppt | pdf"
+        bigint size_bytes
+        bigint uploaded_by "user_id"
+        timestamptz created_at
+        timestamptz updated_at
+        timestamptz deleted_at
+    }
     import_jobs {
         bigint id PK "identity"
         bigint project_id FK
@@ -214,7 +258,7 @@ erDiagram
 - **Optimistic create:** the database assigns the id, so the frontend shows a new card with a temporary client id and replaces it with the real id from the response.
 - **Users are external:** every column that points at a person (`user_id`, `owner_id`, `created_by`, `author_id`, ...) holds the user-service id. There is no FK and no users table. Names and avatars come from `user_cache`. user-service ids are integers (confirmed 2026-11-17). These columns are `bigint`, which holds any `int` value, and it matches the `int64` the Go code already uses.
 - **Roles above project level:** `user_roles` holds only the exceptions. `admin` can do everything, including managing `user_roles`. `manager` can create projects and becomes PM of each one it creates. A user with no row is a regular user, who sees only the projects listed for them in `project_members`. One role per user (`user_id` is the PK).
-- **Project roles are separate:** `project_members.role` (`pm | member | viewer`) is not a reference to `user_roles`. It is its own value with a CHECK.
+- **Project roles are separate:** `project_members.role` (`pm | member`) is not a reference to `user_roles`. It is its own value with a CHECK.
 - **Enums:** `text` + `CHECK (... IN (...))` for values with no order (`status`, `role`, `color`, `type`). The value can be read directly in the database, logs and API, and adding a value is a cheap migration. `priority` is the exception: `smallint CHECK (priority BETWEEN 0 AND 3)`, because it has an order and `ORDER BY priority DESC` sorts it directly. The API sends the names `low | medium | high | urgent`, never the numbers.
 - **Archive is not a status:** `projects.status` is the work state (`active | on_hold | done`). `archived_at` alone says whether a project is archived, so the two can never disagree.
 - **Board load joins lists:** `cards` has no `board_id`. A board loads with `cards JOIN lists ON lists.id = cards.list_id WHERE lists.board_id = $1`, using the indexes on `lists (board_id)` and `cards (list_id, position)`.
@@ -225,7 +269,7 @@ erDiagram
   - Unarchiving a card or list gives it a new key at the end of its list or board.
   - Checklist items have no archive, so `UNIQUE (card_id, position)` covers all of them.
 - **Completion:** `cards.completed_at` is set when a card moves into a list with `is_done = true`, and cleared when it moves out, in the same transaction as the move. Done, overdue, "done this week" and the Gantt read it from `cards` alone, with no join to `lists`.
-- **"Today" is Bangkok time:** the database runs with `ALTER DATABASE ... SET timezone = 'Asia/Bangkok'`, so `current_date` matches the user's day. Without it, a UTC server shows a card due yesterday as not yet overdue between 00:00 and 07:00 Thai time.
+- **"Today" is Bangkok time, computed in Go:** the services take today from the clock in `Asia/Bangkok` and pass it to queries as a parameter; SQL never uses `current_date` (db-contract, Dashboard). As a safety net the service's role also runs with `ALTER ROLE tracking_app IN DATABASE ... SET timezone = 'Asia/Bangkok'` (per role, not per database, so other services sharing the database keep their own), so any `current_date` would still be the Thai day: on a UTC server it would otherwise show a card due yesterday as not yet overdue between 00:00 and 07:00 Thai time.
 - **Search:** `ILIKE '%term%'` on `title` (and `description_md` when asked), limited to the projects the caller can see. There is no `tsvector`: PostgreSQL has no Thai word splitter, so `ออกแบบหน้าแรก` would be one token and `หน้าแรก` would not match it.
   - At one department's size (thousands of cards) the scan takes milliseconds.
   - Add a `pg_trgm` GIN index only if `EXPLAIN ANALYZE` shows search over budget. First check `SELECT show_trgm('ออกแบบหน้าแรก')`: Thai vowel and tone marks must not split the trigrams under the database locale.
@@ -274,6 +318,10 @@ CREATE INDEX ON activity_events (project_id, created_at DESC);   -- P2, created 
 CREATE INDEX ON notifications (user_id, created_at DESC);        -- P2, notification list
 CREATE INDEX ON notifications (user_id) WHERE read_at IS NULL;   -- P2, unread badge
 CREATE INDEX ON notifications (created_at);                      -- P2, daily 1-year cleanup
+CREATE INDEX idx_report_templates_live ON report_templates (lower(category), lower(name), id) WHERE deleted_at IS NULL; -- Reports > Templates list
+CREATE UNIQUE INDEX ux_user_skills ON user_skills (user_id, lower(skill)); -- one spelling per tag per person; the PK (user_id, skill) alone lets "Go" and "go" both in
+CREATE UNIQUE INDEX ux_skill_catalog ON skill_catalog (lower(name)); -- the department list: "Go" and "go" are one skill
+CREATE UNIQUE INDEX ux_skill_categories_name ON skill_categories (lower(name)); -- "Network" and "network" are one category
 ```
 
 ## Business decisions (2026-11-17)

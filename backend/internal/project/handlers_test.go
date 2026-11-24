@@ -35,6 +35,9 @@ func (e env) handler() http.Handler {
 
 func call(h http.Handler, user int64, method, path, body string) (*httptest.ResponseRecorder, map[string]any) {
 	req := httptest.NewRequest(method, "/api/tracking/v1"+path, strings.NewReader(body))
+	if body != "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	req.Header.Set("X-User-ID", strconv.FormatInt(user, 10))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -69,10 +72,10 @@ func TestHandlers_ProjectsRoundTrip(t *testing.T) {
 	if rec, _ = call(h, manager, "PATCH", base, `{"description":"d"}`); rec.Code != 200 {
 		t.Fatalf("patch = %d %s", rec.Code, rec.Body)
 	}
-	if rec, _ = call(h, manager, "POST", base+"/members", `{"userId":3,"role":"viewer"}`); rec.Code != 201 {
+	if rec, _ = call(h, manager, "POST", base+"/members", `{"userId":3,"role":"member"}`); rec.Code != 201 {
 		t.Fatalf("add member = %d %s", rec.Code, rec.Body)
 	}
-	if rec, _ = call(h, manager, "PATCH", base+"/members/3", `{"role":"member"}`); rec.Code != 200 {
+	if rec, _ = call(h, manager, "PATCH", base+"/members/3", `{"role":"pm"}`); rec.Code != 200 {
 		t.Fatalf("set role = %d %s", rec.Code, rec.Body)
 	}
 	if rec, body = call(h, 3, "GET", base+"/members", ""); rec.Code != 200 || len(body["data"].([]any)) != 2 {

@@ -27,15 +27,16 @@ export function UploadZone({ projectId, children }: { projectId: number; childre
   const { lang } = useLang();
   const up = useUploadDocument(projectId);
   const inputRef = useRef<HTMLInputElement>(null);
+  // A code, resolved at render, so the message follows a language switch.
   const [error, setError] = useState<string | null>(null);
   const [over, setOver] = useState(false);
 
   const send = (f: File | undefined) => {
     if (!f) return;
     const bad = checkPdf(f);
-    if (bad) return setError(errorText(bad, lang));
+    if (bad) return setError(bad);
     setError(null);
-    up.mutate(f, { onError: (e) => setError(errorText(codeOf(e), lang)) });
+    up.mutate(f, { onError: (e) => setError(codeOf(e)) });
   };
   const onDrop = (e: DragEvent) => {
     e.preventDefault();
@@ -56,7 +57,7 @@ export function UploadZone({ projectId, children }: { projectId: number; childre
       <div className="flex items-center justify-end gap-3 px-3 pt-3">
         {error && (
           <p role="alert" className="mr-auto text-sm text-destructive">
-            {error}
+            {errorText(error, lang)}
           </p>
         )}
         <input

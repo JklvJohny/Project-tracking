@@ -16,7 +16,7 @@ import (
 	"tracking-service/internal/events"
 	"tracking-service/internal/project"
 	"tracking-service/internal/store"
-	"tracking-service/internal/store/memory"
+	"tracking-service/internal/store/storetest"
 	"tracking-service/internal/users"
 )
 
@@ -26,14 +26,14 @@ const (
 	admin   int64 = 1
 	manager int64 = 2 // creates the project, so is its PM
 	member  int64 = 3
-	viewer  int64 = 4
+	member2 int64 = 4 // a second member
 	outside int64 = 5
 )
 
 type env struct {
 	svc  *board.Service
 	proj *project.Service
-	st   *memory.Store
+	st   storetest.Store
 	ctx  context.Context
 	pid  int64
 	tick *int // minutes added to t0; the clock moves only when a test says so
@@ -43,7 +43,7 @@ func newEnv(t *testing.T) env {
 	t.Helper()
 	tick := new(int)
 	now := clock.Clock(func() time.Time { return t0.Add(time.Duration(*tick) * time.Minute) })
-	st := memory.New(now)
+	st := storetest.New(t, now)
 	st.SeedUserRole(store.UserRole{UserID: admin, Role: "admin"})
 	st.SeedUserRole(store.UserRole{UserID: manager, Role: "manager"})
 	quiet := slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -58,7 +58,7 @@ func newEnv(t *testing.T) env {
 		t.Fatal(err)
 	}
 	e.pid = p.ID
-	for uid, role := range map[int64]string{member: "member", viewer: "viewer"} {
+	for uid, role := range map[int64]string{member: "member", member2: "member"} {
 		if _, err := e.proj.AddMember(e.ctx, manager, p.ID, uid, role); err != nil {
 			t.Fatal(err)
 		}
@@ -184,7 +184,7 @@ func TestBoard_ExcludesArchivedAndSortsByPosition(t *testing.T) {
 func TestBoard_NoDescriptionInSummary(t *testing.T) {
 	e := newEnv(t)
 	e.card(t, e.lists(t)[0].ID, "card", "m")
-	v, _, err := e.svc.Board(e.ctx, viewer, e.pid)
+	v, _, err := e.svc.Board(e.ctx, member2, e.pid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -224,7 +224,7 @@ func TestArchived_ListsAndCards(t *testing.T) {
 	if _, err := e.svc.ArchiveList(e.ctx, manager, ls[3].ID); err != nil {
 		t.Fatal(err)
 	}
-	a, err := e.svc.Archived(e.ctx, viewer, e.pid)
+	a, err := e.svc.Archived(e.ctx, member2, e.pid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -588,7 +588,7 @@ func TestSnapshot_ChecklistPreviewFirstThreeByPosition(t *testing.T) {
 		}
 		return nil
 	})
-	v, _, err := e.svc.Board(e.ctx, viewer, e.pid)
+	v, _, err := e.svc.Board(e.ctx, member2, e.pid)
 	if err != nil {
 		t.Fatal(err)
 	}

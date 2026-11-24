@@ -6,15 +6,16 @@ import { Avatar } from '../shared/Avatar';
 import { fmtDate } from '../shared/format';
 import { useLang, useT } from '../shared/i18n';
 import type { Doc } from './queries';
+import { PersonLink } from '../people/PersonLink';
 
 const TEXT = {
   th: {
     name: 'ชื่อไฟล์', size: 'ขนาด', by: 'อัปโหลดโดย', date: 'วันที่', actions: 'การทำงาน', del: 'ลบ',
-    caption: 'เอกสารในโฟลเดอร์ ดับเบิลคลิกหรือกด Enter เพื่อเปิด', hint: 'ดับเบิลคลิกเอกสารเพื่อเปิด', unknown: 'ผู้ใช้ไม่ทราบชื่อ',
+    caption: 'เอกสารในโฟลเดอร์ ดับเบิลคลิกหรือกด Enter เพื่อเปิด', unknown: 'ผู้ใช้ไม่ทราบชื่อ',
   },
   en: {
     name: 'Name', size: 'Size', by: 'Uploaded by', date: 'Date', actions: 'Actions', del: 'Delete',
-    caption: 'Documents in this folder. Double-click or press Enter to open.', hint: 'Double-click a document to open it', unknown: 'Unknown user',
+    caption: 'Documents in this folder. Double-click or press Enter to open.', unknown: 'Unknown user',
   },
 };
 
@@ -46,9 +47,13 @@ export function DocumentTable({ docs, canDelete, onOpen, onDelete }: Props) {
   const onKey = (e: KeyboardEvent, i: number) => {
     // Keys pressed on the row's own Delete button belong to the button.
     if (e.target !== e.currentTarget) return;
-    if (e.key === 'ArrowDown') (e.preventDefault(), move(i + 1));
-    else if (e.key === 'ArrowUp') (e.preventDefault(), move(i - 1));
-    else if (e.key === 'Enter') (e.preventDefault(), setSelected(docs[i].id), onOpen(i));
+    if (e.key === 'ArrowDown') move(i + 1);
+    else if (e.key === 'ArrowUp') move(i - 1);
+    else if (e.key === 'Enter') {
+      setSelected(docs[i].id);
+      onOpen(i);
+    } else return;
+    e.preventDefault();
   };
 
   return (
@@ -92,10 +97,12 @@ export function DocumentTable({ docs, canDelete, onOpen, onDelete }: Props) {
                   </td>
                   <td className="hidden whitespace-nowrap px-4 py-2.5 text-right tabular-nums text-muted-foreground sm:table-cell">{fmtSize(d.sizeBytes)}</td>
                   <td className="hidden px-4 py-2.5 md:table-cell">
-                    <span className="flex items-center gap-2">
+                    <PersonLink userId={d.uploadedBy} className="flex min-w-0 items-center gap-2">
                       <Avatar user={{ id: d.uploadedBy, name }} size="xs" />
-                      <span className="truncate">{name}</span>
-                    </span>
+                      <span className="truncate" aria-hidden>
+                        {name}
+                      </span>
+                    </PersonLink>
                   </td>
                   <td className="hidden whitespace-nowrap px-4 py-2.5 text-muted-foreground sm:table-cell">{fmtDate(d.createdAt, lang)}</td>
                   <td className="px-2 py-2.5 text-right">
@@ -111,7 +118,6 @@ export function DocumentTable({ docs, canDelete, onOpen, onDelete }: Props) {
           </tbody>
         </table>
       </div>
-      <p className="border-t px-4 py-2 text-xs text-muted-foreground">{t.hint}</p>
     </>
   );
 }

@@ -11,6 +11,9 @@ import (
 type projectRepo struct{ d *data }
 
 func (r *projectRepo) Create(_ context.Context, p store.Project) (store.Project, error) {
+	if r.nameClash(p) {
+		return store.Project{}, store.ErrDuplicate
+	}
 	p.ID = r.d.nextID("projects")
 	r.d.projects[p.ID] = cloneProject(p)
 	return cloneProject(p), nil
@@ -28,8 +31,20 @@ func (r *projectRepo) Save(_ context.Context, p store.Project) error {
 	if _, ok := r.d.projects[p.ID]; !ok {
 		return store.ErrNotFound
 	}
+	if r.nameClash(p) {
+		return store.ErrDuplicate
+	}
 	r.d.projects[p.ID] = cloneProject(p)
 	return nil
+}
+
+// nameClash mirrors ux_projects_name: live names are unique ignoring case.
+func (r *projectRepo) nameClash(p store.Project) bool {
+	if p.ArchivedAt != nil {
+		return false
+	}
+	taken, _ := r.NameTaken(context.Background(), p.Name, p.ID)
+	return taken
 }
 
 func (r *projectRepo) All(_ context.Context) ([]store.Project, error) {

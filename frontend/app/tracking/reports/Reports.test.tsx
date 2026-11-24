@@ -16,14 +16,19 @@ const apiMock = vi.mocked(api);
 const blobMock = vi.mocked(apiBlob);
 
 const user = (id: number, name: string) => ({ id, name, avatarUrl: '' });
-const project = (id: number, name: string, documentCount = 0) => ({
-  id, name, description: '', ownerId: 7, status: 'active', startDate: null, endDate: null, createdAt: '', updatedAt: '',
-  archivedAt: id === 1 ? archived : null, myRole: role, owner: user(7, 'Somchai Dee'), members: [user(7, 'Somchai Dee'), user(8, 'Mali Rak')], cardsDone: 0, cardsTotal: 0,
-  documentCount,
-});
+// The server's flags for the role, as document.folderOf sets them.
+const folder = (id: number, name: string, documentCount = 0) => {
+  const live = (id === 1 ? archived : null) === null;
+  return {
+    id, name, archivedAt: id === 1 ? archived : null, documentCount, access: role,
+    canUpload: live, canShare: live && role !== 'shared', canManage: live && (role === 'pm' || role === 'admin'),
+  };
+};
 const doc = (id: number, filename: string, uploadedBy = 7) => ({
   id, projectId: 1, filename, mimeType: 'application/pdf', sizeBytes: 2048 * id, uploadedBy, uploadedByName: uploadedBy === 8 ? 'Mali Rak' : uploadedBy === 7 ? 'Somchai Dee' : '', createdAt: '2026-11-10T03:00:00Z',
 });
+const share = (userId: number, name: string) => ({ userId, name, avatarUrl: '', sharedBy: 8, createdAt: '2026-11-20T03:00:00Z' });
+let shares: ReturnType<typeof share>[];
 let docs: ReturnType<typeof doc>[];
 let role = 'pm';
 let archived: string | null = null;
@@ -32,7 +37,14 @@ type Init = { method?: string };
 function impl() {
   return (async (path: string, init?: Init) => {
     if (path === '/me') return { user: user(8, 'Mali Rak'), isAdmin: false, canCreateProject: false };
-    if (path === '/projects') return [project(1, 'Website redesign', 3), project(2, 'Mobile app', 5)];
+    if (path === '/report-folders') return [folder(1, 'Website redesign', 3), folder(2, 'Mobile app', 5)];
+    if (path === '/projects/1/folder-shares') return shares;
+    if (path === '/projects/1/members') return [{ userId: 7, name: 'Somchai Dee', avatarUrl: '', role: 'pm', addedAt: '' }];
+    if (path === '/team') {
+      const person = (userId: number, name: string) => ({ userId, name, avatarUrl: '', skills: [], open: 0, overdue: 0, dueSoon: 0 });
+      return { asOf: '2026-11-21', people: [person(7, 'Somchai Dee'), person(6, 'Niran Guest'), person(5, 'Ploy Outsider')], catalog: [], categories: [] };
+    }
+    if (path === '/projects/1/folder-shares/5' && init?.method === 'PUT') return share(5, 'Ploy Outsider');
     if (path === '/projects/1/documents' && init?.method === 'POST') return doc(9, 'new.pdf', 8);
     if (path === '/projects/1/documents') return docs;
     if (path === '/projects/2/documents') return [];
@@ -58,6 +70,14 @@ beforeEach(() => {
   search = 'project=1';
   role = 'pm';
   archived = null;
+  shares = [share(6, 'Niran Guest')];
+  // cmdk (the share picker) measures its list and scrolls the active option into view.
+  Element.prototype.scrollIntoView = vi.fn();
+  globalThis.ResizeObserver ??= class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver;
   docs = [doc(1, 'Kickoff.pdf'), doc(2, 'Weekly.pdf', 8), doc(3, 'Scope.pdf')];
   blobMock.mockResolvedValue(new Blob(['%PDF-']));
   n = 0;
@@ -144,6 +164,18 @@ describe('Reports page', () => {
     expect(posted()).toHaveLength(0);
   });
 
+  it('an error on screen follows a language switch', async () => {
+    const view = setup();
+    fireEvent.change(await screen.findByTestId('upload-input'), { target: { files: [new File(['x'], 'a.txt', { type: 'text/plain' })] } });
+    expect((await screen.findByRole('alert')).textContent).toBe('Only PDF files are supported');
+    view.rerender(
+      <TrackingProvider lang="th">
+        <ReportsPage />
+      </TrackingProvider>,
+    );
+    expect(screen.getByRole('alert').textContent).toBe('รองรับเฉพาะไฟล์ PDF');
+  });
+
   it('upload posts FormData and adds the row', async () => {
     setup();
     fireEvent.change(await screen.findByTestId('upload-input'), { target: { files: [pdf('new.pdf')] } });
@@ -204,15 +236,6 @@ describe('Reports page', () => {
     await waitFor(() => expect(apiMock).toHaveBeenCalledWith('/documents/1/restore', { method: 'POST' }));
   });
 
-  it('a viewer sees no upload or delete', async () => {
-    role = 'viewer';
-    setup();
-    await screen.findByRole('grid');
-    expect(screen.queryByTestId('upload-input')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Upload PDF' })).toBeNull();
-  });
-
   it('a member deletes only their own upload; an archived project has no controls', async () => {
     role = 'member';
     setup();
@@ -226,5 +249,46 @@ describe('Reports page', () => {
     await screen.findByRole('grid');
     expect(screen.queryByTestId('upload-input')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Share/ })).toBeNull();
+  });
+
+  it('someone the folder is shared with uploads and deletes only their own, and cannot share it on', async () => {
+    role = 'shared';
+    setup();
+    await screen.findByRole('grid');
+    expect(within(screen.getByRole('link', { name: /Website redesign/ })).getByText('Shared with you')).toBeTruthy();
+    expect(screen.getByText('This folder is shared with you. You are not in this project.')).toBeTruthy();
+    expect(screen.getByTestId('upload-input')).toBeTruthy();
+    expect(within(screen.getByRole('row', { name: /Weekly/ })).getByRole('button', { name: 'Delete' })).toBeTruthy();
+    expect(within(screen.getByRole('row', { name: /Kickoff/ })).queryByRole('button', { name: 'Delete' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Share/ })).toBeNull();
+    expect(apiMock.mock.calls.some(([p]) => p.includes('folder-shares'))).toBe(false);
+  });
+
+  it('a member shares the folder with someone outside the project and can stop sharing', async () => {
+    role = 'member';
+    setup();
+    fireEvent.click(await screen.findByRole('button', { name: 'Share (1)' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Share the Website redesign folder' });
+    const list = within(dialog).getByRole('region', { name: 'Shared with' });
+    expect(await within(list).findByRole('button', { name: 'Stop sharing with Niran Guest' })).toBeTruthy();
+    // The pop-up lists the whole department; a member and someone already shared with cannot be picked.
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Choose people to share with' }));
+    const member = await screen.findByRole('option', { name: /Somchai Dee/ });
+    expect(member.getAttribute('aria-disabled')).toBe('true');
+    expect(within(member).getByText('Project member')).toBeTruthy();
+    expect(screen.getByRole('option', { name: /Niran Guest/ }).getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(screen.getByRole('option', { name: /Ploy Outsider/ }));
+    await waitFor(() => expect(apiMock).toHaveBeenCalledWith('/projects/1/folder-shares/5', { method: 'PUT' }));
+    expect(await within(list).findByRole('button', { name: 'Stop sharing with Ploy Outsider' })).toBeTruthy();
+    // It stays open for the next pick, now showing Ploy as shared.
+    await waitFor(() => expect(screen.getByRole('option', { name: /Ploy Outsider/ }).getAttribute('aria-disabled')).toBe('true'));
+    fireEvent.keyDown(screen.getByPlaceholderText('Search names'), { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('option')).toBeNull());
+    fireEvent.click(within(list).getByRole('button', { name: 'Stop sharing with Niran Guest' }));
+    const confirm = await screen.findByRole('alertdialog');
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Stop sharing' }));
+    await waitFor(() => expect(apiMock).toHaveBeenCalledWith('/projects/1/folder-shares/6', { method: 'DELETE' }));
+    await waitFor(() => expect(within(list).queryByRole('button', { name: 'Stop sharing with Niran Guest' })).toBeNull());
   });
 });

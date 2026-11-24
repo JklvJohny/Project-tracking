@@ -38,6 +38,187 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's open cards (completedAt not set) across the non-archived projects they can see. Active cards in active lists only. Earliest dueDate first, cards without a dueDate last. Today is the Asia/Bangkok date. */
+        get: operations["getMyTasks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Upload the caller's profile picture (multipart field `file`). JPEG, PNG or WebP up to 5 MiB and 40 megapixels; anything else is `file` = `unsupported_type` / `too_large` / `required`. The server crops it to the centre square and stores a 256x256 JPEG redrawn from the pixels (EXIF and other embedded data are dropped). Every tracking view then carries the new avatarUrl in place of the user-service one. */
+        put: operations["setMyAvatar"];
+        post?: never;
+        /** Remove the caller's tracking picture; the user-service avatar (returned, possibly empty) shows again. */
+        delete: operations["deleteMyAvatar"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users/{userID}/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userID: components["parameters"]["userID"];
+            };
+            cookie?: never;
+        };
+        /** A tracking profile picture as image/jpeg, for any signed-in user. The URL in avatarUrl carries ?v=<version>, so responses are cacheable for good (private). */
+        get: operations["getAvatar"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/people/{userID}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userID: components["parameters"]["userID"];
+            };
+            cookie?: never;
+        };
+        /** One person's page. Admins and anyone who is PM of a project may open anyone's, and see every live project and open card of that person, also in projects they are not in; everyone else only their own (403). Counts follow GET /team. */
+        get: operations["getPerson"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/team": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Everyone in the department (from user-service) by name, with their skills and open-work counts across every live project (counts only, so projects the caller cannot see are not revealed). Open = assigned, not completed, in an active list of a non-archived project; overdue = dueDate before today; dueSoon = dueDate from today to 6 days ahead. Today is the Asia/Bangkok date. */
+        get: operations["getTeam"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/team/skills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Name a skill for the department (the Team page offers and filters on it even before anyone has it) and optionally give it to people, in one transaction. A name that exists ignoring case is reused with its first spelling; people who already have it are left alone. At most 500 named skills (fields.name=too_many) and 500 people per request (fields.userIds=too_many). Anyone signed in. Returns the Team view. */
+        post: operations["addSkill"];
+        /** Take a skill off the department list (matched ignoring case). People who list it keep it. The name is a query parameter because skills such as CI/CD contain a slash. */
+        delete: operations["removeSkill"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/team/skills/category": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Put a skill (matched ignoring case) in one category, or none with categoryId null. A skill only on people's cards joins the department list under its first spelling. Anyone signed in. Returns the Team view. */
+        put: operations["setSkillCategory"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/team/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add a skill category. Names are trimmed with inner spaces squeezed, at most 40 characters, unique ignoring case (fields.name=exists); at most 50 categories (fields.name=too_many). Anyone signed in. Returns the Team view. */
+        post: operations["createSkillCategory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/team/categories/{categoryID}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                categoryID: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a skill category. Its skills stay, uncategorised. Returns the Team view. */
+        delete: operations["deleteSkillCategory"];
+        options?: never;
+        head?: never;
+        /** Rename a skill category, with the same rules as create; changing only the case is allowed. Returns the Team view. */
+        patch: operations["renameSkillCategory"];
+        trace?: never;
+    };
+    "/team/{userID}/skills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userID: components["parameters"]["userID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Replace a person's skills. Any signed-in user may edit anyone's. Each tag is trimmed with inner spaces squeezed; blanks are dropped and case-insensitive duplicates keep the first spelling. At most 30 tags of 40 characters; an empty list clears them. */
+        put: operations["setSkills"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/users": {
         parameters: {
             query?: never;
@@ -490,7 +671,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Append an item. 409 on an archived card. */
+        /** Append an item. 409 on an archived card. At most 100 items per card (fields.text=too_many). */
         post: operations["addChecklistItem"];
         delete?: never;
         options?: never;
@@ -513,7 +694,10 @@ export interface paths {
         delete: operations["deleteChecklistItem"];
         options?: never;
         head?: never;
-        /** Edit text and/or tick the item. */
+        /**
+         * Edit text and/or tick the item.
+         * @description Editing the text needs edit rights on the card (admin, pm, member). Ticking or unticking (`isDone`) is allowed for admin and pm on any card, and for a member only on cards assigned to them; otherwise 403 forbidden.
+         */
         patch: operations["updateChecklistItem"];
         trace?: never;
     };
@@ -548,7 +732,7 @@ export interface paths {
         /** Non-deleted comments, oldest first */
         get: operations["listComments"];
         put?: never;
-        /** Add a comment. Mentions are written `@[<userId>]` in the body; mentioned project members are notified. Viewers get 403. */
+        /** Add a comment. Mentions are written `@[<userId>]` in the body; mentioned project members are notified. At most 10 live comments per card; the 11th is 422 with body too_many. */
         post: operations["addComment"];
         delete?: never;
         options?: never;
@@ -568,11 +752,11 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Soft-delete. Authors delete their own; PM or admin delete any. A viewer gets 403 even on their own comment. */
+        /** Soft-delete. Authors delete their own; PM or admin delete any. */
         delete: operations["deleteComment"];
         options?: never;
         head?: never;
-        /** Edit your own comment (sets editedAt). Member, PM or admin; a viewer gets 403 even on their own comment. */
+        /** Edit your own comment (sets editedAt). */
         patch: operations["editComment"];
         trace?: never;
     };
@@ -588,7 +772,7 @@ export interface paths {
         /** The project's non-deleted reports, newest first. Any member or admin; others get 404. */
         get: operations["listDocuments"];
         put?: never;
-        /** Upload a PDF (admin, pm or member; a viewer gets 403). Max 20 MiB, and the content must start with `%PDF-` whatever the client claims. Field `file`; extra parts are ignored. */
+        /** Upload a PDF (admin, pm, member, or someone the folder is shared with). Max 20 MiB, and the content must start with `%PDF-` whatever the client claims. Field `file`; extra parts are ignored. */
         post: operations["uploadDocument"];
         delete?: never;
         options?: never;
@@ -627,7 +811,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Soft-delete (the file is kept so restore works). The uploader, a pm or an admin; another member or a viewer gets 403. */
+        /** Soft-delete (the file is kept so restore works). The uploader, a pm or an admin; another member gets 403. */
         delete: operations["deleteDocument"];
         options?: never;
         head?: never;
@@ -653,6 +837,156 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/report-folders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The report folders the caller may open, by project id: every project's for an admin; otherwise the caller's projects and the folders shared with them. */
+        get: operations["listReportFolders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{projectID}/folder-shares": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectID: components["parameters"]["projectID"];
+            };
+            cookie?: never;
+        };
+        /** Who outside the project the report folder is shared with, oldest first. Admin, pm or member; a shared user gets 403, anyone else 404. */
+        get: operations["listFolderShares"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{projectID}/folder-shares/{userID}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectID: components["parameters"]["projectID"];
+                userID: components["parameters"]["userID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Share the report folder with someone outside the project: they may list, download and upload reports and delete their own, nothing else in the project. Admin, pm or member. Sharing again returns the existing share. A project member is 422 (userId: already_member); an unknown user is 404; an archived project is 409. */
+        put: operations["shareFolder"];
+        post?: never;
+        /** Stop sharing the folder with that user (their uploads stay). Same permission as sharing; removing a share that does not exist is a no-op. */
+        delete: operations["unshareFolder"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/report-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every non-deleted report template, ordered by category, then name (case-insensitive). Templates are department-wide, not per project; any signed-in user may read them. */
+        get: operations["listReportTemplates"];
+        put?: never;
+        /** Upload a template (any signed-in user). `.docx`, `.xlsx`, `.pptx`, the legacy `.doc`, `.xls`, `.ppt`, or `.pdf`, max 20 MiB; the content must match the extension (`PK` zip header for Office, the OLE2 header `D0 CF 11 E0` for legacy Office, `%PDF-` for PDF), else `file` = `unsupported_type`. Send the text fields BEFORE `file`; parts after the file are not read. An empty `name` defaults to the file name without its extension. */
+        post: operations["uploadReportTemplate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/report-templates/{templateID}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                templateID: components["parameters"]["templateID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Soft-delete (any signed-in user); the file is kept so restore works. */
+        delete: operations["deleteReportTemplate"];
+        options?: never;
+        head?: never;
+        /** Edit category, name or description (any signed-in user). The file is not replaceable here; upload a new template instead. Same rules as upload; a deleted template is 404. */
+        patch: operations["updateReportTemplate"];
+        trace?: never;
+    };
+    "/report-templates/{templateID}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                templateID: components["parameters"]["templateID"];
+            };
+            cookie?: never;
+        };
+        /** Stream the file as an attachment with its own MIME type. A deleted template is 404. */
+        get: operations["downloadReportTemplate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/report-templates/{templateID}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                templateID: components["parameters"]["templateID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Undo a delete (any signed-in user); restoring a live template is a no-op. */
+        post: operations["restoreReportTemplate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Open-work overview across the projects the caller can see (an admin sees all non-archived projects). Counts only active cards in active lists of non-archived projects. `projectId` narrows it to one project; a project the caller cannot see, or an archived one, is 404. Today is the Asia/Bangkok date. */
+        get: operations["getDashboard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -672,12 +1006,12 @@ export interface components {
         /** @enum {string} */
         ProjectStatus: "active" | "on_hold" | "done";
         /** @enum {string} */
-        ProjectRole: "pm" | "member" | "viewer";
+        ProjectRole: "pm" | "member";
         /**
          * @description The caller's role in this project; admin for system admins who are not members.
          * @enum {string}
          */
-        MyRole: "admin" | "pm" | "member" | "viewer";
+        MyRole: "admin" | "pm" | "member";
         /** @enum {string} */
         Priority: "low" | "medium" | "high" | "urgent";
         /** @enum {string} */
@@ -693,6 +1027,8 @@ export interface components {
             isAdmin: boolean;
             /** @description True for system admins and managers. */
             canCreateProject: boolean;
+            /** @description True for system admins and anyone who is PM of a project: they may open any person page (GET /people/{userID}). */
+            canViewPeople: boolean;
         };
         Project: {
             /** Format: int64 */
@@ -977,6 +1313,175 @@ export interface components {
             text?: string;
             isDone?: boolean;
         };
+        /** @description Status rules match the Timeline. done is completedAt set; overdue is not done and dueDate before today; in progress is not done, not overdue and startDate on or before today; otherwise not started. Open means not done. */
+        Dashboard: {
+            /**
+             * Format: date
+             * @description Today in Asia/Bangkok.
+             */
+            asOf: string;
+            totals: {
+                total: number;
+                done: number;
+                open: number;
+                inProgress: number;
+                notStarted: number;
+                overdue: number;
+                /** @description Open cards due today through today plus 7 days. */
+                dueSoon: number;
+                /** @description Open cards with no assignee. */
+                unassigned: number;
+            };
+            /** @description Every scoped project by name; a project with no active cards has all zeros. */
+            byProject: {
+                /** Format: int64 */
+                id: number;
+                name: string;
+                done: number;
+                inProgress: number;
+                notStarted: number;
+                overdue: number;
+                total: number;
+            }[];
+            /** @description Every member of the scoped projects with their open cards, most open first, then by name. Members with no open cards are included. */
+            workload: {
+                user: components["schemas"]["User"];
+                inProgress: number;
+                notStarted: number;
+                overdue: number;
+                open: number;
+            }[];
+            /** @description Open cards per priority; all four are always present, urgent first. */
+            byPriority: {
+                priority: components["schemas"]["Priority"];
+                open: number;
+            }[];
+            /** @description Open cards that are overdue or due within 14 days, soonest first, at most 20. */
+            deadlines: {
+                /** Format: int64 */
+                cardId: number;
+                /** Format: int64 */
+                projectId: number;
+                projectName: string;
+                listName: string;
+                title: string;
+                /** Format: date */
+                dueDate: string;
+                /** @description Days from today to dueDate; negative when overdue. */
+                daysLeft: number;
+                assignees: components["schemas"]["User"][];
+            }[];
+        };
+        Team: {
+            /**
+             * Format: date
+             * @description Today in Asia/Bangkok.
+             */
+            asOf: string;
+            people: components["schemas"]["TeamPerson"][];
+            /** @description Skills the department has named or put in a category, including ones nobody lists yet, by name ignoring case. A skill only on people's cards and never categorised is not listed (it is uncategorised). */
+            catalog: {
+                name: string;
+                /** Format: int64 */
+                categoryId: number | null;
+            }[];
+            /** @description In the order they were made. */
+            categories: components["schemas"]["SkillCategory"][];
+        };
+        SkillCategory: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+        };
+        CategoryName: {
+            name: string;
+        };
+        TeamPerson: {
+            /** Format: int64 */
+            userId: number;
+            name: string;
+            avatarUrl: string;
+            /** @description In the order saved. */
+            skills: string[];
+            open: number;
+            overdue: number;
+            dueSoon: number;
+        };
+        MyTasks: {
+            /**
+             * Format: date
+             * @description Today in Asia/Bangkok.
+             */
+            asOf: string;
+            tasks: components["schemas"]["Task"][];
+        };
+        /** @description One open card assigned to a person. */
+        Task: {
+            /** Format: int64 */
+            cardId: number;
+            /** Format: int64 */
+            projectId: number;
+            projectName: string;
+            listName: string;
+            title: string;
+            priority: components["schemas"]["Priority"];
+            /** Format: date */
+            startDate: string | null;
+            /** Format: date */
+            dueDate: string | null;
+            /** @description Days from today to dueDate; negative when overdue; null without a dueDate. */
+            daysLeft: number | null;
+            checklistTotal: number;
+            checklistDone: number;
+            /** @description Everyone on the card */
+            assignees: components["schemas"]["User"][];
+        };
+        PersonPage: {
+            /**
+             * Format: date
+             * @description Today in Asia/Bangkok.
+             */
+            asOf: string;
+            person: components["schemas"]["TeamPerson"];
+            /** @description Live projects the person belongs to, by name, including ones the caller is not in. */
+            projects: {
+                /** Format: int64 */
+                id: number;
+                name: string;
+                status: components["schemas"]["ProjectStatus"];
+                role: components["schemas"]["ProjectRole"];
+                /** @description Open cards of this project assigned to the person. */
+                open: number;
+            }[];
+            /** @description Every open card assigned to the person in those projects, earliest due date first. */
+            tasks: components["schemas"]["Task"][];
+        };
+        /** @description A department-wide report template. The storage key is never sent. */
+        ReportTemplate: {
+            /** Format: int64 */
+            id: number;
+            category: string;
+            name: string;
+            description: string;
+            filename: string;
+            /** @enum {string} */
+            mimeType: "application/pdf" | "application/vnd.openxmlformats-officedocument.wordprocessingml.document" | "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" | "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+            /** Format: int64 */
+            sizeBytes: number;
+            /** Format: int64 */
+            uploadedBy: number;
+            /** @description Display name from the user cache; empty when the uploader is not cached. */
+            uploadedByName: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ReportTemplatePatch: {
+            category?: string;
+            name?: string;
+            description?: string;
+        };
         /** @description A project report. The storage key is never sent. */
         Document: {
             /** Format: int64 */
@@ -992,6 +1497,41 @@ export interface components {
             uploadedBy: number;
             /** @description Display name from the user cache; empty when the uploader is not cached. */
             uploadedByName: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        /** @description A project's report folder as the caller sees it. */
+        Folder: {
+            /**
+             * Format: int64
+             * @description The project id.
+             */
+            id: number;
+            name: string;
+            /** Format: date-time */
+            archivedAt: string | null;
+            /** @description Reports not deleted. */
+            documentCount: number;
+            /**
+             * @description The caller's project role, or shared when they are outside the project and the folder is shared with them.
+             * @enum {string}
+             */
+            access: "admin" | "pm" | "member" | "shared";
+            /** @description False in an archived project. */
+            canUpload: boolean;
+            /** @description Admin */
+            canShare: boolean;
+            /** @description Delete anyone's report (admin or pm); whoever can upload deletes their own. */
+            canManage: boolean;
+        };
+        FolderShare: {
+            /** Format: int64 */
+            userId: number;
+            /** @description Empty when user-service does not know the user any more. */
+            name: string;
+            avatarUrl: string;
+            /** Format: int64 */
+            sharedBy: number;
             /** Format: date-time */
             createdAt: string;
         };
@@ -1212,6 +1752,89 @@ export interface components {
                 };
             };
         };
+        /** @description The dashboard. */
+        Dashboard: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    /** @constant */
+                    success: true;
+                    data: components["schemas"]["Dashboard"];
+                };
+            };
+        };
+        /** @description The department with skills and workload. */
+        Team: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    /** @constant */
+                    success: true;
+                    data: components["schemas"]["Team"];
+                };
+            };
+        };
+        /** @description The avatar URL now in effect. */
+        AvatarUrl: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    /** @constant */
+                    success: true;
+                    data: {
+                        /** @description Empty when the person has no picture anywhere. */
+                        avatarUrl: string;
+                    };
+                };
+            };
+        };
+        /** @description The person's page. */
+        Person: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    /** @constant */
+                    success: true;
+                    data: components["schemas"]["PersonPage"];
+                };
+            };
+        };
+        /** @description The person's skills as saved. */
+        Skills: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    /** @constant */
+                    success: true;
+                    data: {
+                        skills: string[];
+                    };
+                };
+            };
+        };
+        /** @description The caller's open tasks. */
+        MyTasks: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    /** @constant */
+                    success: true;
+                    data: components["schemas"]["MyTasks"];
+                };
+            };
+        };
         /** @description Non-deleted documents, newest first. */
         DocumentList: {
             headers: {
@@ -1236,6 +1859,82 @@ export interface components {
                     success: true;
                     data: components["schemas"]["Document"];
                 };
+            };
+        };
+        /** @description Report folders by project id. */
+        FolderList: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    /** @constant */
+                    success: true;
+                    data: components["schemas"]["Folder"][];
+                };
+            };
+        };
+        /** @description The folder's shares, oldest first. */
+        FolderShareList: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    /** @constant */
+                    success: true;
+                    data: components["schemas"]["FolderShare"][];
+                };
+            };
+        };
+        /** @description The share. */
+        FolderShare: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    /** @constant */
+                    success: true;
+                    data: components["schemas"]["FolderShare"];
+                };
+            };
+        };
+        /** @description Non-deleted templates by category, then name. */
+        ReportTemplateList: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    /** @constant */
+                    success: true;
+                    data: components["schemas"]["ReportTemplate"][];
+                };
+            };
+        };
+        /** @description The template. */
+        ReportTemplate: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    /** @constant */
+                    success: true;
+                    data: components["schemas"]["ReportTemplate"];
+                };
+            };
+        };
+        /** @description The file bytes (not the JSON envelope), with its own Content-Type, `Content-Disposition attachment; filename*=UTF-8''<name>` and `X-Content-Type-Options nosniff`. */
+        ReportTemplateFile: {
+            headers: {
+                "Content-Disposition"?: string;
+                "X-Content-Type-Options"?: "nosniff";
+                [name: string]: unknown;
+            };
+            content: {
+                "application/octet-stream": string;
             };
         };
         /** @description The PDF bytes, not the JSON envelope. Sent with `Content-Disposition attachment; filename*=UTF-8''<name>` and `X-Content-Type-Options nosniff`. */
@@ -1326,6 +2025,7 @@ export interface components {
         itemID: number;
         commentID: number;
         documentID: number;
+        templateID: number;
     };
     requestBodies: never;
     headers: never;
@@ -1356,6 +2056,267 @@ export interface operations {
         responses: {
             200: components["responses"]["Me"];
             401: components["responses"]["Unauthorized"];
+        };
+    };
+    getMyTasks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["MyTasks"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    setMyAvatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            200: components["responses"]["AvatarUrl"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
+    deleteMyAvatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["AvatarUrl"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getAvatar: {
+        parameters: {
+            query?: {
+                v?: string;
+            };
+            header?: never;
+            path: {
+                userID: components["parameters"]["userID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The picture. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getPerson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userID: components["parameters"]["userID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Person"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getTeam: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Team"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    addSkill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Trimmed with inner spaces squeezed; required. */
+                    name: string;
+                    /** @description People to give it to. Unknown ids are fields.userIds=unknown; anyone already at 30 skills is fields.userIds=too_many. */
+                    userIds?: number[];
+                    /**
+                     * Format: int64
+                     * @description Category to put it in (an existing skill moves there). Unknown is fields.categoryId=unknown.
+                     */
+                    categoryId?: number | null;
+                };
+            };
+        };
+        responses: {
+            200: components["responses"]["Team"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
+    removeSkill: {
+        parameters: {
+            query: {
+                name: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Empty"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    setSkillCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name: string;
+                    /**
+                     * Format: int64
+                     * @description Unknown is fields.categoryId=unknown.
+                     */
+                    categoryId: number | null;
+                };
+            };
+        };
+        responses: {
+            200: components["responses"]["Team"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
+    createSkillCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CategoryName"];
+            };
+        };
+        responses: {
+            200: components["responses"]["Team"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
+    deleteSkillCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                categoryID: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Team"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    renameSkillCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                categoryID: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CategoryName"];
+            };
+        };
+        responses: {
+            200: components["responses"]["Team"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
+    setSkills: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userID: components["parameters"]["userID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    skills: string[];
+                };
+            };
+        };
+        responses: {
+            200: components["responses"]["Skills"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationFailed"];
         };
     };
     searchUsers: {
@@ -2305,6 +3266,207 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    listReportFolders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["FolderList"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    listFolderShares: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectID: components["parameters"]["projectID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["FolderShareList"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    shareFolder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectID: components["parameters"]["projectID"];
+                userID: components["parameters"]["userID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["FolderShare"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
+    unshareFolder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectID: components["parameters"]["projectID"];
+                userID: components["parameters"]["userID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Empty"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    listReportTemplates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["ReportTemplateList"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    uploadReportTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** @description Free text; the UI groups by it. Trimmed; required. */
+                    category: string;
+                    name?: string;
+                    description?: string;
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            201: components["responses"]["ReportTemplate"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
+    deleteReportTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                templateID: components["parameters"]["templateID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Empty"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateReportTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                templateID: components["parameters"]["templateID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportTemplatePatch"];
+            };
+        };
+        responses: {
+            200: components["responses"]["ReportTemplate"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
+    downloadReportTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                templateID: components["parameters"]["templateID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["ReportTemplateFile"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    restoreReportTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                templateID: components["parameters"]["templateID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["ReportTemplate"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getDashboard: {
+        parameters: {
+            query?: {
+                projectId?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Dashboard"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
     };
 }

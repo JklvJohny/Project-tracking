@@ -1,8 +1,9 @@
 # DB contract: what the PostgreSQL `internal/store` must do
 
-For the system owner, who writes the PostgreSQL implementation of `backend/internal/store`.
-The in-memory store (`internal/store/memory`) is the reference: every service test runs against it,
-so the PostgreSQL store must behave the same way for every method below. Schema: `docs/ERD.md`.
+The PostgreSQL store is `backend/internal/store/postgres` (pgx, SQL written by hand); its tables are the goose
+migrations in `internal/store/postgres/migrations`, applied at start-up. The in-memory store (`internal/store/memory`)
+is the behaviour reference: every service test runs on it, and the same tests run on PostgreSQL when
+`TRACKING_TEST_DATABASE_URL` is set (see `backend/README.md`). Schema: `docs/ERD.md`.
 API shapes: `backend/api/openapi.yaml`.
 
 Ground rules:
@@ -10,7 +11,8 @@ Ground rules:
 - Services never see SQL. They call the repo interfaces in `internal/store/repos.go` inside `Store.View` or `Store.Update`.
 - Every id is `int64` (`bigint`), user ids included. User ids have no foreign key (they come from user-service).
 - A missing row is `store.ErrNotFound`, never `sql.ErrNoRows` and never a nil value. Services map it to `not_found`.
-- Dates are `DATE` and travel as `store.Date` (`"YYYY-MM-DD"`). Timestamps are `timestamptz`, handled in UTC: the services stamp every write with `clock.UTC` (wired in `main.go`), and the API emits them as `...Z`. Timestamps read back must be UTC too (run the session with `SET TIME ZONE 'UTC'`, or convert with `.UTC()` when scanning), or the JSON would carry the server's local offset.
+- A write that breaks a unique index the repo comment names returns `store.ErrDuplicate` (map Postgres `23505`). Services map it to a field error.
+- Dates are `DATE` and travel as `store.Date` (`"YYYY-MM-DD"`). Timestamps are `timestamptz`, handled in UTC: the services stamp every write with `clock.UTC` (wired in `main.go`), and the API emits them as `...Z`. Timestamps read back must be UTC too, or the JSON would carry the server's local offset: the store registers the `timestamptz` codec with `ScanLocation: time.UTC` on every connection, since the `tracking_app` role's session zone is `Asia/Bangkok` (see `db/bootstrap.sql`) and pgx would otherwise return `time.Local`. `clock.UTC` cuts to whole microseconds, PostgreSQL's precision, so a value the service returns equals the one a later read gives back.
 - Slices a repo returns (`CardChildren.AssigneeIDs`, `LabelIDs`, `Checklist`, mention ids, list results) are empty, never nil, when there are no rows. The services guard the ones the API emits, but the contract is "never nil".
 - Priority is `smallint` 0-3. The API never sees the number (`store.PriorityName`).
 - Position keys (`lists`, `cards`, `checklist_items`) are LexoRank text from `internal/rank`: base-36 digits `0-9a-z`.
@@ -156,8 +158,8 @@ Every method below is copied from the doc comments in `internal/store/repos.go` 
 Create(ctx context.Context, p Project) (Project, error)
 ```
 
-- Does: Create assigns ID and stores p as given (the service sets timestamps).
-- SQL obligation: INSERT INTO projects ... RETURNING id.
+- Does: Create assigns ID and stores p as given (the service sets timestamps). ErrDuplicate when p is live and another live project has its name, ignoring case: the service checks `NameTaken` first and maps ErrDuplicate to 409 `name_in_use`, which covers two people saving the same name at once.
+- SQL obligation: INSERT INTO projects ... RETURNING id; a unique violation on `ux_projects_name` is ErrDuplicate (return it straight away: the transaction is aborted).
 
 **`Get`**
 
@@ -174,8 +176,8 @@ Get(ctx context.Context, id int64) (Project, error)
 Save(ctx context.Context, p Project) error
 ```
 
-- Does: Save overwrites every column of an existing project; ErrNotFound if absent.
-- SQL obligation: UPDATE projects SET all columns WHERE id = $1.
+- Does: Save overwrites every column of an existing project; ErrNotFound if absent; ErrDuplicate as for `Create` (a rename or a restore can collide).
+- SQL obligation: UPDATE projects SET all columns WHERE id = $1; a unique violation on `ux_projects_name` is ErrDuplicate.
 
 **`All`**
 
@@ -473,6 +475,15 @@ RemoveAssignee(ctx context.Context, cardID, userID int64) (bool, error)
 - Does: RemoveAssignee reports whether a row was removed.
 - SQL obligation: DELETE FROM card_assignees WHERE card_id = $1 AND user_id = $2; removed = rows affected is 1.
 
+**`UnassignInProject`**
+
+```go
+UnassignInProject(ctx context.Context, projectID, userID int64) ([]int64, error)
+```
+
+- Does: removes userID from every card of the project, archived ones included, and returns the ids of the cards that lost them, ascending. `RemoveMember` calls it in the same transaction, then touches each card and logs `card.unassigned` for it, so someone who left a project holds none of its cards.
+- SQL obligation: DELETE FROM card_assignees ca USING cards c, lists l, boards b WHERE ca.card_id = c.id AND c.list_id = l.id AND l.board_id = b.id AND b.project_id = $1 AND ca.user_id = $2 RETURNING ca.card_id (sorted).
+
 **`AddLabel`**
 
 ```go
@@ -763,11 +774,11 @@ Get(ctx context.Context, id int64) (Document, error)
 **`SetDeleted`**
 
 ```go
-SetDeleted(ctx context.Context, id int64, at *time.Time) error
+SetDeleted(ctx context.Context, id int64, at *time.Time) (bool, error)
 ```
 
-- Does: SetDeleted sets deleted_at (nil restores); ErrNotFound if absent. No other column changes.
-- SQL obligation: UPDATE documents SET deleted_at = $2 WHERE id = $1.
+- Does: SetDeleted sets deleted_at (nil restores) and reports whether the row changed state; one already in that state is left alone (false), and the service then logs nothing, so two people deleting at once log one `document.deleted`. ErrNotFound if absent. No other column changes.
+- SQL obligation: UPDATE documents SET deleted_at = $2 WHERE id = $1 AND (deleted_at IS NULL) = ($2::timestamptz IS NOT NULL); changed = rows affected is 1; on 0, `SELECT 1` tells unchanged from ErrNotFound.
 
 **`ByProject`**
 
@@ -778,6 +789,111 @@ ByProject(ctx context.Context, projectID int64) ([]Document, error)
 - Does: ByProject returns the project's non-deleted documents, newest first.
 - SQL obligation: SELECT ... FROM documents WHERE project_id = $1 AND deleted_at IS NULL ORDER BY created_at DESC, id DESC (idx_documents_project).
 
+### TemplateRepo
+
+Backs Reports › Templates (`internal/document/templates.go`). Table `report_templates`: `id, category, name, description, storage_key, filename, mime_type, size_bytes, uploaded_by, created_at, updated_at, deleted_at`, department-wide (no `project_id`), with `idx_report_templates_live (lower(category), lower(name), id) WHERE deleted_at IS NULL`. Any signed-in user may upload, edit, delete and restore (owner's decision, 2026-11-20); deletes are soft so Undo works, and the blob is kept. There is no `activity_events` row: that table is per project. Blob keys are `templates/<random hex><ext>`.
+
+**`Create`**
+- SQL obligation: INSERT INTO report_templates (category, name, description, storage_key, filename, mime_type, size_bytes, uploaded_by, created_at, updated_at) ... RETURNING id.
+
+**`Get`**
+- Does: returns a template even when soft-deleted (the service hides it); ErrNotFound if absent.
+- SQL obligation: SELECT ... FROM report_templates WHERE id = $1.
+
+**`SaveDetails`**
+- Does: writes category, name, description and updated_at only; the file columns never change.
+- SQL obligation: UPDATE report_templates SET category = $2, name = $3, description = $4, updated_at = $5 WHERE id = $1; ErrNotFound when no row.
+
+**`SetDeleted`**
+- SQL obligation: UPDATE report_templates SET deleted_at = $2 WHERE id = $1 (nil restores); ErrNotFound when no row.
+
+**`List`**
+- SQL obligation: SELECT ... FROM report_templates WHERE deleted_at IS NULL ORDER BY lower(category), lower(name), id (`idx_report_templates_live`). The memory store compares with `strings.ToLower`; see parked item 2 for the case-folding rule.
+
+### TeamRepo
+
+Backs the Team page (`internal/team`). Table `user_skills (user_id bigint, skill text, position int, PRIMARY KEY (user_id, skill))` with `ux_user_skills (user_id, lower(skill))`. No foreign key: people live in user-service; `user_id` is their id. Any signed-in user may edit anyone's skills (owner's decision, 2026-11-20). No `activity_events` row: that table is per project. The service trims tags, squeezes inner spaces, drops blanks and case-insensitive duplicates (first spelling wins), and caps at 30 tags of 40 characters before calling the repo.
+
+**`Skills`**
+- Does: every user's skills in saved order; users with none are absent.
+- SQL obligation: SELECT user_id, array_agg(skill ORDER BY position) FROM user_skills GROUP BY user_id.
+
+**`SetSkills`**
+- Does: replaces one person's set in one transaction; an empty slice deletes them all. Two saves for one person at once run one after the other, or the second insert would hit `ux_user_skills`.
+- SQL obligation: SELECT pg_advisory_xact_lock(hashtextextended('user_skills:' || $1, 0)); DELETE FROM user_skills WHERE user_id = $1; INSERT INTO user_skills (user_id, skill, position) SELECT $1, s, ord FROM unnest($2::text[]) WITH ORDINALITY AS t(s, ord).
+
+**`Workload`**
+- Does: per assignee, open cards across every project (not archived, active list, non-archived project, completed_at IS NULL): total, overdue (due before today), due soon (today up to `soon`, exclusive; the service passes today+8 days, so "due in 7 days" is today through today+7, as on the dashboard). Assignees with nothing open are absent. The page shows counts only, never the cards, so a project the caller cannot see is not revealed.
+- SQL obligation: one grouped query driven by `card_assignees`; see the comment on `TeamRepo.Workload` in `internal/store/repos.go`.
+
+Table `skill_catalog (name text PRIMARY KEY, category_id bigint NULL REFERENCES skill_categories(id) ON DELETE SET NULL, created_by bigint, created_at timestamptz)` with `ux_skill_catalog (lower(name))` is the department's list of named skills, so a skill can be offered and filtered on before anyone has it. Adding one with people (`POST /team/skills`) inserts the catalog row and appends the tag to each person's `user_skills` in the same transaction; removing it from the catalog leaves people's tags alone.
+
+Table `skill_categories (id bigint identity PRIMARY KEY, name text, created_by bigint, created_at timestamptz)` with `ux_skill_categories_name (lower(name))` groups skills (Programming, Network, ...). A skill is in at most one category, through `skill_catalog.category_id`; a skill only in `user_skills` has no category. Anyone signed in may add, rename or delete a category (owner's decision for skills, 2026-11-20). The service caps them at 50 and applies the skill name rules to category names.
+
+**`Catalog`**
+- SQL obligation: SELECT name, category_id, created_by, created_at FROM skill_catalog ORDER BY lower(name), name.
+
+**`AddToCatalog`**
+- Does: inserts unless a name matching ignoring case exists; reports whether it inserted. The service then reuses the stored spelling.
+- SQL obligation: INSERT INTO skill_catalog (name, category_id, created_by, created_at) VALUES ($1, $2, $3, $4) ON CONFLICT ((lower(name))) DO NOTHING.
+
+**`RemoveFromCatalog`**
+- SQL obligation: DELETE FROM skill_catalog WHERE lower(name) = lower($1); ErrNotFound when no row.
+
+**`SetSkillCategory`**
+- Does: sets the category of the catalog entry matching the name ignoring case, inserting the entry when the skill is only on people's cards. An existing entry keeps its spelling, `created_by` and `created_at`. The service has checked that the category exists and that someone uses the skill.
+- SQL obligation: INSERT INTO skill_catalog (name, category_id, created_by, created_at) VALUES ($1, $2, $3, $4) ON CONFLICT ((lower(name))) DO UPDATE SET category_id = EXCLUDED.category_id.
+
+**`Categories`**
+- SQL obligation: SELECT id, name, created_by, created_at FROM skill_categories ORDER BY id.
+
+**`CreateCategory`**
+- SQL obligation: INSERT INTO skill_categories (name, created_by, created_at) VALUES ($1, $2, $3) RETURNING id. A `ux_skill_categories_name` violation (23505) returns `store.ErrDuplicate`.
+
+**`RenameCategory`**
+- SQL obligation: UPDATE skill_categories SET name = $2 WHERE id = $1; ErrNotFound when no row; a `ux_skill_categories_name` violation returns `store.ErrDuplicate`.
+
+**`DeleteCategory`**
+- Does: removes the category; its skills become uncategorised (the foreign key's ON DELETE SET NULL), people's tags are untouched.
+- SQL obligation: DELETE FROM skill_categories WHERE id = $1; ErrNotFound when no row.
+
+### AvatarRepo
+
+Backs the profile picture uploaded on the Profile page (`internal/profile`). Table `user_avatars (user_id bigint PRIMARY KEY, storage_key text NOT NULL, updated_at timestamptz NOT NULL)`. No foreign key: people live in user-service. The bytes are a 256x256 JPEG in the blob store (`avatars/<user_id>/<nanos>.jpg`), redrawn by the service from the upload, never the uploaded file itself. Setting a picture also rewrites that person's `user_cache.avatar_url` in the same transaction, so pages that read the cache show it at once.
+
+Services call `users.Provider` inside `Store.Update`, so the provider wrapper that swaps in tracking avatars (`profile.Index`) does not read the store per call: it keeps `user_id -> URL` in process memory, filled by `All` at start-up. With more than one tracking-service instance, call `Index.Load` on a timer (a minute is plenty) so an upload on one instance reaches the others.
+
+**`Get`**
+- SQL obligation: SELECT user_id, storage_key, updated_at FROM user_avatars WHERE user_id = $1; ErrNotFound when no row.
+
+**`All`**
+- SQL obligation: SELECT user_id, storage_key, updated_at FROM user_avatars.
+
+**`Set`**
+- SQL obligation: INSERT INTO user_avatars (user_id, storage_key, updated_at) VALUES ($1, $2, $3) ON CONFLICT (user_id) DO UPDATE SET storage_key = EXCLUDED.storage_key, updated_at = EXCLUDED.updated_at.
+
+**`Delete`**
+- SQL obligation: DELETE FROM user_avatars WHERE user_id = $1; ErrNotFound when no row.
+
+### FolderShareRepo
+
+Backs sharing a project's report folder with someone outside the project (`internal/document`). Table `folder_shares (project_id bigint REFERENCES projects(id), user_id bigint, shared_by bigint NOT NULL, created_at timestamptz NOT NULL, PRIMARY KEY (project_id, user_id))` plus `INDEX (user_id)` for the caller's folder list. No foreign key on `user_id`: people live in user-service. A share opens the report folder only (list, download, upload, delete own uploads), never the board. Admin, pm and member share; a project member is refused (`already_member`), so a share always means "outside the project". Adding the person as a member later leaves the row: the folder then lists once, under their role, and the share is what keeps their access if they are removed again. Share and unshare append `folder.shared` / `folder.unshared` to `activity_events` (payload `{"userId": n}`) in the same transaction.
+
+**`Get`**
+- SQL obligation: SELECT project_id, user_id, shared_by, created_at FROM folder_shares WHERE project_id = $1 AND user_id = $2; ErrNotFound when no row.
+
+**`ByProject`**
+- SQL obligation: SELECT ... FROM folder_shares WHERE project_id = $1 ORDER BY created_at, user_id.
+
+**`ByUser`**
+- SQL obligation: SELECT ... FROM folder_shares WHERE user_id = $1 ORDER BY project_id.
+
+**`Create`**
+- SQL obligation: INSERT INTO folder_shares (project_id, user_id, shared_by, created_at) VALUES ($1, $2, $3, $4); a primary-key unique violation is ErrDuplicate.
+
+**`Delete`**
+- SQL obligation: DELETE FROM folder_shares WHERE project_id = $1 AND user_id = $2; ErrNotFound when no row.
+
 ### Blob store contract (`internal/blob`)
 
 Uploaded files are bytes in a `blob.Store`, never in the database and never in a public folder. The service writes the blob first and the row second inside `Store.Update`; if the row write fails it deletes the blob. Delete is soft: only `deleted_at` is set, the blob stays so restore works.
@@ -787,3 +903,22 @@ Uploaded files are bytes in a `blob.Store`, never in the database and never in a
 - `Delete(ctx, key)`: a missing key is not an error.
 - The key is server-generated, `<projectID>/<random>.pdf`, and never derived from the client file name. The original name lives only in `documents.filename`. A key that is empty, absolute, or has a `.`, `..` or empty segment is `blob.ErrInvalidKey`.
 - The local implementation writes under `UPLOAD_DIR` (default `./uploads`, git-ignored). A MinIO implementation replaces it later behind the same interface.
+
+### DashboardRepo
+
+Backs the Dashboard page (`internal/dashboard`). Read-only; the service runs it in `View` together with the project scope, `Projects.Summaries` (members) and one `user_cache` read.
+
+**`Rows`**
+
+- Does: Rows returns every active card of the listed projects (card not archived, list not archived, project not archived), one `DashboardRow` per card with project id and name, list name, title, priority, start and due dates, `completed_at` and assignee ids (ascending, never nil). Ordered by project id, then card id. Status classification and all counts are done in Go (`dashboard.Build`), so the SQL carries no status logic.
+- SQL obligation: one query, no N+1 for any number of projects: `SELECT c.id, p.id, p.name, l.name, c.title, c.priority, c.start_date, c.due_date, c.completed_at, COALESCE(array_agg(a.user_id ORDER BY a.user_id) FILTER (WHERE a.user_id IS NOT NULL), '{}') FROM cards c JOIN lists l ON l.id = c.list_id AND l.archived_at IS NULL JOIN boards b ON b.id = l.board_id JOIN projects p ON p.id = b.project_id AND p.archived_at IS NULL LEFT JOIN card_assignees a ON a.card_id = c.id WHERE p.id = ANY($1) AND c.archived_at IS NULL GROUP BY c.id, p.id, l.id ORDER BY p.id, c.id` (`idx_cards_list`).
+- Today: the service computes today as the Asia/Bangkok date from the injected clock (fixed `+07:00` fallback), never in SQL, so memory and PostgreSQL agree.
+
+**`AssignedTo`**
+
+```go
+AssignedTo(ctx context.Context, userID int64, projectIDs []int64) ([]TaskRow, error)
+```
+
+- Does: backs My Tasks (`GET /me/tasks`). Returns the open cards (`completed_at IS NULL`) of the listed projects that `userID` is assigned to, with the same active rules as `Rows`. Each `TaskRow` is a `DashboardRow` (assignee ids include the other people on the card) plus checklist total and done counts. Ordered by due date with no due date last, then card id.
+- SQL obligation: one query, no N+1, driven by the `card_assignees (user_id)` index: `SELECT c.id, p.id, p.name, l.name, c.title, c.priority, c.start_date, c.due_date, c.completed_at, (SELECT array_agg(user_id ORDER BY user_id) FROM card_assignees WHERE card_id = c.id), (SELECT count(*) FROM checklist_items WHERE card_id = c.id), (SELECT count(*) FILTER (WHERE is_done) FROM checklist_items WHERE card_id = c.id) FROM card_assignees me JOIN cards c ON c.id = me.card_id JOIN lists l ON l.id = c.list_id AND l.archived_at IS NULL JOIN boards b ON b.id = l.board_id JOIN projects p ON p.id = b.project_id AND p.archived_at IS NULL WHERE me.user_id = $1 AND p.id = ANY($2) AND c.archived_at IS NULL AND c.completed_at IS NULL ORDER BY c.due_date NULLS LAST, c.id` (`idx_checklist_card` for the counts).

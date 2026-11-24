@@ -16,11 +16,14 @@ import (
 	"tracking-service/internal/auth"
 	"tracking-service/internal/board"
 	"tracking-service/internal/card"
+	"tracking-service/internal/dashboard"
 	"tracking-service/internal/document"
 	"tracking-service/internal/events"
 	"tracking-service/internal/httpx"
+	"tracking-service/internal/profile"
 	"tracking-service/internal/project"
-	"tracking-service/internal/store/memory"
+	"tracking-service/internal/store/storetest"
+	"tracking-service/internal/team"
 	"tracking-service/internal/users"
 )
 
@@ -29,7 +32,7 @@ type noAuth struct{}
 func (noAuth) Authenticate(*http.Request) (int64, error) { return 1, nil }
 
 func TestOpenAPI_CoversEveryRoute(t *testing.T) {
-	st := memory.New(time.Now)
+	st := storetest.New(t, time.Now)
 	up := users.NewStub()
 	ev := events.NewLog(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	h := httpx.NewRouter(func(r chi.Router) {
@@ -38,6 +41,9 @@ func TestOpenAPI_CoversEveryRoute(t *testing.T) {
 		board.Mount(r, board.New(st, ev, time.Now))
 		card.Mount(r, card.New(st, up, ev, time.Now))
 		document.Mount(r, document.New(st, nil, users.NewStub(), time.Now))
+		dashboard.Mount(r, dashboard.New(st, time.Now))
+		team.Mount(r, team.New(st, up, time.Now))
+		profile.Mount(r, profile.New(st, nil, up, profile.NewIndex(), time.Now))
 	})
 
 	got := map[string]bool{}

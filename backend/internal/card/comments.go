@@ -192,6 +192,10 @@ func (s *Service) commentTouch(ctx context.Context, r store.Repos, sc scope, use
 	return s.record(ctx, r, sc.project.ID, sc.card.ID, userID, typ, map[string]any{"cardId": sc.card.ID, "commentId": commentID})
 }
 
+// maxComments caps one card's discussion (the owner's decision, 2026-11-24):
+// a longer talk belongs in a meeting or a report. Deleted comments do not count.
+const maxComments = 10
+
 func (s *Service) AddComment(ctx context.Context, userID, cardID int64, body string) (Comment, error) {
 	var out Comment
 	var fresh []int64
@@ -212,6 +216,12 @@ func (s *Service) AddComment(ctx context.Context, userID, cardID int64, body str
 		}
 		if err := lockLiveCard(ctx, r, cardID); err != nil {
 			return err
+		}
+		// Counted under the card lock, so two people posting the 10th at once cannot both get in.
+		if live, err := r.Comments.ByCard(ctx, cardID); err != nil {
+			return err
+		} else if len(live) >= maxComments {
+			return apperr.Validation(map[string]string{"body": "too_many"})
 		}
 		ids, err := memberMentions(ctx, r, sc.project.ID, body)
 		if err != nil {
@@ -235,7 +245,7 @@ func (s *Service) AddComment(ctx context.Context, userID, cardID int64, body str
 }
 
 // EditComment is for the author only, and only while the author may still
-// comment: a member demoted to viewer cannot change what they wrote.
+// comment in the project.
 func (s *Service) EditComment(ctx context.Context, userID, commentID int64, body string) (Comment, error) {
 	var out Comment
 	var fresh []int64

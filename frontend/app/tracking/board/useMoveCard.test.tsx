@@ -162,7 +162,7 @@ describe('useMoveCard', () => {
     await waitFor(() => expect(ids(r)).toEqual(['11@1', '10@1', '12@2']));
     expect(apiMock).toHaveBeenCalledWith('/projects/1/board');
     expect(toast.error).not.toHaveBeenCalled();
-    expect(toastMock).toHaveBeenCalledWith(expect.stringContaining('Reloading'));
+    expect(toastMock).toHaveBeenCalledWith(expect.stringContaining('Reloading'), { id: 'move-1' });
   });
 });
 

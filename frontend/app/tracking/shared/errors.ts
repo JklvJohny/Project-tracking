@@ -27,6 +27,7 @@ const TEXT: Record<Lang, Record<string, string>> = {
     project_archived: 'โปรเจกต์นี้ถูกเก็บถาวรแล้ว จึงแก้ไขไม่ได้',
     too_large: 'ไฟล์ใหญ่เกิน 20 MB',
     not_pdf: 'รองรับเฉพาะไฟล์ PDF',
+    unsupported_type: 'รองรับเฉพาะไฟล์ Word (.docx, .doc), Excel (.xlsx, .xls), PowerPoint (.pptx, .ppt) และ PDF',
   },
   en: {
     bad_request: 'Invalid request',
@@ -51,6 +52,7 @@ const TEXT: Record<Lang, Record<string, string>> = {
     project_archived: 'This project is archived and cannot be changed',
     too_large: 'The file is larger than 20 MB',
     not_pdf: 'Only PDF files are supported',
+    unsupported_type: 'Only Word (.docx, .doc), Excel (.xlsx, .xls), PowerPoint (.pptx, .ppt) and PDF files are supported',
   },
 };
 

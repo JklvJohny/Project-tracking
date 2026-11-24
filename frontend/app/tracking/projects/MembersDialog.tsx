@@ -1,24 +1,25 @@
 'use client';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { api } from '../shared/api/client';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useBoard, useMe } from '../shared/api/queries';
 import type { components } from '../shared/api/schema';
 import { useConfirm } from '../shared/confirm';
 import { errorMessage } from '../shared/errors';
 import { useLang, useT } from '../shared/i18n';
 import { routes } from '../shared/routes';
+import { useUserSearch } from '../shared/useUserSearch';
 import { dropProject, useAddMember, useMembers, useRemoveMember, useSetRole } from './project-mutations';
+import { PersonLink } from '../people/PersonLink';
 
 type S = components['schemas'];
 type Role = S['ProjectRole'];
-const ROLES: Role[] = ['pm', 'member', 'viewer'];
-const DEBOUNCE_MS = 250;
+const ROLES: Role[] = ['pm', 'member'];
 
 const TEXT = {
   th: {
@@ -38,7 +39,7 @@ const TEXT = {
     noResults: 'ไม่พบคน',
     loading: 'กำลังโหลด…',
     members: 'สมาชิก',
-    roles: { pm: 'PM', member: 'สมาชิก', viewer: 'ผู้ชม' } as Record<Role, string>,
+    roles: { pm: 'PM', member: 'สมาชิก' } as Record<Role, string>,
   },
   en: {
     title: 'Project members',
@@ -57,35 +58,9 @@ const TEXT = {
     noResults: 'No one found',
     loading: 'Loading…',
     members: 'Members',
-    roles: { pm: 'PM', member: 'Member', viewer: 'Viewer' } as Record<Role, string>,
+    roles: { pm: 'PM', member: 'Member' } as Record<Role, string>,
   },
 };
-
-const selectCls =
-  'h-8 rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50';
-
-/** Debounced search. A cleanup flag drops any response that is no longer the latest request. */
-function useUserSearch(q: string) {
-  const [state, setState] = useState<{ q: string; users: S['User'][] } | null>(null);
-  useEffect(() => {
-    const term = q.trim();
-    if (!term) return;
-    const ctl = new AbortController();
-    let stale = false;
-    const timer = setTimeout(() => {
-      api<S['User'][]>(`/users?q=${encodeURIComponent(term)}`, { signal: ctl.signal })
-        .then((users) => !stale && setState({ q: term, users }))
-        .catch(() => !stale && setState({ q: term, users: [] }));
-    }, DEBOUNCE_MS);
-    return () => {
-      stale = true;
-      ctl.abort();
-      clearTimeout(timer);
-    };
-  }, [q]);
-  // Results of an older term are never shown for the current one.
-  return q.trim() && state?.q === q.trim() ? state.users : null;
-}
 
 export function MembersDialog({
   projectId,
@@ -179,18 +154,18 @@ function MembersBody({ projectId, onOpenChange }: { projectId: number; onOpenCha
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
-            <select
-              aria-label={t.newRole}
-              className={selectCls}
-              value={newRole}
-              onChange={(e) => setNewRole(e.target.value as Role)}
-            >
-              {ROLES.map((r) => (
-                <option key={r} value={r}>
-                  {t.roles[r]}
-                </option>
-              ))}
-            </select>
+            <Select value={newRole} onValueChange={(v) => setNewRole(v as Role)}>
+              <SelectTrigger aria-label={t.newRole} className="w-36 shrink-0">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ROLES.map((r) => (
+                  <SelectItem key={r} value={r}>
+                    {t.roles[r]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         )}
         {!readOnly && results && (
@@ -221,21 +196,22 @@ function MembersBody({ projectId, onOpenChange }: { projectId: number; onOpenCha
           <ul className="divide-y">
             {list.map((m) => (
               <li key={m.userId} className="flex items-center justify-between gap-2 py-2">
-                <span className="min-w-0 truncate text-sm">{m.name}</span>
+                <PersonLink userId={m.userId} className="min-w-0 truncate text-sm">
+                  {m.name}
+                </PersonLink>
                 <span className="flex shrink-0 items-center gap-2">
-                  <select
-                    aria-label={t.roleOf(m.name)}
-                    className={selectCls}
-                    value={m.role}
-                    disabled={readOnly || setRole.isPending}
-                    onChange={(e) => onRole(m, e.target.value as Role)}
-                  >
-                    {ROLES.map((r) => (
-                      <option key={r} value={r}>
-                        {t.roles[r]}
-                      </option>
-                    ))}
-                  </select>
+                  <Select value={m.role} disabled={readOnly || setRole.isPending} onValueChange={(v) => onRole(m, v as Role)}>
+                    <SelectTrigger aria-label={t.roleOf(m.name)} size="sm" className="w-36">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ROLES.map((r) => (
+                        <SelectItem key={r} value={r}>
+                          {t.roles[r]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   {!readOnly && (
                     <Button size="sm" variant="ghost" aria-label={t.remove(m.name)} disabled={remove.isPending} onClick={() => onRemove(m)}>
                       {t.removeOk}

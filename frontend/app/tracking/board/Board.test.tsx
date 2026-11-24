@@ -37,11 +37,6 @@ async function renderAs(role: components['schemas']['MyRole']) {
 }
 
 describe('Board permissions', () => {
-  it('viewer sees no add or edit controls', async () => {
-    await renderAs('viewer');
-    expect(screen.queryByRole('button')).toBeNull();
-  });
-
   it('member can add cards but not manage lists', async () => {
     await renderAs('member');
     expect(screen.getByRole('button', { name: /Add card/ })).toBeTruthy();

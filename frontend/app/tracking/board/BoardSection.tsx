@@ -1,12 +1,15 @@
 'use client';
 import { ChevronDown } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
 import { useBoard } from '../shared/api/queries';
 import { useT } from '../shared/i18n';
 import { Board } from './Board';
 import { BoardFilters } from './BoardFilters';
+import { FILTER_KEYS, FilterQuery, filterFromQuery, filterToQuery, isFiltering, matchesFilter, type CardFilter } from './card-filter';
+import { todayIso } from '../shared/format';
 
-const OPEN_KEY = 'pt-board-open';
+export const BOARD_OPEN_KEY = 'pt-board-open';
 
 const TEXT = {
   th: {
@@ -19,42 +22,49 @@ const TEXT = {
   },
 };
 
-// Per-viewer convenience only: any storage failure just leaves the section open.
-function readOpen() {
-  try {
-    return localStorage.getItem(OPEN_KEY) !== '0';
-  } catch {
-    return true;
-  }
-}
-
-/** The collapsible board region of the project page; the Timeline section sits below it. */
+/**
+ * The collapsible board region of the project page; the Timeline section sits below it.
+ * Open state is owned by the page (`useStoredOpen(BOARD_OPEN_KEY, true)`) because the splitter can collapse it too.
+ */
 export function BoardSection({
   projectId,
+  open,
   onOpenChange,
+  fill = false,
 }: {
   projectId: number;
-  onOpenChange?: (open: boolean) => void;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  /** The page gave the board a fixed-height region: stretch to it so the lists scroller fills the rest. */
+  fill?: boolean;
 }) {
   const t = useT(TEXT);
   const board = useBoard(projectId);
-  // Open on the server and first paint (no hydration mismatch); the saved choice applies right after mount.
-  const [open, setOpen] = useState(true);
-  useEffect(() => setOpen(readOpen()), []);
-  useEffect(() => onOpenChange?.(open), [open, onOpenChange]);
-  const flip = () => {
-    const next = !open;
-    setOpen(next);
-    try {
-      localStorage.setItem(OPEN_KEY, next ? '1' : '0');
-    } catch {
-      /* storage unavailable: the choice lasts for this visit only */
-    }
-  };
+  const flip = () => onOpenChange(!open);
+  const search = useSearchParams();
+  const [filter, setFilter] = useState<CardFilter>(() => filterFromQuery(search));
+  const filterQuery = useMemo(() => filterToQuery(filter).toString(), [filter]);
+  // The URL follows the filter, so a reload or a shared link keeps it. replaceState changes the address without a
+  // navigation (no refetch, no history entry per keystroke); the rest of the query (an open card, a list) is kept.
+  useEffect(() => {
+    const next = new URLSearchParams(window.location.search);
+    for (const k of FILTER_KEYS) next.delete(k);
+    for (const [k, v] of new URLSearchParams(filterQuery)) next.set(k, v);
+    const qs = next.toString();
+    const url = `${window.location.pathname}${qs ? `?${qs}` : ''}`;
+    if (url !== `${window.location.pathname}${window.location.search}`) window.history.replaceState(window.history.state, '', url);
+  }, [filterQuery]);
+  const data = board.data;
+  // null = no filter: the board keeps every card and drag and drop stays on.
+  const visible = useMemo(() => {
+    if (!data || !isFiltering(filter)) return null;
+    const today = todayIso();
+    return new Set(data.cards.filter((c) => matchesFilter(c, filter, today)).map((c) => c.id));
+  }, [data, filter]);
   const title = board.data ? t.title(board.data.lists.length, board.data.cards.length) : t.board;
 
   return (
-    <section className="flex flex-col border-t bg-muted/40 pt-3">
+    <section className={`flex flex-col border-t bg-muted/40 pt-3 ${fill ? 'min-h-0 flex-1' : ''}`}>
       <button
         type="button"
         aria-expanded={open}
@@ -65,12 +75,21 @@ export function BoardSection({
         <ChevronDown className={`size-4 transition-transform ${open ? '' : '-rotate-90'}`} aria-hidden />
         {title}
       </button>
-      <div id="board-section-body" hidden={!open}>
+      <div id="board-section-body" hidden={!open} className={fill ? 'flex min-h-0 flex-1 flex-col' : undefined}>
         {open && (
-          <>
-            <BoardFilters />
-            <Board projectId={projectId} />
-          </>
+          <FilterQuery.Provider value={filterQuery}>
+            {data && (
+              <BoardFilters
+                value={filter}
+                onChange={setFilter}
+                members={data.members}
+                labels={data.labels}
+                shown={visible ? visible.size : data.cards.length}
+                total={data.cards.length}
+              />
+            )}
+            <Board projectId={projectId} fill={fill} visible={visible} />
+          </FilterQuery.Provider>
         )}
       </div>
     </section>

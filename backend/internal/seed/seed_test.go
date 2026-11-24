@@ -1,4 +1,4 @@
-package memory_test
+package seed_test
 
 import (
 	"context"
@@ -9,14 +9,15 @@ import (
 
 	"tracking-service/internal/board"
 	"tracking-service/internal/events"
-	"tracking-service/internal/store/memory"
+	"tracking-service/internal/seed"
+	"tracking-service/internal/store/storetest"
 	"tracking-service/internal/users"
 )
 
-func seeded(t *testing.T, large bool) (*memory.Store, *board.Service) {
+func seeded(t *testing.T, large bool) (storetest.Store, *board.Service) {
 	t.Helper()
-	st := memory.New(time.Now)
-	if err := memory.Seed(st, users.NewStub(), large); err != nil {
+	st := storetest.New(t, time.Now)
+	if err := seed.Seed(st, time.Now, users.NewStub(), large); err != nil {
 		t.Fatal(err)
 	}
 	return st, board.New(st, events.NewLog(slog.New(slog.NewTextHandler(io.Discard, nil))), time.Now)
@@ -36,7 +37,7 @@ func TestSeed_PrototypeData(t *testing.T) {
 	for _, m := range v.Members {
 		roles[m.UserID] = m.Role
 	}
-	if roles[2] != "pm" || roles[3] != "member" || roles[4] != "member" || roles[5] != "member" || roles[6] != "viewer" {
+	if roles[2] != "pm" || roles[3] != "member" || roles[4] != "member" || roles[5] != "member" || roles[6] != "member" {
 		t.Fatalf("members: %v", roles)
 	}
 	done := 0
